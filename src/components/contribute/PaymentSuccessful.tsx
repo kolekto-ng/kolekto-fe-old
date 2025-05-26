@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckIcon, Download, Copy, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/formatters';
 import { Separator } from '@/components/ui/separator';
+import { useSearchParams } from 'react-router-dom';
 
 interface PaymentDetail {
   label: string;
@@ -29,7 +30,7 @@ interface PaymentSuccessfulProps {
   transactionRef?: string;
 }
 
-const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
+const PaymentSuccessful = ({
   open,
   onOpenChange,
   collectionTitle,
@@ -37,33 +38,36 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
   participants,
   transactionRef
 }) => {
+  const [receiptData, setReceiptData] = useState(null);
+
+
   const handleCopyToClipboard = () => {
     const text = `Payment for: ${collectionTitle}\nAmount: ₦${amountPaid.toLocaleString()}\nTransaction Ref: ${transactionRef || 'N/A'}\n\n` +
       participants.map(participant => {
         const details = participant.details.map(detail => `${detail.label}: ${detail.value}`).join('\n');
         return `${details}\nUnique Code: ${participant.uniqueCode}\n`;
       }).join('\n');
-    
+
     navigator.clipboard.writeText(text)
       .then(() => toast.success('Receipt copied to clipboard'))
       .catch(() => toast.error('Failed to copy receipt'));
   };
-  
+
   const handleDownload = () => {
     const text = `Payment for: ${collectionTitle}\nAmount: ₦${amountPaid.toLocaleString()}\nTransaction Ref: ${transactionRef || 'N/A'}\n\n` +
       participants.map(participant => {
         const details = participant.details.map(detail => `${detail.label}: ${detail.value}`).join('\n');
         return `${details}\nUnique Code: ${participant.uniqueCode}\n`;
       }).join('\n');
-    
+
     const element = document.createElement('a');
-    const file = new Blob([text], {type: 'text/plain'});
+    const file = new Blob([text], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
     element.download = `${collectionTitle.replace(/\s+/g, '_')}_receipt.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
-    
+
     toast.success('Receipt downloaded');
   };
 
@@ -76,7 +80,7 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
       minute: '2-digit'
     });
   };
-  
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md md:max-w-lg">
@@ -86,7 +90,7 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
           </div>
           <DialogTitle className="text-center">Payment Successful!</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           <Card className="border border-gray-200 shadow-sm overflow-hidden">
             <div className="bg-primary px-6 py-4">
@@ -95,7 +99,7 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
                 <FileText className="h-6 w-6 text-white" />
               </div>
             </div>
-            
+
             <CardContent className="p-6">
               <div className="space-y-4">
                 <div className="text-center">
@@ -103,16 +107,16 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
                   <p className="text-2xl font-bold">{formatCurrency(amountPaid)}</p>
                   <p className="text-sm text-gray-500 mt-1">{formatDate()}</p>
                 </div>
-                
+
                 <Separator />
-                
+
                 {transactionRef && (
                   <div className="bg-gray-50 p-3 rounded-md text-center">
                     <p className="text-sm text-gray-500">Transaction Reference</p>
                     <p className="font-mono font-medium">{transactionRef}</p>
                   </div>
                 )}
-                
+
                 <div className="space-y-3">
                   {participants.map((participant, index) => (
                     <Card key={participant.id} className="bg-gray-50 border-dashed">
@@ -138,7 +142,7 @@ const PaymentSuccessful: React.FC<PaymentSuccessfulProps> = ({
               </div>
             </CardContent>
           </Card>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <Button
               onClick={handleCopyToClipboard}
