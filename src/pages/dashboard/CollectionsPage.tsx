@@ -14,6 +14,10 @@ const CollectionsPage: React.FC = () => {
   const { user } = useAuth();
   const { collections, isLoading, error, fetchCollections } = useCollectionStore();
 
+  console.log('CollectionsPage rendered with user:', user);
+  console.log('Collections:', collections);
+
+
   useEffect(() => {
     if (user) {
       fetchCollections(user.id).catch((err) => {
@@ -49,7 +53,7 @@ const CollectionsPage: React.FC = () => {
           <Link to="/dashboard/create-collection">New Collection</Link>
         </Button>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           <Card className="col-span-full">
@@ -62,7 +66,7 @@ const CollectionsPage: React.FC = () => {
           </Card>
         ) : collections && collections.length > 0 ? (
           collections.map(collection => (
-            <CollectionCard 
+            <CollectionCard
               key={collection.id}
               id={collection.id}
               title={collection.title}
@@ -71,7 +75,7 @@ const CollectionsPage: React.FC = () => {
               deadline={collection.deadline || new Date().toISOString()}
               status={collection.status as 'active' | 'expired' | 'completed'}
               participantsCount={collection.participants_count || 0}
-              maxParticipants={collection.max_participants || undefined} 
+              maxParticipants={collection.max_participants || undefined}
               dateCreated={collection.created_at}
               onShare={() => handleShare(collection.id)}
               onViewDetails={() => handleViewDetails(collection.id)}

@@ -38,26 +38,26 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
     expired: 'bg-red-100 text-red-800',
     completed: 'bg-blue-100 text-blue-800'
   };
-  
+
   const deadlineDate = new Date(deadline);
-  const formattedDeadline = deadlineDate.toLocaleDateString('en-NG', { 
-    day: 'numeric', 
-    month: 'short', 
-    year: 'numeric' 
+  const formattedDeadline = deadlineDate.toLocaleDateString('en-NG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
   });
-  
+
   const createdDate = dateCreated ? new Date(dateCreated) : null;
-  const formattedCreatedDate = createdDate 
-    ? createdDate.toLocaleDateString('en-NG', { 
-        day: 'numeric', 
-        month: 'short', 
-        year: 'numeric' 
-      })
+  const formattedCreatedDate = createdDate
+    ? createdDate.toLocaleDateString('en-NG', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
     : 'N/A';
-    
+
   // Calculate total amount raised (mocked for now)
   const totalRaised = participantsCount * amount;
-  
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -75,7 +75,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
             <p className="text-sm text-gray-600">Amount</p>
-            <p className="font-medium">₦{amount.toLocaleString()}</p>
+            <p className="font-medium">₦{amount?.toFixed(2)}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Deadline</p>
@@ -106,18 +106,18 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <Share className="mr-1 h-4 w-4" />
             <span className="hidden sm:inline">Share</span>
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onViewDetails}
             className="flex items-center justify-center"
           >
             <Eye className="mr-1 h-4 w-4" />
             <span className="hidden sm:inline">View</span>
           </Button>
-          <Button 
-            size="sm" 
-            className="bg-kolekto hover:bg-kolekto/90 flex items-center justify-center" 
+          <Button
+            size="sm"
+            className="bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
           >
             <Wallet className="mr-1 h-4 w-4" />
             <span className="hidden sm:inline">Withdraw</span>

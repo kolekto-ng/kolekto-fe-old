@@ -28,12 +28,12 @@ const UniqueCodesSection: React.FC<UniqueCodesSectionProps> = ({
             onCheckedChange={setGenerateUniqueCodes}
           />
           <Label htmlFor="uniqueCodesToggle" className="flex items-center">
-            <span>Generate unique codes for each participant</span>
+            <span>Generate unique codes for each contributor</span>
             <Key className="ml-1 h-4 w-4 text-gray-500" />
           </Label>
         </div>
       </div>
-      
+
       {generateUniqueCodes && (
         <div className="mt-4 space-y-2">
           <Label htmlFor="codePrefix">Code Prefix (Optional)</Label>
