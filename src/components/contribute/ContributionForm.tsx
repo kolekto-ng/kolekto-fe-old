@@ -22,7 +22,6 @@ import { usePaystackStore } from "@/store/usePaystackStore";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
-import { log } from "console";
 
 interface Field {
   name: string;
@@ -46,15 +45,13 @@ interface ContributionFormProps {
   onPaymentError: (errorMsg: string) => void;
 }
 
-const ContributionForm: React.FC<ContributionFormProps> = ({
+const ContributionForm = ({
   collectionId,
   collectionTitle,
   amount,
   amountBreakdown,
   fields,
   description,
-  onPaymentSuccess,
-  onPaymentError,
 }) => {
   const [step, setStep] = useState<"details" | "contact" | "payment">("details"); // 1. Start at "details"
   const [numberOfParticipants, setNumberOfParticipants] = useState(1);
@@ -72,7 +69,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
   const [verificationInterval, setVerificationInterval] =
     useState<NodeJS.Timeout | null>(null);
 
-  const { initiatePayment: initializePayment, verifyPayment, } =
+  const { initializePayment, verifyPayment, } =
     usePaystackStore();
   let paymentLoading = false
   // Clear interval on unmount
@@ -171,13 +168,13 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
   const createContributor = async () => {
     try {
       const response = await axiosInstance.post(
-        `/collections/${collectionId}/contributors`,
+        `/contributions/${collectionId}`,
         {
           name: contactInfo.name,
           email: contactInfo.email,
           phoneNumber: contactInfo.phone,
           amount: amount * numberOfParticipants,
-          participantInformation: participants.map((participant) => ({
+          contributionInformation: participants.map((participant) => ({
             ...participant.data,
           })),
           collectionId,
@@ -189,6 +186,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
           response.data.message || "Failed to create contributor"
         );
       }
+      console.log(response.data, "contributor created");
 
       return response.data.contributor?.id || response.data.contributor?._id;
     } catch (error: any) {
@@ -209,7 +207,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
 
         if (verification?.status === "success") {
           clearInterval(interval);
-          handlePaymentSuccess(reference);
+          // handlePaymentSuccess(reference);
         }
       } catch (error) {
         console.error("Verification error:", error);
@@ -243,7 +241,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     };
 
     setIsLoading(false);
-    onPaymentSuccess(successData);
     toast.success("Payment successful!");
   };
 
@@ -254,7 +251,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     }
 
     setIsLoading(true);
-    setPaymentError(null);
 
     try {
       // 1. Create contributor record
@@ -271,29 +267,23 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
             : amount,
         contributorId,
         collectionId,
+        callback_url: `${window.location.origin}/payment/callback`, // <-- Add this
       };
-
       const paymentResponse = await initializePayment(paymentData);
-
+      console.log(paymentResponse, "payment response");
       if (!paymentResponse?.authorization_url) {
         throw new Error("Failed to get payment URL");
       }
 
       // 3. Open payment gateway
-      const paymentWindow = window.open(paymentResponse.authorization_url);
 
-      if (!paymentWindow) {
-        throw new Error("Please allow popups to proceed with payment");
-      }
-
+      window.location.href = paymentResponse.authorization_url;
       // 4. Start verification process
-      startPaymentVerification(paymentResponse.reference);
+      // startPaymentVerification(paymentResponse.reference);
     } catch (error: any) {
       console.error("Payment error:", error);
       setIsLoading(false);
       const errorMsg = error.message || "Payment failed. Please try again.";
-      setPaymentError(errorMsg);
-      onPaymentError(errorMsg);
       toast.error(errorMsg);
     }
   };

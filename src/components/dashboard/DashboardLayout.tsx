@@ -1,15 +1,16 @@
 
 import React, { useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import DashboardSidebar from './DashboardSidebar';
 import { useIsMobile } from "@/hooks/use-mobile";
+import { initializeAuth, useAuthStore } from '@/store';
 
 const DashboardContent = () => {
   const location = useLocation();
   const { setOpen } = useSidebar();
   const isMobile = useIsMobile();
-  
+
   // Close sidebar when route changes
   useEffect(() => {
     // Always close sidebar on mobile when route changes
@@ -17,7 +18,7 @@ const DashboardContent = () => {
       setOpen(false);
     }
   }, [location.pathname, setOpen, isMobile]);
-  
+
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/dashboard':
@@ -53,6 +54,28 @@ const DashboardContent = () => {
 
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
+
+  const { user, isLoading } = useAuthStore();
+
+  // Initialize auth store when component mounts
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
+  }
+
+  console.log(user, "IS LOGGED IN");
+
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <SidebarProvider defaultOpen={!isMobile}>

@@ -99,19 +99,17 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           amountBreakdown={amountBreakdown}
           fields={fields}
           description={description}
-          onPaymentSuccess={handlePaymentSuccess}
-          onPaymentError={handlePaymentError}
         />
       )}
 
-      <PaymentSuccessful
+      {/* <PaymentSuccessful
         open={isPaymentSuccessful}
         onOpenChange={setIsPaymentSuccessful}
         collectionTitle={collectionTitle}
         amountPaid={amountPaid}
         participants={participantDetails}
         transactionRef={transactionRef}
-      />
+      /> */}
     </>
   );
 };
