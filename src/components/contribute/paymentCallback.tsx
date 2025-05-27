@@ -3,54 +3,26 @@ import { useSearchParams } from "react-router-dom";
 import PaymentSuccessful from './PaymentSuccessful'
 import axios from "axios";
 import { axiosInstance } from "@/utils/axios";
+import { set } from "date-fns";
 
 const PaymentCallback = () => {
     const [searchParams] = useSearchParams();
     const transactionRef = searchParams.get("reference");
-    const [receiptData, setReceiptData] = useState({
-        "collectionTitle": "Handout",
-        "amountPaid": 30899.98,
-        "participants": [
-            {
-                "id": "1",
-                "uniqueCode": "ABC123",
-                "details": [
-                    { "label": "Full Name", "value": "Jane Doe" },
-                    { "label": "Email", "value": "jane@example.com" },
-                    { "label": "Phone", "value": "+2348012345678" }
-                ]
-            },
-            {
-                "id": "2",
-                "uniqueCode": "XYZ789",
-                "details": [
-                    { "label": "Full Name", "value": "John Smith" },
-                    { "label": "Email", "value": "john@example.com" },
-                    { "label": "Phone", "value": "+2348098765432" }
-                ]
-            }
-        ],
-        "transactionRef": "6gnxahinyd",
-        "status": "success",
-        "paidAt": "2025-05-27T08:21:23+00:00",
-        "channel": "card",
-        "currency": "NGN",
-        "payer": {
-            "name": "Mohammed Abdullahi",
-            "email": "moh.abdullahi2003@gmail.com",
-            "phone": "08025275911"
-        }
-    });
+    const [receiptData, setReceiptData] = useState(null);
+    const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(true); // Control dialog open state
     // After redirect from Paystack
 
     useEffect(() => {
+        setLoading(true);
+
         if (transactionRef) {
             axiosInstance.get(`/payments/verify?reference=${transactionRef}`)
                 .then((res) => {
                     console.log(res.data, "receiptData res");
 
                     setReceiptData(res.data.receiptData)
+                    setLoading(false);
                 })
                 .catch(() => setReceiptData(null));
         }
@@ -64,6 +36,10 @@ const PaymentCallback = () => {
 
     // Pass receiptData to your PaymentSuccessful component
     console.log("Transaction Reference:", transactionRef);
+
+    if (loading) {
+        return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    }
 
     return (
         <PaymentSuccessful

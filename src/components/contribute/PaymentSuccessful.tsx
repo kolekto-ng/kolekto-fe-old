@@ -150,7 +150,7 @@ const PaymentSuccessful = ({
                 </div>
 
                 <div className="space-y-3">
-                  {participants.map((participant, index) => (
+                  {participants?.map((participant, index) => (
                     <Card key={participant.id} className="bg-gray-50 border-dashed">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium flex justify-between items-center">
