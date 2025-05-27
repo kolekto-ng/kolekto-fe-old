@@ -72,7 +72,7 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Contributions</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -90,7 +90,7 @@ const DashboardPage: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(stats?.total_amount || 0)}</div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Recent Activity */}
@@ -121,7 +121,7 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Recent Payments</CardTitle>
           </CardHeader>
@@ -147,7 +147,7 @@ const DashboardPage: React.FC = () => {
               <p className="text-gray-500">No payments yet</p>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </div>
   );
