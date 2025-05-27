@@ -13,7 +13,7 @@ import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react'
 import { useAuthStore } from '@/store';
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user } = useAuth();
   let { collections, fetchCollections } = useCollectionStore();
   const { contributions, fetchContributions } = useContributionStore();
   const { withdrawals, fetchWithdrawals } = useWithdrawalStore();
