@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import html2pdf from 'html2pdf.js';
 import { CheckIcon, Download, Copy, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ const PaymentSuccessful = ({
   payer
 }) => {
   const [receiptData, setReceiptData] = useState(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
 
   const handleCopyToClipboard = () => {
@@ -75,6 +77,28 @@ const PaymentSuccessful = ({
     toast.success('Receipt downloaded');
   };
 
+  const getReceiptFilename = () => {
+    const safeTitle = collectionTitle.replace(/\s+/g, '_');
+    const safeRef = transactionRef ? transactionRef : 'receipt';
+    const safeDate = paidAt ? new Date(paidAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    return `${safeTitle}_${safeRef}_${safeDate}_receipt.pdf`;
+  };
+
+  const handleDownloadPDF = () => {
+    if (receiptRef.current) {
+      html2pdf()
+        .set({
+          margin: 0.5,
+          filename: getReceiptFilename(),
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        })
+        .from(receiptRef.current)
+        .save();
+      toast.success('PDF receipt downloaded');
+    }
+  };
+
   const formatDate = () => {
     return new Date().toLocaleString('en-NG', {
       day: 'numeric',
@@ -95,7 +119,7 @@ const PaymentSuccessful = ({
           <DialogTitle className="text-center">Payment Successful!</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div ref={receiptRef} className="space-y-6">
           <Card className="border border-gray-200 shadow-sm overflow-hidden">
             <div className="bg-primary px-6 py-4">
               <div className="flex justify-between items-center">
@@ -159,14 +183,16 @@ const PaymentSuccessful = ({
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <dl className="divide-y divide-gray-100">
-                          {participant.details.map((detail, i) => (
-                            <div key={i} className="px-1 py-2 sm:grid sm:grid-cols-3 sm:gap-4">
-                              <dt className="text-sm font-medium text-gray-500">{detail.label}</dt>
-                              <dd className="text-sm sm:col-span-2 overflow-hidden text-ellipsis">{detail.value}</dd>
-                            </div>
-                          ))}
-                        </dl>
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {participant.details.map((detail, i) => (
+                              <tr key={i}>
+                                <td className="font-medium text-gray-500 pr-2 align-top">{detail.label}</td>
+                                <td className="text-gray-900">{detail.value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </CardContent>
                     </Card>
                   ))}
@@ -174,28 +200,36 @@ const PaymentSuccessful = ({
               </div>
             </CardContent>
           </Card>
+        </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Button
-              onClick={handleCopyToClipboard}
-              variant="outline"
-              className="w-full sm:w-1/2"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy Receipt
-            </Button>
-            <Button
-              onClick={handleDownload}
-              variant="outline"
-              className="w-full sm:w-1/2"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download Receipt
-            </Button>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <Button
+            onClick={handleCopyToClipboard}
+            variant="outline"
+            className="w-full sm:w-1/2"
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Copy Receipt
+          </Button>
+          {/* <Button
+            onClick={handleDownload}
+            variant="outline"
+            className="w-full sm:w-1/2"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Receipt
+          </Button> */}
+          <Button
+            onClick={handleDownloadPDF}
+            variant="outline"
+            className="w-full sm:w-1/2"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download PDF
+          </Button>
         </div>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 };
 
