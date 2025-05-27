@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/formatters';
 import { Separator } from '@/components/ui/separator';
-import { useSearchParams } from 'react-router-dom';
 
 interface PaymentDetail {
   label: string;
@@ -28,6 +27,11 @@ interface PaymentSuccessfulProps {
   amountPaid: number;
   participants: ParticipantInfo[];
   transactionRef?: string;
+  status?: string;
+  paidAt?: string;
+  channel?: string;
+  currency?: string;
+  payer?: { name: string; email: string; phone: string };
 }
 
 const PaymentSuccessful = ({
@@ -42,60 +46,72 @@ const PaymentSuccessful = ({
   channel = 'card',
   currency = 'NGN',
   payer
-}) => {
-  const [receiptData, setReceiptData] = useState(null);
+}: PaymentSuccessfulProps) => {
   const receiptRef = useRef<HTMLDivElement>(null);
 
-
   const handleCopyToClipboard = () => {
-    const text = `Payment for: ${collectionTitle}\nAmount: ₦${amountPaid.toLocaleString()}\nTransaction Ref: ${transactionRef || 'N/A'}\n\n` +
-      participants.map(participant => {
-        const details = participant.details.map(detail => `${detail.label}: ${detail.value}`).join('\n');
-        return `${details}\nUnique Code: ${participant.uniqueCode}\n`;
-      }).join('\n');
+    const url = window.location.href;
+    const message = [
+      "🎉 This is my receipt from Kolekto!",
+      "",
+      `Collection: ${collectionTitle}`,
+      `Amount Paid: ${formatCurrency(amountPaid)}`,
+      transactionRef ? `Transaction Ref: ${transactionRef}` : "",
+      paidAt ? `Paid At: ${new Date(paidAt).toLocaleString('en-NG')}` : "",
+      channel ? `Channel: ${channel}` : "",
+      currency ? `Currency: ${currency}` : "",
+      "",
+      participants && participants.length > 0
+        ? "Contributor Details:\n" + participants.map((p, idx) =>
+          `  ${participants.length > 1 ? `(${idx + 1}) ` : ""}${p.details.map(d => `${d.label}: ${d.value}`).join(", ")}${p.uniqueCode ? `, Unique Code: ${p.uniqueCode}` : ""}`
+        ).join("\n")
+        : "",
+      "",
+      `View your receipt online: ${url}`,
+    ].filter(Boolean).join("\n");
 
-    navigator.clipboard.writeText(text)
-      .then(() => toast.success('Receipt copied to clipboard'))
+    navigator.clipboard.writeText(message)
+      .then(() => toast.success('Receipt details copied!'))
       .catch(() => toast.error('Failed to copy receipt'));
-  };
-
-  const handleDownload = () => {
-    const text = `Payment for: ${collectionTitle}\nAmount: ₦${amountPaid.toLocaleString()}\nTransaction Ref: ${transactionRef || 'N/A'}\n\n` +
-      participants.map(participant => {
-        const details = participant.details.map(detail => `${detail.label}: ${detail.value}`).join('\n');
-        return `${details}\nUnique Code: ${participant.uniqueCode}\n`;
-      }).join('\n');
-
-    const element = document.createElement('a');
-    const file = new Blob([text], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${collectionTitle.replace(/\s+/g, '_')}_receipt.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-
-    toast.success('Receipt downloaded');
   };
 
   const getReceiptFilename = () => {
     const safeTitle = collectionTitle.replace(/\s+/g, '_');
     const safeRef = transactionRef ? transactionRef : 'receipt';
     const safeDate = paidAt ? new Date(paidAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-    return `${safeTitle}_${safeRef}_${safeDate}_receipt.pdf`;
+    return `${safeTitle}_${safeRef}_${safeDate}_receipt@kolekto.com.ng.pdf`;
   };
 
   const handleDownloadPDF = () => {
     if (receiptRef.current) {
+      // Save original styles
+      const originalMaxHeight = receiptRef.current.style.maxHeight;
+      const originalOverflowY = receiptRef.current.style.overflowY;
+
+      // Remove scroll/max-height for PDF rendering
+      receiptRef.current.style.maxHeight = 'none';
+      receiptRef.current.style.overflowY = 'visible';
+
       html2pdf()
         .set({
           margin: 0.5,
           filename: getReceiptFilename(),
-          html2canvas: { scale: 2 },
+          html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         })
         .from(receiptRef.current)
-        .save();
-      toast.success('PDF receipt downloaded');
+        .save()
+        .then(() => {
+          // Restore original styles
+          receiptRef.current.style.maxHeight = originalMaxHeight;
+          receiptRef.current.style.overflowY = originalOverflowY;
+          toast.success('PDF receipt downloaded');
+        })
+        .catch(() => {
+          receiptRef.current.style.maxHeight = originalMaxHeight;
+          receiptRef.current.style.overflowY = originalOverflowY;
+          toast.error('Failed to download PDF');
+        });
     }
   };
 
@@ -111,7 +127,7 @@ const PaymentSuccessful = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md md:max-w-lg">
+      <DialogContent className="sm:max-w-md md:max-w-lg pb-4 max-h-[90vh] flex flex-col">
         <DialogHeader>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
             <CheckIcon className="h-6 w-6 text-green-600" />
@@ -119,11 +135,20 @@ const PaymentSuccessful = ({
           <DialogTitle className="text-center">Payment Successful!</DialogTitle>
         </DialogHeader>
 
-        <div ref={receiptRef} className="space-y-6">
-          <Card className="border border-gray-200 shadow-sm overflow-hidden">
+        {/* Scrollable receipt area */}
+        <div
+          ref={receiptRef}
+          className="space-y-6 overflow-x-auto overflow-y-auto min-w-[320px] max-h-[50vh] sm:max-h-[60vh] pr-2"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          <Card className="border border-gray-200 shadow-sm min-w-[340px]">
             <div className="bg-primary px-6 py-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-white font-bold text-xl">Receipt</h2>
+                {/* Logo and Receipt title */}
+                <div className="flex items-center gap-2">
+                  <img src="../../../public/favicon.ico" alt="Kolekto Logo" className="h-8 w-8 rounded bg-white p-1" />
+                  <h2 className="text-white font-bold text-xl">Receipt</h2>
+                </div>
                 <FileText className="h-6 w-6 text-white" />
               </div>
             </div>
@@ -154,7 +179,7 @@ const PaymentSuccessful = ({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700">
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 text-sm text-gray-700">
                   <div>
                     <span className="font-medium">Status:</span>{" "}
                     <span className={status === "success" ? "text-green-600" : "text-red-600"}>
@@ -202,7 +227,8 @@ const PaymentSuccessful = ({
           </Card>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        {/* Action buttons */}
+        <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-3 sm:justify-between">
           <Button
             onClick={handleCopyToClipboard}
             variant="outline"
@@ -211,14 +237,6 @@ const PaymentSuccessful = ({
             <Copy className="mr-2 h-4 w-4" />
             Copy Receipt
           </Button>
-          {/* <Button
-            onClick={handleDownload}
-            variant="outline"
-            className="w-full sm:w-1/2"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Download Receipt
-          </Button> */}
           <Button
             onClick={handleDownloadPDF}
             variant="outline"
@@ -229,7 +247,7 @@ const PaymentSuccessful = ({
           </Button>
         </div>
       </DialogContent>
-    </Dialog >
+    </Dialog>
   );
 };
 

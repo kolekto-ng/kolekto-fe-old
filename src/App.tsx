@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -23,6 +22,7 @@ import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
 import { initializeAuth } from "./store";
 import PaymentCallback from "./components/contribute/paymentCallback";
+import { Loader2 } from "lucide-react";
 
 // Create query client outside of the component to avoid React hooks issues
 const queryClient = new QueryClient();
@@ -37,7 +37,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+      </div>
+    );
   }
 
   if (!user) {
@@ -49,7 +53,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
-
   return (
     <Routes>
       {/* Public Routes */}
@@ -62,11 +65,14 @@ const AuthenticatedApp = () => {
       <Route path="/payment/callback" element={<PaymentCallback />} />
 
       {/* Protected Dashboard Routes */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardLayout />
-        </ProtectedRoute>
-      }>
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<DashboardPage />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
