@@ -2,32 +2,32 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import PaymentSuccessful from './PaymentSuccessful'
 import axios from "axios";
-
-const dummyParticipants = [
-    {
-        id: "1",
-        uniqueCode: "ABC123",
-        details: [
-            { label: "Full Name", value: "Jane Doe" },
-            { label: "Email", value: "jane@example.com" },
-            { label: "Phone", value: "+2348012345678" },
-        ],
-    }
-];
+import { axiosInstance } from "@/utils/axios";
+import { set } from "date-fns";
 
 const PaymentCallback = () => {
     const [searchParams] = useSearchParams();
     const transactionRef = searchParams.get("reference");
     const [receiptData, setReceiptData] = useState(null);
+    const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(true); // Control dialog open state
-    // useEffect(() => {
-    //     if (transactionRef) {
-    //         axios
-    //             .get(`/api/payment/receipt?reference=${transactionRef}`)
-    //             .then((res) => setReceiptData(res.data))
-    //             .catch(() => setReceiptData(null));
-    //     }
-    // }, [transactionRef]);
+    // After redirect from Paystack
+
+    useEffect(() => {
+        setLoading(true);
+
+        if (transactionRef) {
+            axiosInstance.get(`/payments/verify?reference=${transactionRef}`)
+                .then((res) => {
+                    console.log(res.data, "receiptData res");
+
+                    setReceiptData(res.data.receiptData)
+                    setLoading(false);
+                })
+                .catch(() => setReceiptData(null));
+        }
+    }, [transactionRef]);
+    console.log(receiptData, "receiptData");
 
     // if (error) return <div className="text-red-500">{error}</div>;
     // if (!receiptData) return <div>Loading...</div>;
@@ -37,20 +37,23 @@ const PaymentCallback = () => {
     // Pass receiptData to your PaymentSuccessful component
     console.log("Transaction Reference:", transactionRef);
 
+    if (loading) {
+        return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    }
+
     return (
         <PaymentSuccessful
-            // open={true}
-            // onOpenChange={() => { }}
-            // collectionTitle={receiptData.collectionTitle}
-            // amountPaid={receiptData.amountPaid}
-            // participants={receiptData.participants}
-            transactionRef={transactionRef}
-
             open={open}
             onOpenChange={setOpen}
-            collectionTitle="Handout"
-            amountPaid={5000}
-            participants={dummyParticipants}
+            collectionTitle={receiptData?.collectionTitle}
+            amountPaid={receiptData?.amountPaid}
+            participants={receiptData?.participants}
+            transactionRef={receiptData?.transactionRef}
+            status={receiptData?.status}
+            paidAt={receiptData?.paidAt}
+            channel={receiptData?.channel}
+            currency={receiptData?.currency}
+            payer={receiptData?.payer}
         />
     );
 };

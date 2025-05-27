@@ -254,10 +254,21 @@ const ContributionForm = ({
 
     try {
       // 1. Create contributor record
-      const contributorId = await createContributor();
+      // const contributorId = await createContributor();
 
       // 2. Initialize payment
       const paymentData = {
+        contributor: {
+          name: contactInfo.name,
+          email: contactInfo.email,
+          phoneNumber: contactInfo.phone,
+          amount: amount * numberOfParticipants,
+          contributionInformation: participants.map((participant) => ({
+            ...participant.data,
+          })),
+          collectionId,
+        },
+
         fullName: contactInfo.name,
         email: contactInfo.email,
         phoneNumber: contactInfo.phone,
@@ -265,7 +276,6 @@ const ContributionForm = ({
           amount != amountBreakdown.totalPayable
             ? amountBreakdown.totalFees + amount * numberOfParticipants
             : amount,
-        contributorId,
         collectionId,
         callback_url: `${window.location.origin}/payment/callback`, // <-- Add this
       };

@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sid
 import DashboardSidebar from './DashboardSidebar';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { initializeAuth, useAuthStore } from '@/store';
+import { useAuth } from '@/context/AuthContext';
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -55,7 +56,7 @@ const DashboardContent = () => {
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
 
-  const { user, isLoading } = useAuthStore();
+  const { user, isLoading } = useAuth();
 
   // Initialize auth store when component mounts
   useEffect(() => {
