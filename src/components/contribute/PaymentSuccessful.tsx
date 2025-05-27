@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CheckIcon, Download, Copy, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +35,12 @@ const PaymentSuccessful = ({
   collectionTitle,
   amountPaid,
   participants,
-  transactionRef
+  transactionRef,
+  status = 'success',
+  paidAt,
+  channel = 'card',
+  currency = 'NGN',
+  payer
 }) => {
   const [receiptData, setReceiptData] = useState(null);
 
@@ -116,6 +120,34 @@ const PaymentSuccessful = ({
                     <p className="font-mono font-medium">{transactionRef}</p>
                   </div>
                 )}
+
+                {payer && (
+                  <div className="bg-gray-50 p-3 rounded-md text-center mb-2">
+                    <p className="text-sm text-gray-500 font-medium">Paid by</p>
+                    <div className="font-medium">{payer.name}</div>
+                    <div className="text-xs text-gray-600">{payer.email}</div>
+                    <div className="text-xs text-gray-600">{payer.phone}</div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700">
+                  <div>
+                    <span className="font-medium">Status:</span>{" "}
+                    <span className={status === "success" ? "text-green-600" : "text-red-600"}>
+                      {status?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Paid At:</span>{" "}
+                    {paidAt ? new Date(paidAt).toLocaleString() : "N/A"}
+                  </div>
+                  <div>
+                    <span className="font-medium">Channel:</span> {channel || "N/A"}
+                  </div>
+                  <div>
+                    <span className="font-medium">Currency:</span> {currency || "NGN"}
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   {participants.map((participant, index) => (

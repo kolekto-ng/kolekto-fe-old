@@ -13,14 +13,17 @@ export const usePaystackStore = create((set) => ({
   initializePayment: async (data) => {
     set({ isInitiating: true });
     try {
-      const response = await axiosInstance.post("/initialize-payment", data);
+      const response = await axiosInstance.post(
+        "/payments/initialize-payment",
+        data
+      );
       set({ isInitiating: false });
       toast.success(response.data.message);
       console.log("Payment initialized successfully:", response.data);
 
       return {
-        authorization_url: response.data.data.authorization_url,
-        reference: response.data.data.reference,
+        authorization_url: response.data.authorizationUrl,
+        reference: response.data.reference,
       };
     } catch (error: any) {
       console.error("Payment initialization failed:", error);
