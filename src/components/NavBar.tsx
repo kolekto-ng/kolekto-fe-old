@@ -13,11 +13,11 @@ import {
 import { useAuthStore } from "@/store";
 
 const NavBar: React.FC = () => {
-  const { user, isLoading } = useAuthStore();
+  const { user, isLoading, signOut } = useAuth();
   const isAuthenticated = !!user;
 
   const handleSignOut = async () => {
-    // await signOut();
+    await signOut();
   };
 
   const MobileNav = () => (
