@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
@@ -6,6 +5,7 @@ import DashboardSidebar from './DashboardSidebar';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { initializeAuth, useAuthStore } from '@/store';
 import { useAuth } from '@/context/AuthContext';
+import { Loader2 } from "lucide-react";
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -55,7 +55,6 @@ const DashboardContent = () => {
 
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
-
   const { user, isLoading } = useAuth();
 
   // Initialize auth store when component mounts
@@ -66,13 +65,10 @@ const DashboardLayout: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        Loading...
+        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
       </div>
     );
   }
-
-  console.log(user, "IS LOGGED IN");
-
 
   if (!user) {
     return <Navigate to="/login" replace />;

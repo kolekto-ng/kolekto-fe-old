@@ -59,15 +59,16 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    if (!contributions || contributions.length === 0) {
-      toast.info("No contributors data to export");
+    const paidContributions = (contributions || []).filter(c => c.status === "paid");
+    if (paidContributions.length === 0) {
+      toast.info("No paid contributors data to export");
       return;
     }
 
     // 1. Collect all unique dynamic fields from contributor_information
     const allDynamicFields = Array.from(
       new Set(
-        contributions.flatMap(contributor =>
+        paidContributions.flatMap(contributor =>
           (contributor.contributor_information || []).flatMap(info =>
             Object.keys(info)
           )
@@ -76,7 +77,7 @@ const CollectionDetailsPage: React.FC = () => {
     );
 
     // 2. Check if any contributor has a unique code
-    const hasUniqueCode = contributions.some(
+    const hasUniqueCode = paidContributions.some(
       c => c.contributor_unique_code
     );
 
@@ -85,28 +86,28 @@ const CollectionDetailsPage: React.FC = () => {
       // 'Name',
       // 'Email',
       // 'Phone',
-      'Amount',
-      'Date Contributed',
+      // 'Amount',
+      // 'Date Contributed',
       ...allDynamicFields,
       ...(hasUniqueCode ? ['Unique Code'] : []),
-      'Status'
+      // 'Status'
     ];
 
     let csvContent = headers.join(',') + '\n';
 
-    contributions.forEach((contribution) => {
+    paidContributions.forEach((contribution) => {
       const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
       const row = [
         // contribution.contributor_name || contribution.name || '',
         // contribution.contributor_email || contribution.email || '',
         // contribution.contributor_phone || contribution.phone || '',
-        contribution.amount || '',
-        formattedDate,
+        // contribution.amount || '',
+        // formattedDate,
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-        contribution.status || ''
+        // contribution.status || ''
       ];
       csvContent += row.map(val =>
         typeof val === 'string' && val.includes(',') ? `"${val}"` : val
@@ -208,9 +209,14 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  const filteredContributors = contributions?.filter((contribution) =>
-    contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Only show paid contributors
+  const filteredContributors = (contributions || []).filter(
+    (contribution) =>
+      (contribution.status === "paid") &&
+      (
+        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
   ) || [];
 
   // Group contributions by date for chart data
@@ -486,71 +492,70 @@ const CollectionDetailsPage: React.FC = () => {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="overflow-auto">
-              {filteredContributors.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {/* <TableHead>Name</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Amount</TableHead>
-                      <TableHead className="hidden md:table-cell">Date</TableHead>
-                      <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
-                      {/* Render dynamic fields */}
-                      {allDynamicFields.map(field => (
-                        <TableHead key={field} className="hidden lg:table-cell">{field}</TableHead>
-                      ))}
-                      {/* Unique code column if present */}
-                      {hasUniqueCode && (
-                        <TableHead className="hidden lg:table-cell">Unique Code</TableHead>
-                      )}
-                      <TableHead className="hidden lg:table-cell">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredContributors.map(contributor => (
-                      <TableRow key={contributor.id}>
-                        {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
-                        <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {contributor.formattedDate ||
-                            new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
+            <CardContent className="p-0">
+              <div className="w-full overflow-x-auto">
+                {filteredContributors.length > 0 ? (
+                  <Table className="min-w-[700px]">
+                    <TableHeader className='overflow-x-auto'>
+                      <TableRow>
+                        {/* <TableHead>Name</TableHead>
+                        <TableHead className="hidden sm:table-cell">Email</TableHead>
+                        <TableHead className="hidden md:table-cell">Amount</TableHead>
+                        <TableHead className="hidden md:table-cell">Date</TableHead>
+                        <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
                         {/* Render dynamic fields */}
                         {allDynamicFields.map(field => (
-                          <TableCell key={field} className="hidden lg:table-cell">
-                            {(contributor.contributor_information || [])[0]?.[field] || ''}
-                          </TableCell>
+                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
                         {/* Unique code column if present */}
                         {hasUniqueCode && (
-                          <TableCell className="hidden lg:table-cell">
-                            {contributor.contributor_unique_code || ''}
-                          </TableCell>
+                          <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
-                        <TableCell className="hidden lg:table-cell">
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
-                            ? 'bg-green-100 text-green-800'
-                            : contributor.status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                            }`}>
-                            {contributor.status}
-                          </span>
-                        </TableCell>
+                        {/* <TableHead className="lg:table-cell">Status</TableHead> */}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="py-8 text-center text-gray-500">
-                  {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
-                </div>
-              )}
-              <div className="block sm:hidden mt-4">
-                <p className="text-xs text-gray-500">Swipe to see full contributor details</p>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredContributors.map(contributor => (
+                        <TableRow key={contributor.id}>
+                          {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
+                          <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {contributor.formattedDate ||
+                              new Date(contributor.created_at).toLocaleDateString('en-NG')}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
+                          {/* Render dynamic fields */}
+                          {allDynamicFields.map(field => (
+                            <TableCell key={field} className="lg:table-cell">
+                              {(contributor.contributor_information || [])[0]?.[field] || ''}
+                            </TableCell>
+                          ))}
+                          {/* Unique code column if present */}
+                          {hasUniqueCode && (
+                            <TableCell className="lg:table-cell">
+                              {contributor.contributor_unique_code || ''}
+                            </TableCell>
+                          )}
+                          {/* <TableCell className="hidden lg:table-cell">
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
+                              ? 'bg-green-100 text-green-800'
+                              : contributor.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                              }`}>
+                              {contributor.status}
+                            </span>
+                          </TableCell> */}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="py-8 text-center text-gray-500">
+                    {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,24 +12,25 @@ import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react'
 import { useAuthStore } from '@/store';
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
-  let { collections, fetchCollections } = useCollectionStore();
+  const { user, isLoading: authloading } = useAuth();
+  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
   const { contributions, fetchContributions } = useContributionStore();
   const { withdrawals, fetchWithdrawals } = useWithdrawalStore();
-  useEffect(() => {
-    if (user) {
-      // fetchDashboardStats(user.id);
-      // fetchRecentPayments(user.id);
-      collections = fetchCollections(user.id);
-      fetchWithdrawals(user.id);
-    }
-  }, [user, fetchCollections, fetchWithdrawals]);
+
   const { stats, recentPayments, isLoading } = useDashboard(collections, contributions, user?.id);
 
+  console.log(collections, 'collections in dashboard page');
 
-  console.log('DashboardPage rendered with user:', user);
-  console.log('Dashboard collections:', collections, stats, recentPayments);
-  if (isLoading) {
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchCollections(user.id);
+      fetchWithdrawals(user.id);
+    }
+  }, [user?.id, fetchCollections, fetchWithdrawals]);
+
+  // Show loader if any relevant data is loading
+  if (authloading || collectionsLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -109,8 +109,14 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm text-gray-500">{collection.formattedAmount}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{collection.participants_count || 0} participants</p>
-                      <p className="text-xs text-gray-500">{collection.status}</p>
+                      <p className="text-sm font-medium">{collection.total_contributions || 0} Contributions</p>
+                      <p className="text-xs text-gray-500">
+                        {collection.status === "completed"
+                          ? "completed"
+                          : collection.deadline && new Date(collection.deadline) > new Date()
+                            ? "active"
+                            : "expired"}
+                      </p>
                     </div>
                   </div>
                 ))}
