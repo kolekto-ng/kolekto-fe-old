@@ -39,6 +39,13 @@ const DashboardPage: React.FC = () => {
     );
   }
 
+  // Sort collections by created_at ascending (oldest first)
+  const sortedCollections = [...collections].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA; // Newest first
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -103,7 +110,7 @@ const DashboardPage: React.FC = () => {
           <CardContent>
             {collections.length > 0 ? (
               <div className="space-y-4">
-                {collections.slice(0, 5).map(collection => (
+                {sortedCollections.slice(0, 5).map(collection => (
                   <div key={collection.id} className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{collection.title}</p>

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,13 @@ const CollectionsPage: React.FC = () => {
     }
   };
 
+  // Sort collections by created_at descending (newest first)
+  const sortedCollections = [...collections].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -64,8 +70,8 @@ const CollectionsPage: React.FC = () => {
               <p className="text-gray-500">Loading collections...</p>
             </CardContent>
           </Card>
-        ) : collections && collections.length > 0 ? (
-          collections.map(collection => (
+        ) : sortedCollections && sortedCollections.length > 0 ? (
+          sortedCollections.map(collection => (
             <CollectionCard
               key={collection.id}
               id={collection.id}
