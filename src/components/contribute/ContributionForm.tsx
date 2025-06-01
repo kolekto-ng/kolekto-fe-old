@@ -380,7 +380,65 @@ const ContributionForm = ({
             {index === 0 ? "Your Details" : `Participant ${index + 1} Details`}
           </h3>
           <div className="space-y-4">
-            {Object.values(fields || {}).map((field) => {
+
+            {fields.map((field) => {
+              const isUniqueCode = field.name.toLowerCase() === "unique code";
+              // Render select for select/selectdropdown fields
+              if (field.type === "select" || field.type === "selectdropdown") {
+                return (
+                  <div key={`${participant.id}-${field.name}`} className="space-y-2">
+                    <Label>
+                      {field.name}
+                      {field.required && " *"}
+                    </Label>
+                    <Select
+                      value={participant.data?.[field.name] || ""}
+                      onValueChange={(value) =>
+                        handleFieldChange(participant.id, field.name, value)
+                      }
+                      required={field.required}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(field.options || []).map((opt: string) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+
+              // Default: render input for other types
+              return (
+                <div key={`${participant.id}-${field.name}`} className="space-y-2">
+                  {!isUniqueCode && (
+                    <>
+                      <Label>
+                        {field.name}
+                        {field.required && " *"}
+                      </Label>
+                      <Input
+                        type={field.type}
+                        value={participant.data?.[field.name] || ""}
+                        onChange={(e) =>
+                          handleFieldChange(participant.id, field.name, e.target.value)
+                        }
+                        required={field.required}
+                        readOnly={isUniqueCode}
+                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* {Object.values(fields || {}).map((field) => {
               console.log(field);
 
               const isUniqueCode = field.name.toLowerCase() === "unique code";
@@ -416,7 +474,7 @@ const ContributionForm = ({
                   )}
                 </div>
               );
-            })}
+            })} */}
           </div>
         </div>
       ))}

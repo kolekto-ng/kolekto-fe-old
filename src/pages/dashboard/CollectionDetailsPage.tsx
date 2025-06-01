@@ -143,19 +143,15 @@ const CollectionDetailsPage: React.FC = () => {
       toast.error('Unable to process withdrawal. Please try again.');
       return;
     }
+    console.log(data, 'withdraw data');
 
     try {
-      await createWithdrawal({
-        organizer_id: user.id,
-        amount: data.amount,
-        account_name: data.accountName,
-        account_number: data.accountNumber,
-        bank_name: data.bankName,
-        collection_id: id
-      });
-
       setIsWithdrawDialogOpen(false);
       toast.success('Withdrawal request submitted successfully!');
+      setTimeout(() => {
+        window.location.reload();
+
+      }, 2000);
     } catch (error: any) {
       console.error('Withdrawal error:', error);
       toast.error(error.message || 'Failed to submit withdrawal request');
