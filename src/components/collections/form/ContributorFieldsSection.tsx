@@ -31,15 +31,15 @@ const FIELD_TYPES = [
   { value: 'email', label: 'Email' },
   { value: 'tel', label: 'Phone Number' },
   { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'time', label: 'Time' },
-  { value: 'datetime-local', label: 'Date & Time' },
-  { value: 'url', label: 'URL' },
-  { value: 'password', label: 'Password' },
-  { value: 'textarea', label: 'Text Area' },
+  // { value: 'date', label: 'Date' },
+  // { value: 'time', label: 'Time' },
+  // { value: 'datetime-local', label: 'Date & Time' },
+  // { value: 'url', label: 'URL' },
+  // { value: 'password', label: 'Password' },
+  // { value: 'textarea', label: 'Text Area' },
   { value: 'select', label: 'Select Dropdown' },
-  { value: 'radio', label: 'Radio Buttons' },
-  { value: 'checkbox', label: 'Checkbox' },
+  // { value: 'radio', label: 'Radio Buttons' },
+  // { value: 'checkbox', label: 'Checkbox' },
 ];
 
 const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({

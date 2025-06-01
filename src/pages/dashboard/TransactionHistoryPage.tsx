@@ -221,7 +221,7 @@ const TransactionHistoryPage: React.FC = () => {
                     <span className="material-icons info-icon text-xs">info_outline</span>
                   </span>
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Actions</th>
+                {/* <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Actions</th> */}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -238,14 +238,14 @@ const TransactionHistoryPage: React.FC = () => {
                     <div className="text-gray-900 font-medium">{formatCurrency(earning.balance)} <span className="text-xs text-gray-500">(Balance)</span></div>
                     <div className="text-green-600 font-semibold">{formatCurrency(earning.withdrawable)} <span className="text-xs text-gray-500">(Withdrawable)</span></div>
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
+                  {/* <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       className="flex items-center text-green-600 hover:text-green-800 bg-green-100 hover:bg-green-200 px-2 py-1 rounded-md text-xs"
                       onClick={() => handleWithdraw(earning.id)}
                     >
                       <span className="material-icons text-sm mr-1">account_balance_wallet</span> Withdraw
                     </button>
-                  </td>
+                  </td> */}
                 </tr>
               ))}
             </tbody>
@@ -255,7 +255,7 @@ const TransactionHistoryPage: React.FC = () => {
 
       <div className="bg-white w-full max-w-full shadow-md rounded-lg">
         <div className="px-4 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-700">Withdrawals Transactions</h2>
+          <h2 className="text-xl font-semibold text-gray-700">Withdrawal Transactions</h2>
         </div>
         {/* Responsive table: horizontal scroll on small screens, compact columns */}
         <div className="overflow-x-auto w-full">
