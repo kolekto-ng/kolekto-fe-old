@@ -10,6 +10,7 @@ import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
 
 const DashboardPage: React.FC = () => {
   const { user, isLoading: authloading } = useAuth();
@@ -154,6 +155,7 @@ const DashboardPage: React.FC = () => {
             )}
           </CardContent>
         </Card> */}
+        {/* <ContributionTransactions /> */}
       </div>
     </div>
   );

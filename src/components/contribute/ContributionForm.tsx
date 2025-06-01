@@ -277,7 +277,7 @@ const ContributionForm = ({
             ? amountBreakdown.totalFees + amount * numberOfParticipants
             : amount,
         collectionId,
-        callback_url: `${window.location.origin}/payment/callback`, // <-- Add this
+        callback_url: `${window.location.origin}/payment/verify`, // <-- Add this
       };
       const paymentResponse = await initializePayment(paymentData);
       console.log(paymentResponse, "payment response");

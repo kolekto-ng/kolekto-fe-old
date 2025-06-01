@@ -31,7 +31,7 @@ const DashboardContent = () => {
       case '/dashboard/profile':
         return 'Profile';
       case '/dashboard/transactions':
-        return 'Transaction History';
+        return 'Wallet Overview';
       default:
         if (location.pathname.startsWith('/dashboard/collections/')) {
           return 'Collection Details';

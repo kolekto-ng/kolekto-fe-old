@@ -62,7 +62,7 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
-      <Route path="/payment/callback" element={<PaymentCallback />} />
+      <Route path="/payment/verify" element={<PaymentCallback />} />
 
       {/* Protected Dashboard Routes */}
       <Route

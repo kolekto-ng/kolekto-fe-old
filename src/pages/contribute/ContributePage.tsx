@@ -277,7 +277,7 @@ const ContributePage: React.FC = () => {
             collectionId={collection.id}
             collectionTitle={collection.title}
             amount={collection.amount}
-            amountBreakdown={collection.amount_breakdown}
+            amountBreakdown={collection.wallets[0].fee_breakdown}
             fields={collection.contributions_fields}
             description={collection.description}
             deadline={collection.deadline}

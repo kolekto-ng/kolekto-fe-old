@@ -54,12 +54,9 @@ const PaymentSuccessful = ({
     const message = [
       "🎉 This is my receipt from Kolekto!",
       "",
-      `Collection: ${collectionTitle}`,
-      `Amount Paid: ${formatCurrency(amountPaid)}`,
-      transactionRef ? `Transaction Ref: ${transactionRef}` : "",
-      paidAt ? `Paid At: ${new Date(paidAt).toLocaleString('en-NG')}` : "",
-      channel ? `Channel: ${channel}` : "",
-      currency ? `Currency: ${currency}` : "",
+      `Collection: ${collectionTitle}`, ` Amount Paid: ${formatCurrency(amountPaid)}`,
+      transactionRef ? `Transaction Ref: ${transactionRef}` : "", paidAt ? ` Paid At: ${new Date(paidAt).toLocaleString('en-NG')}` : "",
+      channel ? `Channel: ${channel}` : "", currency ? `Currency: ${currency}` : "",
       "",
       participants && participants.length > 0
         ? "Contributor Details:\n" + participants.map((p, idx) =>
