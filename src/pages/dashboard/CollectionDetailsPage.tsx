@@ -237,7 +237,9 @@ const CollectionDetailsPage: React.FC = () => {
   }, 0) || 0;
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-  const withdrawableAmount = currentCollection?.balance
+  console.log(currentCollection, 'current collection');
+
+  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
 
   if (!currentCollection) {
     return (
@@ -621,7 +623,7 @@ const CollectionDetailsPage: React.FC = () => {
                       >
                         <div>
                           <div className="font-medium">
-                            {contributor.contributor_name}
+                            {contributor.name}
                           </div>
                           <div className="text-sm text-gray-500">
                             {new Date(
@@ -785,7 +787,7 @@ const CollectionDetailsPage: React.FC = () => {
           open={isWithdrawDialogOpen}
           onOpenChange={setIsWithdrawDialogOpen}
           onComplete={onWithdrawComplete}
-          availableBalance={currentCollection?.balance || 0}
+          availableBalance={currentCollection.wallets[0].available_balance || 0}
           collectionId={id || ''}
           collectionTitle={currentCollection?.title || ''}
         />
