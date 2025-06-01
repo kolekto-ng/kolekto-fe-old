@@ -106,6 +106,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ error: error.message, isLoading: false });
     }
   },
+
+  sendMagicLink: async (email: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + "/login",
+        },
+      });
+      if (error) throw error;
+      set({ isLoading: false });
+      return { error: null };
+    } catch (error: any) {
+      set({ error: error.message, isLoading: false });
+      return { error };
+    }
+  },
 }));
 
 // Initialize auth state
