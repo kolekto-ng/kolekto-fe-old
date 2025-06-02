@@ -10,9 +10,10 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useAuthStore } from "@/store";
 
 const NavBar: React.FC = () => {
-  const { user, signOut, isLoading } = useAuth();
+  const { user, isLoading, signOut } = useAuth();
   const isAuthenticated = !!user;
 
   const handleSignOut = async () => {
@@ -77,9 +78,9 @@ const NavBar: React.FC = () => {
         <Link to="/" className="flex items-center">
           <Logo size="md" />
         </Link>
-        
+
         <MobileNav />
-        
+
         <div className="hidden md:flex items-center gap-4">
           {isLoading ? (
             <div className="h-10 w-20 bg-gray-100 animate-pulse rounded-md"></div>

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,10 @@ const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { collections, isLoading, error, fetchCollections } = useCollectionStore();
+
+  console.log('CollectionsPage rendered with user:', user);
+  console.log('Collections:', collections);
+
 
   useEffect(() => {
     if (user) {
@@ -41,6 +44,13 @@ const CollectionsPage: React.FC = () => {
     }
   };
 
+  // Sort collections by created_at descending (newest first)
+  const sortedCollections = [...collections].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -49,7 +59,7 @@ const CollectionsPage: React.FC = () => {
           <Link to="/dashboard/create-collection">New Collection</Link>
         </Button>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           <Card className="col-span-full">
@@ -60,9 +70,9 @@ const CollectionsPage: React.FC = () => {
               <p className="text-gray-500">Loading collections...</p>
             </CardContent>
           </Card>
-        ) : collections && collections.length > 0 ? (
-          collections.map(collection => (
-            <CollectionCard 
+        ) : sortedCollections && sortedCollections.length > 0 ? (
+          sortedCollections.map(collection => (
+            <CollectionCard
               key={collection.id}
               id={collection.id}
               title={collection.title}
@@ -70,8 +80,8 @@ const CollectionsPage: React.FC = () => {
               amount={collection.amount}
               deadline={collection.deadline || new Date().toISOString()}
               status={collection.status as 'active' | 'expired' | 'completed'}
-              participantsCount={collection.participants_count || 0}
-              maxParticipants={collection.max_participants || undefined} 
+              participantsCount={collection.total_contributions || 0}
+              maxParticipants={collection.max_contributions || undefined}
               dateCreated={collection.created_at}
               onShare={() => handleShare(collection.id)}
               onViewDetails={() => handleViewDetails(collection.id)}

@@ -25,9 +25,9 @@ const ContributorLimitSection: React.FC<ContributorLimitSectionProps> = ({
           checked={isMaxContributorsEnabled}
           onCheckedChange={setIsMaxContributorsEnabled}
         />
-        <Label htmlFor="maxContributorsToggle">Limit number of contributors</Label>
+        <Label htmlFor="maxContributorsToggle">Max number of contributions</Label>
       </div>
-      
+
       {isMaxContributorsEnabled && (
         <div className="w-full sm:w-32">
           <Input

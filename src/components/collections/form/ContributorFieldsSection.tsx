@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -31,15 +31,15 @@ const FIELD_TYPES = [
   { value: 'email', label: 'Email' },
   { value: 'tel', label: 'Phone Number' },
   { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'time', label: 'Time' },
-  { value: 'datetime-local', label: 'Date & Time' },
-  { value: 'url', label: 'URL' },
-  { value: 'password', label: 'Password' },
-  { value: 'textarea', label: 'Text Area' },
+  // { value: 'date', label: 'Date' },
+  // { value: 'time', label: 'Time' },
+  // { value: 'datetime-local', label: 'Date & Time' },
+  // { value: 'url', label: 'URL' },
+  // { value: 'password', label: 'Password' },
+  // { value: 'textarea', label: 'Text Area' },
   { value: 'select', label: 'Select Dropdown' },
-  { value: 'radio', label: 'Radio Buttons' },
-  { value: 'checkbox', label: 'Checkbox' },
+  // { value: 'radio', label: 'Radio Buttons' },
+  // { value: 'checkbox', label: 'Checkbox' },
 ];
 
 const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
@@ -72,7 +72,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
     if (fieldType === 'select' || fieldType === 'radio') {
       newField.options = ['Option 1', 'Option 2'];
     }
-    
+
     setFormFields([...formFields, newField]);
     setIsAddingField(false);
   };
@@ -85,17 +85,17 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
     setFormFields(formFields.map(field => {
       if (field.id === id) {
         const updatedField = { ...field, [key]: value };
-        
+
         // Add default options when changing to select/radio
         if (key === 'type' && (value === 'select' || value === 'radio') && !updatedField.options) {
           updatedField.options = ['Option 1', 'Option 2'];
         }
-        
+
         // Remove options when changing away from select/radio
         if (key === 'type' && value !== 'select' && value !== 'radio') {
           delete updatedField.options;
         }
-        
+
         return updatedField;
       }
       return field;
@@ -140,14 +140,14 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
 
   const renderOptionsUI = (field: FormField) => {
     if (field.type !== 'select' && field.type !== 'radio') return null;
-    
+
     return (
       <div className="mt-3 p-3 border border-dashed border-gray-300 rounded-md bg-gray-50">
         <div className="flex items-center gap-2 mb-3">
           <List className="h-4 w-4 text-gray-500" />
           <h4 className="font-medium text-sm">Options for "{field.name || 'Unnamed field'}"</h4>
         </div>
-        
+
         {(field.options || []).map((option, index) => (
           <div key={`${field.id}-option-${index}`} className="flex items-center gap-2 mb-2">
             <Badge variant="outline" className="min-w-6 h-6 flex items-center justify-center text-xs">{index + 1}</Badge>
@@ -169,7 +169,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
             </Button>
           </div>
         ))}
-        
+
         <Button
           type="button"
           variant="outline"
@@ -179,7 +179,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
         >
           <Plus className="mr-1 h-3 w-3" /> Add Option
         </Button>
-        
+
         {(!field.options || field.options.length < 2) && (
           <p className="text-xs text-amber-600 mt-2">
             Add at least 2 options
@@ -191,12 +191,12 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
 
   return (
     <div className="border-t pt-6">
-      <h3 className="font-medium text-lg mb-4">Contributor Information Fields</h3>
-      
+      <h3 className="font-medium text-lg mb-4">Contribution Information Fields</h3>
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId={droppableId}>
           {(provided) => (
-            <div 
+            <div
               {...provided.droppableProps}
               ref={provided.innerRef}
               className="space-y-3"
@@ -207,9 +207,8 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                     <div
                       ref={provided.innerRef}
                       {...provided.draggableProps}
-                      className={`border rounded-lg p-3 bg-white transition-shadow ${
-                        snapshot.isDragging ? 'shadow-lg' : 'shadow-sm'
-                      }`}
+                      className={`border rounded-lg p-3 bg-white transition-shadow ${snapshot.isDragging ? 'shadow-lg' : 'shadow-sm'
+                        }`}
                     >
                       <div className="flex items-start gap-2">
                         <div
@@ -218,7 +217,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                         >
                           <GripVertical className="h-4 w-4" />
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
                             <div className="md:col-span-5">
@@ -230,7 +229,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                                 className="w-full"
                               />
                             </div>
-                            
+
                             <div className="md:col-span-3">
                               <Select
                                 value={field.type}
@@ -248,7 +247,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                                 </SelectContent>
                               </Select>
                             </div>
-                            
+
                             <div className="md:col-span-3 flex items-center space-x-2">
                               <Switch
                                 id={`required-${field.id}`}
@@ -259,7 +258,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                                 Required
                               </Label>
                             </div>
-                            
+
                             <div className="md:col-span-1 flex justify-end">
                               <Button
                                 type="button"
@@ -273,7 +272,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
                               </Button>
                             </div>
                           </div>
-                          
+
                           {renderOptionsUI(field)}
                         </div>
                       </div>
@@ -286,7 +285,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
           )}
         </Droppable>
       </DragDropContext>
-      
+
       <div className="mt-4">
         <DropdownMenu open={isAddingField} onOpenChange={setIsAddingField}>
           <DropdownMenuTrigger asChild>

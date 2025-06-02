@@ -11,6 +11,7 @@ import ContributorLimitSection from './form/ContributorLimitSection';
 import UniqueCodesSection from './form/UniqueCodesSection';
 import ContributorFieldsSection from './form/ContributorFieldsSection';
 import { FormField, PriceTier } from '@/types';
+import { useAuthStore } from '@/store';
 
 interface CreateCollectionFormProps {
   onPreview?: (data: any) => void;
@@ -28,13 +29,13 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const [formFields, setFormFields] = useState<FormField[]>([
     { id: '1', name: 'Contributor Info', type: 'text', required: false },
   ]);
-  
+
   const [usePriceTiers, setUsePriceTiers] = useState(false);
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([
     { id: '1', name: 'Regular', price: 0, description: '', quantity: null }
   ]);
 
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const { createCollection } = useCollectionStore();
 
@@ -60,16 +61,16 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         } else {
           kolektoFeePercentage = 0.015;
         }
-        
+
         let gatewayFee = parsedAmount * 0.015;
         gatewayFee = Math.min(gatewayFee, 2000);
-        
+
         const platformFee = parsedAmount * kolektoFeePercentage;
-        
+
         setKolektoFee(platformFee);
         setPaymentGatewayFee(gatewayFee);
         setTotalFees(platformFee + gatewayFee);
-        
+
         if (feeBearer === 'contributor') {
           setTotalPayable(parsedAmount + platformFee + gatewayFee);
         } else {
@@ -114,10 +115,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
     // Validate price tiers if enabled
     if (usePriceTiers) {
-      const invalidTiers = priceTiers.filter(tier => 
+      const invalidTiers = priceTiers.filter(tier =>
         !tier.name.trim() || tier.price <= 0
       );
-      
+
       if (invalidTiers.length > 0) {
         toast.error("Each price tier must have a name and a valid price greater than zero");
         setIsLoading(false);
@@ -134,11 +135,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
     try {
       // Validate options for option-type fields
-      const invalidFields = formFields.filter(field => 
-        (field.type === 'select' || field.type === 'radio') && 
+      const invalidFields = formFields.filter(field =>
+        (field.type === 'select' || field.type === 'radio') &&
         (!field.options || field.options.length < 2 || field.options.some(opt => !opt.trim()))
       );
-      
+
       if (invalidFields.length > 0) {
         const fieldNames = invalidFields.map(f => f.name || 'Unnamed field').join(', ');
         toast.error(`Please add at least 2 non-empty options for: ${fieldNames}`);
@@ -147,14 +148,16 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       }
 
       const collectionData = {
-        organizer_id: user.id,
+        user_id: user.id,
         title,
         description: description || null,
-        amount: usePriceTiers ? 0 : parseFloat(amount),
-        max_participants: maxContributorsValue,
+        amount: parseFloat(amount),
+        max_contributions: maxContributorsValue,
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
-        form_fields: formFields,
-        pricing_tiers: priceTiers,
+        contributions_fields: formFields,
+        fee_bearer: feeBearer,
+        generate_unique_codes: generateUniqueCodes,
+        code_prefix: codePrefix || null,
         status: "active" as const
       };
 
@@ -162,7 +165,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
       toast.success("Collection created successfully!");
       console.log("Collection created:", data);
-      
+
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
@@ -175,7 +178,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const getKolektoFeePercentage = () => {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount === 0) return "3.0%";
-    
+
     if (parsedAmount < 1000) return "3.0%";
     if (parsedAmount < 5000) return "2.5%";
     if (parsedAmount < 20000) return "2.0%";
@@ -227,18 +230,18 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         formFields={formFields}
         setFormFields={setFormFields}
       />
-      
+
       <div className="border-t pt-6 flex gap-4">
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           className="flex-1 bg-kolekto hover:bg-kolekto/90"
           disabled={isLoading}
         >
           {isLoading ? "Creating Collection..." : "Create Collection"}
         </Button>
-        
+
         {onPreview && (
-          <Button 
+          <Button
             type="button"
             variant="outline"
             className="flex-1"

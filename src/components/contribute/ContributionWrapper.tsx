@@ -1,112 +1,116 @@
+import React, { useState } from "react";
+import ContributionForm from "./ContributionForm";
+import PaymentSuccessful from "./PaymentSuccessful";
+import PaymentErrorHandler from "./PaymentErrorHandler";
+import { toast } from "sonner";
+import { format } from "path";
+import { log } from "console";
 
-import React, { useState } from 'react';
-import ContributionForm from './ContributionForm';
-import PaymentSuccessful from './PaymentSuccessful';
-import PaymentErrorHandler from './PaymentErrorHandler';
-
-interface PriceTier {
+interface Field {
   name: string;
-  price: number;
-  description?: string;
-  quantity?: number | null;
+  type: string;
+  required: boolean;
+  value?: string;
 }
 
 interface ContributionWrapperProps {
   collectionId: string;
   collectionTitle: string;
   amount: number;
-  fields: any[];
+  amountBreakdown: { totalPayable: number; totalFees: number };
+  fields: Field[];
   description?: string;
   deadline?: string;
-  priceTiers?: PriceTier[];
 }
 
 const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   collectionId,
   collectionTitle,
   amount,
+  amountBreakdown,
   fields,
   description,
   deadline,
-  priceTiers
 }) => {
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'error'>('pending');
-  const [paymentData, setPaymentData] = useState<any>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(true);
+  const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
+  const [participantDetails, setParticipantDetails] = useState<any[]>([]);
+  const [amountPaid, setAmountPaid] = useState(0);
+  const [transactionRef, setTransactionRef] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePaymentSuccess = (data: any) => {
-    setPaymentData(data);
-    setPaymentStatus('success');
+  const isExpired = deadline ? new Date(deadline) < new Date() : false;
+
+  const handlePaymentSuccess = (formData: any) => {
+    console.log("Payment success with data:", formData);
+
+    const formattedParticipants = formData.participants.map(
+      (participant: any, index: number) => {
+        return {
+          id: `participant-${index + 1}`,
+          details: Object.entries(participant.data).map(([key, value]) => ({
+            label: key,
+            value: value as string,
+          })),
+          uniqueCode: `${formData.collectionId}-${Math.random()
+            .toString(36)
+            .substring(2, 8)
+            .toUpperCase()}`,
+        };
+      }
+    );
+    console.log(formattedParticipants, "formattedParticipants");
+    console.log(formData, "formData");
+
+    setParticipantDetails(formattedParticipants);
+    setAmountPaid(formData.totalAmount);
+    setTransactionRef(formData.transactionRef || "");
+    setIsPaymentSuccessful(true);
   };
 
   const handlePaymentError = (errorMsg: string) => {
-    setErrorMessage(errorMsg);
-    setPaymentStatus('error');
+    setError(errorMsg);
+    setTimeout(() => {
+      setError(null);
+    }, 10000);
   };
 
-  const handleRetryPayment = () => {
-    setPaymentStatus('pending');
-    setErrorMessage(null);
+  const handleRetry = () => {
+    setError(null);
   };
-
-  const handleModalChange = (open: boolean) => {
-    setIsModalOpen(open);
-    // If modal is closed and status is success or error, reset to pending
-    if (!open && (paymentStatus === 'success' || paymentStatus === 'error')) {
-      setPaymentStatus('pending');
-    }
-  };
-
-  // Process payment data for PaymentSuccessful component
-  const processedParticipants = paymentData ? [{
-    id: '1',
-    details: Object.entries(paymentData.formData || {}).map(([key, value]) => ({
-      label: key,
-      value: value as string
-    })),
-    uniqueCode: paymentData.referenceCode || 'N/A'
-  }] : [];
-
-  // Create collection object from props
-  const collection = {
-    id: collectionId,
-    title: collectionTitle,
-    amount: amount,
-    description: description,
-    deadline: deadline
-  };
+  console.log(amountBreakdown, "fields");
 
   return (
-    <div>
-      {paymentStatus === 'pending' && (
+    <>
+      <PaymentErrorHandler error={error} onRetry={handleRetry} />
+
+      {isExpired ? (
+        <div className="text-center py-8">
+          <h2 className="text-xl font-bold mb-2">Collection Expired</h2>
+          <p className="text-gray-600">
+            The deadline for this collection has passed and it is no longer
+            accepting contributions.
+          </p>
+        </div>
+      ) : (
         <ContributionForm
-          collection={collection}
-          formFields={fields}
-          pricingTiers={priceTiers}
-          onPaymentSuccess={handlePaymentSuccess}
-          onPaymentError={handlePaymentError}
-        />
-      )}
-
-      {paymentStatus === 'success' && (
-        <PaymentSuccessful
-          open={isModalOpen}
-          onOpenChange={handleModalChange}
+          collectionId={collectionId}
           collectionTitle={collectionTitle}
-          amountPaid={paymentData?.amount || amount}
-          participants={processedParticipants}
-          transactionRef={paymentData?.referenceCode}
+          amount={amount}
+          amountBreakdown={amountBreakdown}
+          fields={fields}
+          description={description}
         />
       )}
 
-      {paymentStatus === 'error' && (
-        <PaymentErrorHandler
-          error={errorMessage || 'An error occurred during payment processing.'}
-          onRetry={handleRetryPayment}
-        />
-      )}
-    </div>
+      {/* <PaymentSuccessful
+        open={isPaymentSuccessful}
+        onOpenChange={setIsPaymentSuccessful}
+        collectionTitle={collectionTitle}
+        amountPaid={amountPaid}
+        participants={participantDetails}
+        transactionRef={transactionRef}
+      /> */}
+    </>
   );
 };
 

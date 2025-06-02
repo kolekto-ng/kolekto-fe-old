@@ -65,25 +65,27 @@ const PricingSection: React.FC<PricingSectionProps> = ({
   };
 
   const handlePriceTierChange = (id: string, field: keyof PriceTier, value: string) => {
-    setPriceTiers(priceTiers.map(tier => 
+    setPriceTiers(priceTiers.map(tier =>
       tier.id === id ? { ...tier, [field]: value } : tier
     ));
   };
 
+  // <div className="flex items-center space-x-2 mb-4">
+  // <Switch
+  //   id="priceTiersToggle"
+  //   checked={usePriceTiers}
+  //   onCheckedChange={setUsePriceTiers}
+  // />
+  //   <Label htmlFor="priceTiersToggle" className="flex items-center">
+  //   <span>Use multiple price tiers</span>
+  //   <Tags className="ml-1 h-4 w-4 text-gray-500" />
+  // </Label>
+  // </div>
+
   return (
     <div className="border-t pt-4">
-      <div className="flex items-center space-x-2 mb-4">
-        <Switch
-          id="priceTiersToggle"
-          checked={usePriceTiers}
-          onCheckedChange={setUsePriceTiers}
-        />
-        <Label htmlFor="priceTiersToggle" className="flex items-center">
-          <span>Use multiple price tiers</span>
-          <Tags className="ml-1 h-4 w-4 text-gray-500" />
-        </Label>
-      </div>
-      
+
+
       {!usePriceTiers ? (
         <div className="space-y-2">
           <Label htmlFor="amount">Amount per Person (NGN)</Label>
@@ -102,7 +104,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
       ) : (
         <div className="space-y-4">
           <h3 className="font-medium text-base">Price Tiers</h3>
-          
+
           {priceTiers.map((tier, index) => (
             <div key={tier.id} className="p-4 border rounded-md">
               <div className="flex justify-between items-center mb-3">
@@ -117,7 +119,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <div className="space-y-2">
                   <Label>Tier Name</Label>
@@ -128,7 +130,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                     required={usePriceTiers}
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Price (NGN)</Label>
                   <Input
@@ -142,7 +144,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                   />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Description (Optional)</Label>
@@ -152,7 +154,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                     placeholder="Brief description of this tier"
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>Quantity Available (Optional)</Label>
                   <Input
@@ -166,7 +168,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
               </div>
             </div>
           ))}
-          
+
           <Button
             type="button"
             variant="outline"
@@ -183,9 +185,9 @@ const PricingSection: React.FC<PricingSectionProps> = ({
           <CardContent className="pt-4">
             <div className="space-y-4">
               <h3 className="font-medium">Charges Breakdown</h3>
-              
-              <RadioGroup 
-                value={feeBearer} 
+
+              <RadioGroup
+                value={feeBearer}
                 onValueChange={(value) => setFeeBearer(value as 'organizer' | 'contributor')}
                 className="space-y-3"
               >
@@ -198,7 +200,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                   <Label htmlFor="contributor">Contributor pays charges (added to payment amount)</Label>
                 </div>
               </RadioGroup>
-              
+
               <div className="text-sm mb-2">
                 <p className="font-medium">Fee Structure:</p>
                 <ul className="list-disc pl-5 text-gray-600 space-y-1">
@@ -209,24 +211,26 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                   <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
                 </ul>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2 text-sm border-t border-gray-200 pt-3">
                 <div>Base Amount:</div>
                 <div className="text-right font-medium">₦{parseFloat(amount).toLocaleString()}</div>
-                
+
                 <div>Kolekto Fee ({getKolektoFeePercentage()}):</div>
-                <div className="text-right">₦{kolektoFee.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-                
+                <div className="text-right">₦{kolektoFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
                 <div>Payment Gateway (1.5%):</div>
-                <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-                
+                <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
                 <div className="border-t border-gray-200 pt-1 font-medium">Total Fees:</div>
-                <div className="border-t border-gray-200 pt-1 text-right font-medium">₦{totalFees.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-                
-                {feeBearer === 'contributor' && (
+                <div className="border-t border-gray-200 pt-1 text-right font-medium">₦{totalFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
+                {feeBearer && (
                   <>
-                    <div className="pt-3 font-bold">Amount Payable:</div>
-                    <div className="pt-3 text-right font-bold">₦{totalPayable.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div className="pt-3 font-bold">Amount Payable (by contributor):</div>
+                    <div className="pt-3 text-right font-bold">₦{totalPayable.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    <div className="pt-3 font-bold">Amount collection would recieve:</div>
+                    <div className="pt-3 text-right font-bold">₦{(totalPayable - totalFees).toFixed(2)}</div>
                   </>
                 )}
               </div>

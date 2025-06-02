@@ -26,7 +26,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuth();
-  
+
   const { fetchCollectionById, currentCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
@@ -37,7 +37,7 @@ const CollectionDetailsPage: React.FC = () => {
         console.error('Error fetching collection:', err);
         toast.error('Failed to load collection details');
       });
-      
+
       fetchContributions(id).catch((err) => {
         console.error('Error fetching contributions:', err);
         toast.error('Failed to load contributions');
@@ -59,33 +59,59 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    // If no contributions, show a message
-    if (!contributions || contributions.length === 0) {
-      toast.info("No contributors data to export");
+    const paidContributions = (contributions || []).filter(c => c.status === "paid");
+    if (paidContributions.length === 0) {
+      toast.info("No paid contributors data to export");
       return;
     }
 
-    // Define headers for CSV (excluding sensitive data like amount)
+    // 1. Collect all unique dynamic fields from contributor_information
+    const allDynamicFields = Array.from(
+      new Set(
+        paidContributions.flatMap(contributor =>
+          (contributor.contributor_information || []).flatMap(info =>
+            Object.keys(info)
+          )
+        )
+      )
+    );
+
+    // 2. Check if any contributor has a unique code
+    const hasUniqueCode = paidContributions.some(
+      c => c.contributor_unique_code
+    );
+
+    // 3. Define headers for CSV
     const headers = [
-      'Name',
-      'Email', 
-      'Phone',
-      'Date Contributed',
-      'Status'
+      // 'Name',
+      // 'Email',
+      // 'Phone',
+      // 'Amount',
+      // 'Date Contributed',
+      ...allDynamicFields,
+      ...(hasUniqueCode ? ['Unique Code'] : []),
+      // 'Status'
     ];
 
     let csvContent = headers.join(',') + '\n';
 
-    contributions.forEach((contribution) => {
+    paidContributions.forEach((contribution) => {
       const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
       const row = [
-        contribution.contributor_name,
-        contribution.contributor_email,
-        contribution.contributor_phone || 'N/A',
-        formattedDate,
-        contribution.status
+        // contribution.contributor_name || contribution.name || '',
+        // contribution.contributor_email || contribution.email || '',
+        // contribution.contributor_phone || contribution.phone || '',
+        // contribution.amount || '',
+        // formattedDate,
+        ...allDynamicFields.map(field =>
+          (contribution.contributor_information || [])[0]?.[field] || ''
+        ),
+        ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+        // contribution.status || ''
       ];
-      csvContent += row.join(',') + '\n';
+      csvContent += row.map(val =>
+        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+      ).join(',') + '\n';
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -99,6 +125,9 @@ const CollectionDetailsPage: React.FC = () => {
 
     toast.success('Contributor data exported successfully!');
   };
+
+  console.log('contributions:---------', contributions,);
+
 
   const handleWithdraw = () => {
     setIsWithdrawDialogOpen(true);
@@ -114,19 +143,15 @@ const CollectionDetailsPage: React.FC = () => {
       toast.error('Unable to process withdrawal. Please try again.');
       return;
     }
+    console.log(data, 'withdraw data');
 
     try {
-      await createWithdrawal({
-        organizer_id: user.id,
-        amount: data.amount,
-        account_name: data.accountName,
-        account_number: data.accountNumber,
-        bank_name: data.bankName,
-        collection_id: id
-      });
-      
       setIsWithdrawDialogOpen(false);
       toast.success('Withdrawal request submitted successfully!');
+      setTimeout(() => {
+        window.location.reload();
+
+      }, 2000);
     } catch (error: any) {
       console.error('Withdrawal error:', error);
       toast.error(error.message || 'Failed to submit withdrawal request');
@@ -134,8 +159,22 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
+  // Helper to check if collection is active based on deadline
+  const isActiveByDeadline = currentCollection?.deadline
+    ? new Date(currentCollection.deadline) > new Date()
+    : false;
+  console.log(currentCollection?.deadline, isActiveByDeadline, new Date(currentCollection?.deadline || '') > new Date(), '----------------------');
+
+  // Helper to get status string based on deadline
+  const getDeadlineStatus = () => {
+    if (!currentCollection?.deadline) return currentCollection?.status || "No deadline";
+    return isActiveByDeadline ? "active" : "expired";
+  };
+
+  // Helper to get status color based on deadline
+  const getDeadlineStatusColor = () => {
+    const status = getDeadlineStatus();
+    switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
       case 'expired':
@@ -149,8 +188,10 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
+  // Helper to get status icon based on deadline
+  const getDeadlineStatusIcon = () => {
+    const status = getDeadlineStatus();
+    switch (status) {
       case 'active':
         return <CheckCircle className="h-4 w-4 mr-1" />;
       case 'expired':
@@ -164,9 +205,14 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  const filteredContributors = contributions?.filter((contribution) => 
-    contribution.contributor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contribution.contributor_email?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Only show paid contributors
+  const filteredContributors = (contributions || []).filter(
+    (contribution) =>
+      (contribution.status === "paid") &&
+      (
+        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
   ) || [];
 
   // Group contributions by date for chart data
@@ -187,7 +233,9 @@ const CollectionDetailsPage: React.FC = () => {
   }, 0) || 0;
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-  const withdrawableAmount = totalCollected * 0.9; // 90% of total is withdrawable (assuming 10% platform fee)
+  console.log(currentCollection, 'current collection');
+
+  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
 
   if (!currentCollection) {
     return (
@@ -201,15 +249,36 @@ const CollectionDetailsPage: React.FC = () => {
     );
   }
 
+  // 1. Collect all unique dynamic fields from contributor_information
+  const allDynamicFields = Array.from(
+    new Set(
+      filteredContributors.flatMap(contributor => {
+        console.log(contributor, 'contributor');
+
+
+        return (contributor.contributor_information || []).flatMap(info =>
+          Object.keys(info)
+        )
+      }
+      )
+    )
+  );
+  console.log(allDynamicFields, 'allDynamicFields', filteredContributors, 'filteredContributors');
+
+  // 2. Check if any contributor has a unique code
+  const hasUniqueCode = filteredContributors.some(
+    c => c.contributor_unique_code
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getStatusColor(currentCollection.status)}`}>
-              {getStatusIcon(currentCollection.status)}
-              {currentCollection.status}
+            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
+              {getDeadlineStatusIcon()}
+              {getDeadlineStatus()}
             </span>
           </div>
           {currentCollection.description && (
@@ -217,7 +286,7 @@ const CollectionDetailsPage: React.FC = () => {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button 
+          <Button
             onClick={handleShare}
             className="bg-kolekto hover:bg-kolekto/90 flex items-center"
           >
@@ -225,9 +294,9 @@ const CollectionDetailsPage: React.FC = () => {
             <span className="hidden sm:inline">Share Collection</span>
             <span className="sm:hidden">Share</span>
           </Button>
-          
-          <Button 
-            onClick={handleWithdraw} 
+
+          <Button
+            onClick={handleWithdraw}
             variant="outline"
             className="border-kolekto text-kolekto hover:bg-kolekto/10 flex items-center"
             disabled={withdrawableAmount <= 0}
@@ -238,17 +307,17 @@ const CollectionDetailsPage: React.FC = () => {
           </Button>
         </div>
       </div>
-      
+
       {showQR && (
         <div className="mb-6">
-          <QRCodeDisplay 
-            collectionId={id || ''} 
-            collectionTitle={currentCollection.title || 'Collection'} 
+          <QRCodeDisplay
+            collectionId={id || ''}
+            collectionTitle={currentCollection.title || 'Collection'}
             shareUrl={shareUrl}
           />
         </div>
       )}
-      
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-3 w-full">
           <TabsTrigger value="overview" className="flex items-center gap-1">
@@ -264,7 +333,7 @@ const CollectionDetailsPage: React.FC = () => {
             Activity
           </TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="overview" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
@@ -276,7 +345,7 @@ const CollectionDetailsPage: React.FC = () => {
                 <p className="text-sm text-gray-500">Per contributor</p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
@@ -286,14 +355,14 @@ const CollectionDetailsPage: React.FC = () => {
                 <p className="text-sm text-gray-500">From {contributorsCount} contributors</p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Deadline</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {currentCollection.deadline ? 
+                  {currentCollection.deadline ?
                     new Date(currentCollection.deadline).toLocaleDateString('en-NG', {
                       day: 'numeric',
                       month: 'short',
@@ -301,8 +370,8 @@ const CollectionDetailsPage: React.FC = () => {
                     }) : 'No deadline set'}
                 </div>
                 <p className="text-sm text-gray-500">
-                  {currentCollection.deadline && new Date(currentCollection.deadline) > new Date() 
-                    ? `${Math.ceil((new Date(currentCollection.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left` 
+                  {currentCollection.deadline && isActiveByDeadline
+                    ? `${Math.ceil((new Date(currentCollection.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left`
                     : currentCollection.deadline ? 'Expired' : 'No deadline'}
                 </p>
               </CardContent>
@@ -328,9 +397,9 @@ const CollectionDetailsPage: React.FC = () => {
                       </div>
                       <div className="flex justify-between border-b pb-2">
                         <span className="text-gray-600">Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getStatusColor(currentCollection.status)}`}>
-                          {getStatusIcon(currentCollection.status)}
-                          {currentCollection.status}
+                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
+                          {getDeadlineStatusIcon()}
+                          {getDeadlineStatus()}
                         </span>
                       </div>
                       {currentCollection.max_participants && (
@@ -345,10 +414,10 @@ const CollectionDetailsPage: React.FC = () => {
                       </div>
                       <div className="flex justify-between pb-2">
                         <span className="text-gray-600">Unique Payment Link</span>
-                        <a 
-                          href={shareUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
+                        <a
+                          href={shareUrl}
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-kolekto hover:underline truncate max-w-[200px]"
                         >
                           {shareUrl.split('/').pop()}
@@ -359,31 +428,31 @@ const CollectionDetailsPage: React.FC = () => {
                   <div>
                     <h3 className="font-medium mb-2">Quick Actions</h3>
                     <div className="space-y-3">
-                      <Button 
-                        onClick={handleShare} 
-                        variant="outline" 
+                      <Button
+                        onClick={handleShare}
+                        variant="outline"
                         className="w-full flex items-center justify-center"
                       >
                         <Share className="mr-2 h-4 w-4" />
                         Share Collection
                       </Button>
-                      <Button 
-                        onClick={() => setShowQR(!showQR)} 
-                        variant="outline" 
+                      <Button
+                        onClick={() => setShowQR(!showQR)}
+                        variant="outline"
                         className="w-full flex items-center justify-center"
                       >
                         {showQR ? 'Hide QR Code' : 'Show QR Code'}
                       </Button>
-                      <Button 
-                        onClick={exportToCSV} 
-                        variant="outline" 
+                      <Button
+                        onClick={exportToCSV}
+                        variant="outline"
                         className="w-full flex items-center justify-center"
                       >
                         <Download className="mr-2 h-4 w-4" />
                         Export Contributors Data
                       </Button>
-                      <Button 
-                        onClick={handleWithdraw} 
+                      <Button
+                        onClick={handleWithdraw}
                         className="w-full bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
                         disabled={withdrawableAmount <= 0}
                       >
@@ -397,7 +466,7 @@ const CollectionDetailsPage: React.FC = () => {
             </Card>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="contributors" className="mt-6">
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -410,9 +479,9 @@ const CollectionDetailsPage: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
-                <Button 
+                <Button
                   onClick={exportToCSV}
-                  variant="outline" 
+                  variant="outline"
                   size="sm"
                   className="flex items-center whitespace-nowrap"
                 >
@@ -421,55 +490,171 @@ const CollectionDetailsPage: React.FC = () => {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="overflow-auto">
-              {filteredContributors.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Amount</TableHead>
-                      <TableHead className="hidden md:table-cell">Date</TableHead>
-                      <TableHead className="hidden lg:table-cell">Phone</TableHead>
-                      <TableHead className="hidden lg:table-cell">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredContributors.map(contributor => (
-                      <TableRow key={contributor.id}>
-                        <TableCell className="font-medium">{contributor.contributor_name}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{contributor.contributor_email}</TableCell>
-                        <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">{contributor.contributor_phone || 'N/A'}</TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${
-                            contributor.status === 'paid' ? 'bg-green-100 text-green-800' : 
-                            contributor.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {contributor.status}
-                          </span>
-                        </TableCell>
+            <CardContent className="p-0">
+              <div className="w-full overflow-x-auto">
+                {filteredContributors.length > 0 ? (
+                  <Table className="min-w-[700px]">
+                    <TableHeader className='overflow-x-auto'>
+                      <TableRow>
+                        {/* <TableHead>Name</TableHead>
+                        <TableHead className="hidden sm:table-cell">Email</TableHead>
+                        <TableHead className="hidden md:table-cell">Amount</TableHead>
+                        <TableHead className="hidden md:table-cell">Date</TableHead>
+                        <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
+                        {/* Render dynamic fields */}
+                        {allDynamicFields.map(field => (
+                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
+                        ))}
+                        {/* Unique code column if present */}
+                        {hasUniqueCode && (
+                          <TableHead className="lg:table-cell">Unique Code</TableHead>
+                        )}
+                        {/* <TableHead className="lg:table-cell">Status</TableHead> */}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="py-8 text-center text-gray-500">
-                  {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
-                </div>
-              )}
-              <div className="block sm:hidden mt-4">
-                <p className="text-xs text-gray-500">Swipe to see full contributor details</p>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredContributors.map(contributor => (
+                        <TableRow key={contributor.id}>
+                          {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
+                          <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {contributor.formattedDate ||
+                              new Date(contributor.created_at).toLocaleDateString('en-NG')}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
+                          {/* Render dynamic fields */}
+                          {allDynamicFields.map(field => (
+                            <TableCell key={field} className="lg:table-cell">
+                              {(contributor.contributor_information || [])[0]?.[field] || ''}
+                            </TableCell>
+                          ))}
+                          {/* Unique code column if present */}
+                          {hasUniqueCode && (
+                            <TableCell className="lg:table-cell">
+                              {contributor.contributor_unique_code || ''}
+                            </TableCell>
+                          )}
+                          {/* <TableCell className="hidden lg:table-cell">
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
+                              ? 'bg-green-100 text-green-800'
+                              : contributor.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                              }`}>
+                              {contributor.status}
+                            </span>
+                          </TableCell> */}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="py-8 text-center text-gray-500">
+                    {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="activity" className="mt-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Contribution Activity</CardTitle>
+              <div className="text-right">
+                <div className="text-sm text-gray-500">
+                  Available for withdrawal
+                </div>
+                <div className="font-bold text-lg">
+                  ₦{withdrawableAmount.toLocaleString()}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* {chartData.length > 0 ? (
+                <div className="h-64 w-full mb-6">
+                  <ChartContainer
+                    config={{
+                      amount: {
+                        color: "#10B981",
+                      },
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart data={chartData}>
+                        <XAxis dataKey="date" />
+                        <YAxis tickFormatter={(value) => `₦${value}`} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <Tooltip
+                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
+                          labelFormatter={(label) => `Date: ${label}`}
+                        />
+                        <Bar
+                          dataKey="amount"
+                          name="Amount"
+                          fill="var(--color-amount)"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              ) : (
+                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
+                  <p className="text-gray-500">No payment activity yet</p>
+                </div>
+              )} */}
+
+              <h3 className="font-medium mb-4">Recent Contributions</h3>
+              {filteredContributors.length > 0 ? (
+                <div className="space-y-4">
+                  {filteredContributors.slice(0, 5).map((contributor) => {
+                    if (contributor.status != "paid") return;
+                    return (
+                      <div
+                        key={contributor.id}
+                        className="flex justify-between items-center border-b pb-2"
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {contributor.name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(
+                              contributor.created_at
+                            ).toLocaleDateString("en-NG")}
+                          </div>
+                        </div>
+                        <div className="font-bold">
+                          ₦{contributor.amount?.toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-4 text-center text-gray-500">
+                  No contributions yet
+                </div>
+              )}
+
+              <div className="mt-6">
+                <Button
+                  onClick={handleWithdraw}
+                  className="w-full bg-kolekto hover:bg-kolekto/90"
+                  disabled={withdrawableAmount <= 0}
+                >
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Withdraw Funds
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* <TabsContent value="activity" className="mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Contribution Activity</CardTitle>
@@ -493,14 +678,14 @@ const CollectionDetailsPage: React.FC = () => {
                         <XAxis dataKey="date" />
                         <YAxis tickFormatter={(value) => `₦${value}`} />
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip 
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`} 
+                        <Tooltip
+                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
                           labelFormatter={(label) => `Date: ${label}`}
                         />
-                        <Bar 
-                          dataKey="amount" 
-                          name="Amount" 
-                          fill="var(--color-amount)" 
+                        <Bar
+                          dataKey="amount"
+                          name="Amount"
+                          fill="var(--color-amount)"
                           radius={[4, 4, 0, 0]}
                         />
                       </RechartsBarChart>
@@ -512,7 +697,7 @@ const CollectionDetailsPage: React.FC = () => {
                   <p className="text-gray-500">No payment activity yet</p>
                 </div>
               )}
-              
+
               <h3 className="font-medium mb-4">Recent Contributions</h3>
               {contributions && contributions.length > 0 ? (
                 <div className="space-y-4">
@@ -533,9 +718,9 @@ const CollectionDetailsPage: React.FC = () => {
                   No contributions yet
                 </div>
               )}
-              
+
               <div className="mt-6">
-                <Button 
+                <Button
                   onClick={handleWithdraw}
                   className="w-full bg-kolekto hover:bg-kolekto/90"
                   disabled={withdrawableAmount <= 0}
@@ -546,9 +731,9 @@ const CollectionDetailsPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> */}
       </Tabs>
-      
+
       <Drawer open={isShareDrawerOpen} onOpenChange={setIsShareDrawerOpen}>
         <DrawerContent>
           <DrawerHeader>
@@ -558,14 +743,14 @@ const CollectionDetailsPage: React.FC = () => {
             </DrawerDescription>
           </DrawerHeader>
           <div className="px-4">
-            <QRCodeDisplay 
-              collectionId={id || ''} 
-              collectionTitle={currentCollection.title || 'Collection'} 
+            <QRCodeDisplay
+              collectionId={id || ''}
+              collectionTitle={currentCollection.title || 'Collection'}
               shareUrl={shareUrl}
             />
           </div>
           <DrawerFooter>
-            <Button 
+            <Button
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
@@ -592,13 +777,13 @@ const CollectionDetailsPage: React.FC = () => {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
-      
+
       {currentCollection && (
-        <WithdrawFundsDialog 
+        <WithdrawFundsDialog
           open={isWithdrawDialogOpen}
           onOpenChange={setIsWithdrawDialogOpen}
           onComplete={onWithdrawComplete}
-          availableBalance={currentCollection?.total_amount || 0}
+          availableBalance={currentCollection.wallets[0].available_balance || 0}
           collectionId={id || ''}
           collectionTitle={currentCollection?.title || ''}
         />
