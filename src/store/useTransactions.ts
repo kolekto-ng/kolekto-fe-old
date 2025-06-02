@@ -38,7 +38,6 @@ export const useTransactions = () => {
     }
     try {
       const response = await axiosInstance.get(`/collections`);
-      console.log(response, "collections-09876777777777");
 
       return {
         data: response?.data.data,
@@ -80,7 +79,6 @@ export const useTransactions = () => {
     }
     try {
       const response = await axiosInstance.get(`/withdrawals`);
-      console.log(response.data.withdrawals, "withdrawals");
 
       return {
         data: (response.data.withdrawals as Withdrawal[]) || [],

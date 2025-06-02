@@ -132,7 +132,6 @@ export const initializeAuth = async () => {
 
   // Set up auth state listener
   supabase.auth.onAuthStateChange((event, session) => {
-    console.log("Auth state changed:", event);
 
     // Update the store's state
     useAuthStore.setState({

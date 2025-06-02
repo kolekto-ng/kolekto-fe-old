@@ -9,7 +9,6 @@ export function useDashboard(collections = [], contributions = [], userId) {
   // Ensure collections and contributions are always arrays
   const safeCollections = Array.isArray(collections) ? collections : [];
   const safeContributions = Array.isArray(contributions) ? contributions : [];
-  console.log(safeCollections, collections, "usedash");
 
   const now = new Date();
 

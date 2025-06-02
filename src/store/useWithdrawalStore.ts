@@ -16,7 +16,6 @@ export const useWithdrawalStore = create((set, get) => ({
       const res = await axiosInstance.get("/withdrawals", {
         params: { userId, collectionId },
       });
-      console.log("Fetched withdrawals data:", res.data);
 
       // let query = supabase
       //   .from("withdrawals")
@@ -67,7 +66,6 @@ export const useWithdrawalStore = create((set, get) => ({
         "/withdrawals/request",
         withdrawalData
       );
-      console.log(data, "Withdrawal data being sent:", withdrawalData);
 
       // const { data, error } = await supabase
       //   .from("withdrawals")

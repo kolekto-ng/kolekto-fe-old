@@ -20,9 +20,6 @@ const DashboardPage: React.FC = () => {
 
   const { stats, recentPayments, isLoading } = useDashboard(collections, contributions, user?.id);
 
-  console.log(collections, 'collections in dashboard page');
-
-
   useEffect(() => {
     if (user?.id) {
       fetchCollections(user.id);
