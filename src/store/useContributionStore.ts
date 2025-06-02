@@ -16,7 +16,6 @@ export const useContributionStore = create((set, get) => ({
       let res = await axiosInstance.get("/collection", {
         params: { collectionId },
       });
-      console.log(res.data, "RESPONSE FROM FETCH COLLECTION BY ID API");
 
       // Format data
       const formattedData = {
@@ -43,7 +42,6 @@ export const useContributionStore = create((set, get) => ({
       const { data } = await axiosInstance.get("/contributions", {
         params: { collectionId },
       });
-      console.log(data, "RESPONSE FROM FETCH CONTRIBUTIONS API");
 
       // Format data
       const formattedData =

@@ -53,7 +53,7 @@ const UserProfilePage: React.FC = () => {
 
   const handleSave = async () => {
     if (!user || !profile) return;
-    
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -96,7 +96,7 @@ const UserProfilePage: React.FC = () => {
         account_number: data.accountNumber,
         bank_name: data.bankName
       });
-      
+
       setIsWithdrawDialogOpen(false);
       toast.success('Withdrawal request submitted successfully!');
     } catch (error: any) {
@@ -109,7 +109,7 @@ const UserProfilePage: React.FC = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Profile & Settings</h1>
-      
+
       {loading ? (
         <div className="text-center text-muted-foreground py-10">Loading profile...</div>
       ) : profile ? (
@@ -178,7 +178,7 @@ const UserProfilePage: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Account Actions</CardTitle>
             </CardHeader>
@@ -190,8 +190,8 @@ const UserProfilePage: React.FC = () => {
                 Withdraw Funds
               </Button>
             </CardContent>
-          </Card>
-
+          </Card> */}
+          {/* 
           <WithdrawFundsDialog 
             open={isWithdrawDialogOpen}
             onOpenChange={setIsWithdrawDialogOpen}
@@ -199,7 +199,7 @@ const UserProfilePage: React.FC = () => {
             availableBalance={0}
             collectionId=""
             collectionTitle=""
-          />
+          /> */}
         </>
       ) : (
         <div className="text-center text-destructive py-10">Profile not found.</div>

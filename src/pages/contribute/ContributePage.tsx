@@ -31,7 +31,6 @@ const ContributePage: React.FC = () => {
 
       try {
         const data = await fetchCollectionById(collectionId);
-        console.log(data, "getting singe ");
 
         if (!data) {
           throw new Error('Collection not found');
@@ -89,9 +88,6 @@ const ContributePage: React.FC = () => {
       Array.isArray(collection.pricing_tiers) &&
       collection.pricing_tiers.length > 0;
   };
-
-  console.log(collection, 'contribute collection');
-
 
   // If still loading
   if (loading) {

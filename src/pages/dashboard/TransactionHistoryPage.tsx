@@ -51,9 +51,6 @@ const TransactionHistoryPage: React.FC = () => {
 
   const { withdrawals } = useWithdrawalStore()
 
-  console.log(withdrawals, "Withdrawals from store");
-
-
   useEffect(() => {
     // Sort collections by created_at descending (newest first)
     const sortedCollections = [...collections].sort((a, b) => {
