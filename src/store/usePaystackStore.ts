@@ -19,7 +19,6 @@ export const usePaystackStore = create((set) => ({
       );
       set({ isInitiating: false });
       toast.success(response.data.message);
-      console.log("Payment initialized successfully:", response.data);
 
       return {
         authorization_url: response.data.authorizationUrl,

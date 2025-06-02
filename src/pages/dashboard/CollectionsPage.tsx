@@ -13,10 +13,6 @@ const CollectionsPage: React.FC = () => {
   const { user } = useAuth();
   const { collections, isLoading, error, fetchCollections } = useCollectionStore();
 
-  console.log('CollectionsPage rendered with user:', user);
-  console.log('Collections:', collections);
-
-
   useEffect(() => {
     if (user) {
       fetchCollections(user.id).catch((err) => {

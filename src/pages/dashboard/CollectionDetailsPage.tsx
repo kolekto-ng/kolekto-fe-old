@@ -126,9 +126,6 @@ const CollectionDetailsPage: React.FC = () => {
     toast.success('Contributor data exported successfully!');
   };
 
-  console.log('contributions:---------', contributions,);
-
-
   const handleWithdraw = () => {
     setIsWithdrawDialogOpen(true);
   };
@@ -143,7 +140,6 @@ const CollectionDetailsPage: React.FC = () => {
       toast.error('Unable to process withdrawal. Please try again.');
       return;
     }
-    console.log(data, 'withdraw data');
 
     try {
       setIsWithdrawDialogOpen(false);
@@ -163,7 +159,6 @@ const CollectionDetailsPage: React.FC = () => {
   const isActiveByDeadline = currentCollection?.deadline
     ? new Date(currentCollection.deadline) > new Date()
     : false;
-  console.log(currentCollection?.deadline, isActiveByDeadline, new Date(currentCollection?.deadline || '') > new Date(), '----------------------');
 
   // Helper to get status string based on deadline
   const getDeadlineStatus = () => {
@@ -233,7 +228,6 @@ const CollectionDetailsPage: React.FC = () => {
   }, 0) || 0;
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-  console.log(currentCollection, 'current collection');
 
   const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
 
@@ -253,8 +247,6 @@ const CollectionDetailsPage: React.FC = () => {
   const allDynamicFields = Array.from(
     new Set(
       filteredContributors.flatMap(contributor => {
-        console.log(contributor, 'contributor');
-
 
         return (contributor.contributor_information || []).flatMap(info =>
           Object.keys(info)
@@ -263,7 +255,6 @@ const CollectionDetailsPage: React.FC = () => {
       )
     )
   );
-  console.log(allDynamicFields, 'allDynamicFields', filteredContributors, 'filteredContributors');
 
   // 2. Check if any contributor has a unique code
   const hasUniqueCode = filteredContributors.some(

@@ -15,7 +15,6 @@ export const useCollectionStore = create((set, get) => ({
     try {
       // Fetch collections with contributions and filter by paid status
       const res = await axiosInstance.get("/collections");
-      console.log(res.data.data, "RESPONSE FROM FETCH COLLECTIONS API");
       const data = res.data.data;
       // Format data with proper type casting
       const formattedData =
@@ -80,7 +79,6 @@ export const useCollectionStore = create((set, get) => ({
       // };
       let currentCollection;
       set((state) => {
-        console.log(state, "trying to set current user");
         currentCollection = state.collections.find(
           (collection) => collection.id === id
         );
@@ -106,7 +104,6 @@ export const useCollectionStore = create((set, get) => ({
       const res = await axiosInstance.post("/create-collection", {
         ...collectionData,
       });
-      console.log(res.data, "RESPONSE FROM CREATE COLLECTION API");
 
       // Add the new collection to the state
       set((state) => ({

@@ -108,7 +108,6 @@ const ContributionForm = ({
     fieldName: string,
     value: string
   ) => {
-    console.log("paying");
 
     setParticipants((prev) =>
       prev.map((p) =>
@@ -133,9 +132,6 @@ const ContributionForm = ({
     }
     return true;
   };
-
-  // console.log(fields[0]);
-  // console.log(participants);
 
   const validateParticipantData = () => {
     for (const participant of participants) {
@@ -186,7 +182,6 @@ const ContributionForm = ({
           response.data.message || "Failed to create contributor"
         );
       }
-      console.log(response.data, "contributor created");
 
       return response.data.contributor?.id || response.data.contributor?._id;
     } catch (error: any) {
@@ -280,7 +275,6 @@ const ContributionForm = ({
         callback_url: `${window.location.origin}/payment/verify`, // <-- Add this
       };
       const paymentResponse = await initializePayment(paymentData);
-      console.log(paymentResponse, "payment response");
       if (!paymentResponse?.authorization_url) {
         throw new Error("Failed to get payment URL");
       }
@@ -297,7 +291,6 @@ const ContributionForm = ({
       toast.error(errorMsg);
     }
   };
-  console.log(amountBreakdown, "total fees");
 
   const renderContactForm = () => (
     <div className="space-y-4">
@@ -592,7 +585,6 @@ const ContributionForm = ({
     }
   };
 
-  console.log(amountBreakdown, "amount breakdown");
 
 
   const pay =
@@ -600,7 +592,6 @@ const ContributionForm = ({
       ? amountBreakdown.totalFees + amount * numberOfParticipants
       : amount;
 
-  console.log(pay, "payment");
 
   const getStepActions = () => {
     switch (step) {
