@@ -169,7 +169,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error("An unexpected error occurred. Please try again.");
+      toast.error(err.response?.data?.error || "An unexpected error occurred while creating the collection.");
     }
 
     setIsLoading(false);
