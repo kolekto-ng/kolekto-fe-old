@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from "react-icons/fa";
 import Logo from '@/components/Logo';
 import { useCollectionStore, useContributionStore } from '@/store';
+import Maintenance from '@/components/Maintenance';
 
 const ContributePage: React.FC = () => {
   const { collectionId } = useParams<{ collectionId: string }>();
@@ -146,6 +147,11 @@ const ContributePage: React.FC = () => {
   }
 
   // If there was an error or collection not found
+
+  return (
+
+    <Maintenance />
+  )
   if (error || !collection) {
     return (
       <div className="min-h-screen flex flex-col">
