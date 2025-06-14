@@ -13,10 +13,9 @@ export const useContributionStore = create((set, get) => ({
   fetchCollectionById: async (collectionId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      let res = await axiosInstance.get("/contributions", {
+      let res = await axiosInstance.get("/collection", {
         params: { collectionId },
       });
-      console.log(res.data, "RESPONSE FROM FETCH COLLECTION BY ID API");
 
       // Format data
       const formattedData = {
@@ -40,22 +39,13 @@ export const useContributionStore = create((set, get) => ({
   fetchContributions: async (collectionId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      let query = supabase
-        .from("contributions")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (collectionId) {
-        query = query.eq("collection_id", collectionId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
+      const { data } = await axiosInstance.get("/contributions", {
+        params: { collectionId },
+      });
 
       // Format data
       const formattedData =
-        data?.map((contribution) => ({
+        data.data?.map((contribution) => ({
           ...contribution,
           formattedAmount: formatCurrency(contribution.amount),
           formattedDate: formatDate(contribution.created_at),

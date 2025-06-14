@@ -12,8 +12,6 @@ export function useDashboardPayments({
   collections,
   userId,
 }: UseDashboardPaymentsProps) {
-  console.log(collections, "collectionsin usedahsboard");
-
   const recentPayments: Transaction[] = useMemo(
     () =>
       contributions?.map((contribution) => ({

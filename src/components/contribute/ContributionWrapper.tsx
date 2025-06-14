@@ -4,7 +4,6 @@ import PaymentSuccessful from "./PaymentSuccessful";
 import PaymentErrorHandler from "./PaymentErrorHandler";
 import { toast } from "sonner";
 import { format } from "path";
-import { log } from "console";
 import Maintenance from "../Maintenance";
 
 interface Field {
@@ -42,7 +41,6 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   const isExpired = deadline ? new Date(deadline) < new Date() : false;
 
   const handlePaymentSuccess = (formData: any) => {
-    console.log("Payment success with data:", formData);
 
     const formattedParticipants = formData.participants.map(
       (participant: any, index: number) => {
@@ -59,8 +57,6 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
         };
       }
     );
-    console.log(formattedParticipants, "formattedParticipants");
-    console.log(formData, "formData");
 
     setParticipantDetails(formattedParticipants);
     setAmountPaid(formData.totalAmount);
@@ -78,12 +74,6 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   const handleRetry = () => {
     setError(null);
   };
-  console.log(amountBreakdown, "fields");
-
-  return (
-    <div className="max-w-3xl mx-auto p-4">
-      <Maintenance />
-    </div>);
 
   return (
     <>
@@ -105,19 +95,17 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           amountBreakdown={amountBreakdown}
           fields={fields}
           description={description}
-          onPaymentSuccess={handlePaymentSuccess}
-          onPaymentError={handlePaymentError}
         />
       )}
 
-      <PaymentSuccessful
+      {/* <PaymentSuccessful
         open={isPaymentSuccessful}
         onOpenChange={setIsPaymentSuccessful}
         collectionTitle={collectionTitle}
         amountPaid={amountPaid}
         participants={participantDetails}
         transactionRef={transactionRef}
-      />
+      /> */}
     </>
   );
 };

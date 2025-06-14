@@ -26,13 +26,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('Auth state changed:', event, session);
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         const isContributeRoute = location.pathname.startsWith('/contribute');
-        
-        if (event === 'SIGNED_IN' && session && !isContributeRoute) {
+        const isPaymentRoute = location.pathname.startsWith('/payment');
+
+        if (event === 'SIGNED_IN' && session && !isContributeRoute && !isPaymentRoute) {
           setTimeout(() => {
             navigate('/dashboard');
           }, 0);
@@ -59,8 +59,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string, fullName: string, phoneNumber?: string) => {
-    const { error } = await supabase.auth.signUp({ 
-      email, 
+    console.log(phoneNumber, 'phoneNumber in signUp');
+    const { error } = await supabase.auth.signUp({
+      email,
       password,
       options: {
         data: {
@@ -73,7 +74,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const sendMagicLink = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ 
+    const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: window.location.origin + '/login',

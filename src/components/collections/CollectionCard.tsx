@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -40,6 +39,13 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   };
 
   const deadlineDate = new Date(deadline);
+  const now = new Date();
+  // Determine status based on deadline
+  let computedStatus: 'active' | 'expired' | 'completed' = status;
+  if (status !== 'completed') {
+    computedStatus = deadlineDate > now ? 'active' : 'expired';
+  }
+
   const formattedDeadline = deadlineDate.toLocaleDateString('en-NG', {
     day: 'numeric',
     month: 'short',
@@ -63,8 +69,8 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <h3 className="font-semibold text-lg">{title}</h3>
-          <Badge className={statusColors[status]}>
-            {status === 'active' ? 'Active' : status === 'expired' ? 'Expired' : 'Completed'}
+          <Badge className={statusColors[computedStatus]}>
+            {computedStatus === 'active' ? 'Active' : computedStatus === 'expired' ? 'Expired' : 'Completed'}
           </Badge>
         </div>
         {description && (
@@ -82,7 +88,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <p className="font-medium">{formattedDeadline}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600">Participants</p>
+            <p className="text-sm text-gray-600">Contributors</p>
             <p className="font-medium">
               {participantsCount}
               {maxParticipants && ` / ${maxParticipants}`}

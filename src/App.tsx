@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -22,6 +21,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
 import { initializeAuth } from "./store";
+import PaymentCallback from "./components/contribute/paymentCallback";
+import { Loader2 } from "lucide-react";
 
 // Create query client outside of the component to avoid React hooks issues
 const queryClient = new QueryClient();
@@ -29,25 +30,29 @@ const queryClient = new QueryClient();
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return <>{children}</>;
-};
 
-// Auth layout that wraps all routes
-const AuthenticatedApp = () => {
   // Initialize auth store when component mounts
   useEffect(() => {
     initializeAuth();
   }, []);
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Auth layout that wraps all routes
+const AuthenticatedApp = () => {
   return (
     <Routes>
       {/* Public Routes */}
@@ -57,13 +62,17 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
-      
+      <Route path="/payment/verify" element={<PaymentCallback />} />
+
       {/* Protected Dashboard Routes */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardLayout />
-        </ProtectedRoute>
-      }>
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<DashboardPage />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
@@ -71,7 +80,7 @@ const AuthenticatedApp = () => {
         <Route path="profile" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
       </Route>
-      
+
       {/* Catch-all for 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>

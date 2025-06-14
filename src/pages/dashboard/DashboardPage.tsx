@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,32 +10,38 @@ import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuthStore();
-  let { collections, fetchCollections } = useCollectionStore();
+  const { user, isLoading: authloading } = useAuth();
+  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
   const { contributions, fetchContributions } = useContributionStore();
   const { withdrawals, fetchWithdrawals } = useWithdrawalStore();
-  useEffect(() => {
-    if (user) {
-      // fetchDashboardStats(user.id);
-      // fetchRecentPayments(user.id);
-      collections = fetchCollections(user.id);
-      fetchWithdrawals(user.id);
-    }
-  }, [user, fetchCollections, fetchWithdrawals]);
+
   const { stats, recentPayments, isLoading } = useDashboard(collections, contributions, user?.id);
 
+  useEffect(() => {
+    if (user?.id) {
+      fetchCollections(user.id);
+      fetchWithdrawals(user.id);
+    }
+  }, [user?.id, fetchCollections, fetchWithdrawals]);
 
-  console.log('DashboardPage rendered with user:', user);
-  console.log('Dashboard collections:', collections, stats, recentPayments);
-  if (isLoading) {
+  // Show loader if any relevant data is loading
+  if (authloading || collectionsLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
+
+  // Sort collections by created_at ascending (oldest first)
+  const sortedCollections = [...collections].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
+    return dateB - dateA; // Newest first
+  });
 
   return (
     <div className="space-y-6">
@@ -72,7 +77,7 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Contributions</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -90,7 +95,7 @@ const DashboardPage: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(stats?.total_amount || 0)}</div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Recent Activity */}
@@ -102,15 +107,21 @@ const DashboardPage: React.FC = () => {
           <CardContent>
             {collections.length > 0 ? (
               <div className="space-y-4">
-                {collections.slice(0, 5).map(collection => (
+                {sortedCollections.slice(0, 5).map(collection => (
                   <div key={collection.id} className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{collection.title}</p>
                       <p className="text-sm text-gray-500">{collection.formattedAmount}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{collection.participants_count || 0} participants</p>
-                      <p className="text-xs text-gray-500">{collection.status}</p>
+                      <p className="text-sm font-medium">{collection.total_contributions || 0} Contributions</p>
+                      <p className="text-xs text-gray-500">
+                        {collection.status === "completed"
+                          ? "completed"
+                          : collection.deadline && new Date(collection.deadline) > new Date()
+                            ? "active"
+                            : "expired"}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -121,7 +132,7 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Recent Payments</CardTitle>
           </CardHeader>
@@ -147,7 +158,8 @@ const DashboardPage: React.FC = () => {
               <p className="text-gray-500">No payments yet</p>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
+        {/* <ContributionTransactions /> */}
       </div>
     </div>
   );

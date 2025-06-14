@@ -62,7 +62,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
           kolektoFeePercentage = 0.015;
         }
 
-        let gatewayFee = parsedAmount * 0.015;
+        let gatewayFee = (parsedAmount * 0.015) + 100; // 1.5% + #100
         gatewayFee = Math.min(gatewayFee, 2000);
 
         const platformFee = parsedAmount * kolektoFeePercentage;
@@ -169,7 +169,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error("An unexpected error occurred. Please try again.");
+      toast.error(err.response?.data?.error || "An unexpected error occurred while creating the collection.");
     }
 
     setIsLoading(false);
@@ -230,12 +230,14 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         formFields={formFields}
         setFormFields={setFormFields}
       />
-
+      <p className="text-sm text-muted-foreground">Note: We can't currently create new collections message us at hello@kolekto.com.ng if you have any enquiry. we willgive update as soon as possible. Thank you.</p>
+      <p className="text-sm text-muted-foreground">
+        Note: The Kolekto fee is {getKolektoFeePercentage()} of the amount you set. This fee is deducted from the total amount collected.</p>
       <div className="border-t pt-6 flex gap-4">
         <Button
           type="submit"
           className="flex-1 bg-kolekto hover:bg-kolekto/90"
-          disabled={isLoading}
+          disabled={true}
         >
           {isLoading ? "Creating Collection..." : "Create Collection"}
         </Button>
@@ -246,6 +248,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
             variant="outline"
             className="flex-1"
             onClick={handlePreview}
+            disabled={true}
           >
             Preview
           </Button>

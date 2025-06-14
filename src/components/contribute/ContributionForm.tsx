@@ -22,7 +22,6 @@ import { usePaystackStore } from "@/store/usePaystackStore";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
-import { log } from "console";
 
 interface Field {
   name: string;
@@ -46,15 +45,13 @@ interface ContributionFormProps {
   onPaymentError: (errorMsg: string) => void;
 }
 
-const ContributionForm: React.FC<ContributionFormProps> = ({
+const ContributionForm = ({
   collectionId,
   collectionTitle,
   amount,
   amountBreakdown,
   fields,
   description,
-  onPaymentSuccess,
-  onPaymentError,
 }) => {
   const [step, setStep] = useState<"details" | "contact" | "payment">("details"); // 1. Start at "details"
   const [numberOfParticipants, setNumberOfParticipants] = useState(1);
@@ -72,7 +69,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
   const [verificationInterval, setVerificationInterval] =
     useState<NodeJS.Timeout | null>(null);
 
-  const { initiatePayment: initializePayment, verifyPayment, } =
+  const { initializePayment, verifyPayment, } =
     usePaystackStore();
   let paymentLoading = false
   // Clear interval on unmount
@@ -111,7 +108,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     fieldName: string,
     value: string
   ) => {
-    console.log("paying");
 
     setParticipants((prev) =>
       prev.map((p) =>
@@ -136,9 +132,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     }
     return true;
   };
-
-  // console.log(fields[0]);
-  // console.log(participants);
 
   const validateParticipantData = () => {
     for (const participant of participants) {
@@ -171,13 +164,13 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
   const createContributor = async () => {
     try {
       const response = await axiosInstance.post(
-        `/collections/${collectionId}/contributors`,
+        `/contributions/${collectionId}`,
         {
           name: contactInfo.name,
           email: contactInfo.email,
           phoneNumber: contactInfo.phone,
           amount: amount * numberOfParticipants,
-          participantInformation: participants.map((participant) => ({
+          contributionInformation: participants.map((participant) => ({
             ...participant.data,
           })),
           collectionId,
@@ -209,7 +202,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
 
         if (verification?.status === "success") {
           clearInterval(interval);
-          handlePaymentSuccess(reference);
+          // handlePaymentSuccess(reference);
         }
       } catch (error) {
         console.error("Verification error:", error);
@@ -243,7 +236,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     };
 
     setIsLoading(false);
-    onPaymentSuccess(successData);
     toast.success("Payment successful!");
   };
 
@@ -254,14 +246,24 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     }
 
     setIsLoading(true);
-    setPaymentError(null);
 
     try {
       // 1. Create contributor record
-      const contributorId = await createContributor();
+      // const contributorId = await createContributor();
 
       // 2. Initialize payment
       const paymentData = {
+        contributor: {
+          name: contactInfo.name,
+          email: contactInfo.email,
+          phoneNumber: contactInfo.phone,
+          amount: amount * numberOfParticipants,
+          contributionInformation: participants.map((participant) => ({
+            ...participant.data,
+          })),
+          collectionId,
+        },
+
         fullName: contactInfo.name,
         email: contactInfo.email,
         phoneNumber: contactInfo.phone,
@@ -269,35 +271,26 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
           amount != amountBreakdown.totalPayable
             ? amountBreakdown.totalFees + amount * numberOfParticipants
             : amount,
-        contributorId,
         collectionId,
+        callback_url: `${window.location.origin}/payment/verify`, // <-- Add this
       };
-
       const paymentResponse = await initializePayment(paymentData);
-
       if (!paymentResponse?.authorization_url) {
         throw new Error("Failed to get payment URL");
       }
 
       // 3. Open payment gateway
-      const paymentWindow = window.open(paymentResponse.authorization_url);
 
-      if (!paymentWindow) {
-        throw new Error("Please allow popups to proceed with payment");
-      }
-
+      window.location.href = paymentResponse.authorization_url;
       // 4. Start verification process
-      startPaymentVerification(paymentResponse.reference);
+      // startPaymentVerification(paymentResponse.reference);
     } catch (error: any) {
       console.error("Payment error:", error);
       setIsLoading(false);
       const errorMsg = error.message || "Payment failed. Please try again.";
-      setPaymentError(errorMsg);
-      onPaymentError(errorMsg);
       toast.error(errorMsg);
     }
   };
-  console.log(amountBreakdown, "total fees");
 
   const renderContactForm = () => (
     <div className="space-y-4">
@@ -380,7 +373,65 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
             {index === 0 ? "Your Details" : `Participant ${index + 1} Details`}
           </h3>
           <div className="space-y-4">
-            {Object.values(fields || {}).map((field) => {
+
+            {fields.map((field) => {
+              const isUniqueCode = field.name.toLowerCase() === "unique code";
+              // Render select for select/selectdropdown fields
+              if (field.type === "select" || field.type === "selectdropdown") {
+                return (
+                  <div key={`${participant.id}-${field.name}`} className="space-y-2">
+                    <Label>
+                      {field.name}
+                      {field.required && " *"}
+                    </Label>
+                    <Select
+                      value={participant.data?.[field.name] || ""}
+                      onValueChange={(value) =>
+                        handleFieldChange(participant.id, field.name, value)
+                      }
+                      required={field.required}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(field.options || []).map((opt: string) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              }
+
+              // Default: render input for other types
+              return (
+                <div key={`${participant.id}-${field.name}`} className="space-y-2">
+                  {!isUniqueCode && (
+                    <>
+                      <Label>
+                        {field.name}
+                        {field.required && " *"}
+                      </Label>
+                      <Input
+                        type={field.type}
+                        value={participant.data?.[field.name] || ""}
+                        onChange={(e) =>
+                          handleFieldChange(participant.id, field.name, e.target.value)
+                        }
+                        required={field.required}
+                        readOnly={isUniqueCode}
+                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* {Object.values(fields || {}).map((field) => {
               console.log(field);
 
               const isUniqueCode = field.name.toLowerCase() === "unique code";
@@ -416,7 +467,7 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
                   )}
                 </div>
               );
-            })}
+            })} */}
           </div>
         </div>
       ))}
@@ -534,7 +585,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
     }
   };
 
-  console.log(amountBreakdown, "amount breakdown");
 
 
   const pay =
@@ -542,7 +592,6 @@ const ContributionForm: React.FC<ContributionFormProps> = ({
       ? amountBreakdown.totalFees + amount * numberOfParticipants
       : amount;
 
-  console.log(pay, "payment");
 
   const getStepActions = () => {
     switch (step) {

@@ -3,19 +3,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardState, DashboardStats, Transaction } from "@/types";
 import { Stats } from "fs";
 import { useMemo } from "react";
+import { isAfter } from "date-fns"; // Add this import
 
 export function useDashboard(collections = [], contributions = [], userId) {
   // Ensure collections and contributions are always arrays
   const safeCollections = Array.isArray(collections) ? collections : [];
   const safeContributions = Array.isArray(contributions) ? contributions : [];
-  console.log(safeCollections, collections, "usedash");
+
+  const now = new Date();
 
   const stats = {
     total_collections: safeCollections.length || 0,
     total_contributions: safeContributions.length || 0,
     total_amount: safeCollections.reduce((sum, c) => sum + (c.amount || 0), 0),
-    active_collections: safeCollections.filter((c) => c.status === "active")
-      .length,
+    active_collections: safeCollections.filter((c) => {
+      // If deadline exists and is in the future, consider active
+      if (c.deadline) {
+        return isAfter(new Date(c.deadline), now);
+      }
+      // fallback to status if no deadline
+      return c.status === "active";
+    }).length,
   };
 
   const recentPayments = useMemo(
