@@ -5,6 +5,7 @@ import PaymentErrorHandler from "./PaymentErrorHandler";
 import { toast } from "sonner";
 import { format } from "path";
 import { log } from "console";
+import Maintenance from "../Maintenance";
 
 interface Field {
   name: string;
@@ -78,6 +79,11 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
     setError(null);
   };
   console.log(amountBreakdown, "fields");
+
+  return (
+    <div className="max-w-3xl mx-auto p-4">
+      <Maintenance />
+    </div>);
 
   return (
     <>
