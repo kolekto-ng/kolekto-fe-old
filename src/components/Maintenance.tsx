@@ -10,8 +10,8 @@ const Maintenance = () => {
     return (
         <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100 text-gray-800'>
             <nav className="w-full bg-white shadow-md fixed top-0 left-0 z-50">
-                <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-                    <div className="flex items-center space-x-4">
+                <div className="container px-4 py-3 flex justify-between items-center">
+                    <div className=" container flex justify-between items-center space-x-4">
                         <Link to="/" className="flex items-center">
                             <Logo size="md" />
                         </Link>
@@ -56,6 +56,7 @@ const Maintenance = () => {
             <h1>Maintenance Mode</h1>
             <p>We are currently undergoing maintenance. Please check back later.</p>
 
+            {/* <hr className='bg-red-300 border border-yellow-700' /> */}
             <div className="mt-12 text-center">
                 <h2 className="text-2xl font-bold mb-4">
                     Ready to Start Collecting?
