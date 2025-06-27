@@ -75,10 +75,10 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
     setError(null);
   };
 
-  return (
-    <div className="max-w-3xl mx-auto p-4">
-      <Maintenance />
-    </div>);
+  // return (
+  //   <div className="max-w-3xl mx-auto p-4">
+  //     <Maintenance />
+  //   </div>);
 
   return (
     <>
