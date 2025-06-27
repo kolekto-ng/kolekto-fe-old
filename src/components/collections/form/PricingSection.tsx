@@ -219,7 +219,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                 <div>Kolekto Fee ({getKolektoFeePercentage()}):</div>
                 <div className="text-right">₦{kolektoFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
-                <div>Payment Gateway (1.5%) + #100:</div>
+                <div>Payment Gateway (1.5%) {Number(amount) >= 2500 ? "+ ₦100:" : null}</div>
                 <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
                 <div className="border-t border-gray-200 pt-1 font-medium">Total Fees:</div>
