@@ -147,11 +147,6 @@ const ContributePage: React.FC = () => {
   }
 
   // If there was an error or collection not found
-
-  return (
-
-    <Maintenance />
-  )
   if (error || !collection) {
     return (
       <div className="min-h-screen flex flex-col">
