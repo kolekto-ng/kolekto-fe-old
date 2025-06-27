@@ -146,6 +146,7 @@ const ContributePage: React.FC = () => {
     );
   }
 
+
   // If there was an error or collection not found
   if (error || !collection) {
     return (
