@@ -51,30 +51,32 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     if (amount && !usePriceTiers) {
       const parsedAmount = parseFloat(amount);
       if (!isNaN(parsedAmount)) {
-        let kolektoFeePercentage;
+        let kolektoFee;
+
         if (parsedAmount < 1000) {
-          kolektoFeePercentage = 0.03;
-        } else if (parsedAmount < 5000) {
-          kolektoFeePercentage = 0.025;
-        } else if (parsedAmount < 20000) {
-          kolektoFeePercentage = 0.02;
+          kolektoFee = 30;
+        } else if (parsedAmount <= 5000) {
+          kolektoFee = 50;
+        } else if (parsedAmount <= 10000) {
+          kolektoFee = 100;
+        } else if (parsedAmount <= 20000) {
+          kolektoFee = 200;
         } else {
-          kolektoFeePercentage = 0.015;
+          kolektoFee = Math.min(parsedAmount * 0.01, 2000);
         }
 
         let gatewayFee = parsedAmount * 0.015;
-
-        // Cap fee at ₦2000 max
         gatewayFee = Math.min(gatewayFee, 2000);
 
-        const platformFee = parsedAmount * kolektoFeePercentage;
+        const totalFees = kolektoFee + gatewayFee;
+        const platformFee = kolektoFee;
 
-        setKolektoFee(platformFee);
+        setKolektoFee(kolektoFee);
         setPaymentGatewayFee(gatewayFee);
-        setTotalFees(platformFee + gatewayFee);
+        setTotalFees(kolektoFee + gatewayFee);
 
         if (feeBearer === 'contributor') {
-          setTotalPayable(parsedAmount + platformFee + gatewayFee);
+          setTotalPayable(parsedAmount + kolektoFee + gatewayFee);
         } else {
           setTotalPayable(parsedAmount);
         }
