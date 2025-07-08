@@ -204,10 +204,11 @@ const PricingSection: React.FC<PricingSectionProps> = ({
               <div className="text-sm mb-2">
                 <p className="font-medium">Fee Breakdown:</p>
                 <ul className="list-disc pl-5 text-gray-600 space-y-1">
-                  <li>₦0 – ₦999: 3.0% Kolekto fee</li>
-                  <li>₦1,000 – ₦4,999: 2.5% Kolekto fee</li>
-                  <li>₦5,000 – ₦19,999: 2.0% Kolekto fee</li>
-                  <li>₦20,000 and above: 1.5% Kolekto fee</li>
+                  <li>₦0 – ₦999: ₦30 Kolekto fee</li>
+                  <li>₦1,000 – ₦4,999: ₦50 Kolekto fee</li>
+                  <li>₦5,000 – ₦9,999: ₦100 Kolekto fee</li>
+                  <li>₦10,000 – ₦19,999: ₦200 Kolekto fee</li>
+                  <li>₦20,000 and above: 1% Kolekto fee (capped at ₦2,000)</li>
                   <li>Payment gateway fee: 1.5% (capped at ₦2,000)</li>
                 </ul>
 
