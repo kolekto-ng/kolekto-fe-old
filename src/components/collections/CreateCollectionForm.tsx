@@ -181,13 +181,16 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const getKolektoFeePercentage = () => {
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount === 0) return "3.0%";
+    if (isNaN(parsedAmount) || parsedAmount === 0) return "₦30";
 
-    if (parsedAmount < 1000) return "3.0%";
-    if (parsedAmount < 5000) return "2.5%";
-    if (parsedAmount < 20000) return "2.0%";
-    return "1.5%";
+    if (parsedAmount < 1000) return "₦30";
+    if (parsedAmount <= 5000) return "₦50";
+    if (parsedAmount <= 10000) return "₦100";
+    if (parsedAmount <= 20000) return "₦200";
+
+    return "1% (max ₦2,000)";
   };
+
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto px-4 sm:px-0">

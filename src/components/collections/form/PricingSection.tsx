@@ -202,14 +202,15 @@ const PricingSection: React.FC<PricingSectionProps> = ({
               </RadioGroup>
 
               <div className="text-sm mb-2">
-                <p className="font-medium">Fee Structure:</p>
+                <p className="font-medium">Fee Breakdown:</p>
                 <ul className="list-disc pl-5 text-gray-600 space-y-1">
-                  <li>₦0 – ₦999: 3.0% fee</li>
-                  <li>₦1,000 – ₦4,999: 2.5% fee</li>
-                  <li>₦5,000 – ₦19,999: 2.0% fee</li>
-                  <li>₦20,000 and above: 1.5% fee</li>
-                  <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
+                  <li>₦0 – ₦999: 3.0% Kolekto fee</li>
+                  <li>₦1,000 – ₦4,999: 2.5% Kolekto fee</li>
+                  <li>₦5,000 – ₦19,999: 2.0% Kolekto fee</li>
+                  <li>₦20,000 and above: 1.5% Kolekto fee</li>
+                  <li>Payment gateway fee: 1.5% (capped at ₦2,000)</li>
                 </ul>
+
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm border-t border-gray-200 pt-3">
