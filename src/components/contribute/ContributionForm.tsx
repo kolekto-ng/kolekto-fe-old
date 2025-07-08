@@ -680,7 +680,7 @@ const ContributionForm = ({
             <div className="mt-2">
               Total Amount: ₦{amount.toLocaleString()}
               {amount != amountBreakdown.totalPayable
-                ? ` + ₦${amountBreakdown.totalFees}`
+                ? ` + ₦${amountBreakdown.platformFee} (kolekto fee) + ₦${amountBreakdown.platformGatewayFee} (gateway fee)`
                 : null}{" "}
             </div>
           </CardDescription>
