@@ -13,7 +13,7 @@ export const supabase = createClient<Database>(
   {
     auth: {
       persistSession: true,
-      autoRefreshToken: true,
+      autoRefreshToken: false,
       storageKey: "kolekto-auth-token",
     },
   }
