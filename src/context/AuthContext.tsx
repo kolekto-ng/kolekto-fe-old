@@ -21,8 +21,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showExpiryWarning, setShowExpiryWarning] = useState(false);
 
-  console.log('AuthProvider initialized', session, user);
-
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,7 +36,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
-        console.log(`Auth event: ${event}`, session);
 
         setUser(session?.user ?? null);
 
