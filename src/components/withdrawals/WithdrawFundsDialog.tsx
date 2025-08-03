@@ -11,6 +11,7 @@ import WithdrawForm from './WithdrawForm';
 import { toast } from 'sonner';
 import { useWithdrawalStore } from '@/store';
 import { useAuth } from '@/context/AuthContext';
+import { axiosInstance } from '@/utils/axios';
 
 interface WithdrawFundsDialogProps {
   open: boolean;
@@ -43,9 +44,9 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
       toast.error('You must be logged in to withdraw funds');
       return;
     }
-    
+
     setIsLoading(true);
-    
+
     try {
       await createWithdrawal({
         amount: data.amount,
@@ -55,7 +56,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
         bank_name: data.bankName,
         organizer_id: user.id
       });
-      
+
       onOpenChange(false);
       if (onComplete) onComplete();
     } catch (error: any) {
@@ -72,13 +73,13 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
-            {collectionTitle 
-              ? `Withdraw from "${collectionTitle}" collection.` 
+            {collectionTitle
+              ? `Withdraw from "${collectionTitle}" collection.`
               : 'Withdraw from your account balance.'}
           </DialogDescription>
         </DialogHeader>
-        
-        <WithdrawForm 
+
+        <WithdrawForm
           availableBalance={availableBalance}
           onSubmit={handleWithdraw}
           isLoading={isLoading}
