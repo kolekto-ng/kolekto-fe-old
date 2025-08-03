@@ -21,6 +21,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showExpiryWarning, setShowExpiryWarning] = useState(false);
 
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -35,12 +36,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
+
         setUser(session?.user ?? null);
 
         const isContributeRoute = location.pathname.startsWith('/contribute');
         const isPaymentRoute = location.pathname.startsWith('/payment');
+        const isAuthRoute =
+          location.pathname === '/login' ||
+          location.pathname === '/register' ||
+          location.pathname === '/forgot-password';
 
-        if (event === 'SIGNED_IN' && session && !isContributeRoute && !isPaymentRoute) {
+        if (event === 'SIGNED_IN' && session && isAuthRoute) {
+          // Only redirect if user is on an auth page
           setTimeout(() => {
             navigate('/dashboard');
           }, 0);
