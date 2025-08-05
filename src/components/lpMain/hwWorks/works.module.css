@@ -14,7 +14,7 @@
   position: relative;
 }
 
-.marquee-content {
+.marqueeContent {
   display: flex;
   animation: scrolling var(--marquee-animation-duration) linear infinite;
 }
@@ -41,8 +41,4 @@
     --marquee-animation-duration: calc(var(--marquee-elements) * 8s);
     --marquee-elements-displayed: 1; /* reduce visible items */
   }
-}
-
-.poppins {
-  font-family: "Poppins", sans-serif;
 }

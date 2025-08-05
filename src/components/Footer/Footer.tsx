@@ -1,6 +1,6 @@
 import React from 'react'
 import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
-import '../lpMain/hwWorks/works.css'
+import '../lpMain/hwWorks/works.module.css'
 
 
 const Footer = () => {

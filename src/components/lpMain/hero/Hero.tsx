@@ -8,7 +8,7 @@ import paystack from '../../../assets/paystack.png'
 import collectionSvg from '../../../assets/collector-svg.svg'
 import IIH from '../../../assets/iih.png'
 import heroImage from '../../../assets/hero-image.png'
-import './hero.css'
+import styles from './hero.module.css'
 const Hero = () => {
 
     const logos = [
@@ -133,16 +133,16 @@ const Hero = () => {
             </div>
             { /* logo strip */}
             <div className='bg-white w-full min-[300px]: overflow-hidden border-t border-gray-100 py-8 mt-9'>
-                <div className='marquee-wrapper px-4 sm:px-6 lg:px-8'>
-                    <div className='marquee-content' >
+                <div className={`${styles.marqueeWrapper} px-4 sm:px-6 lg:px-8`}>
+                    <div className={`${styles.marqueeContent}`} >
                         {/* original items */}
                         {logos.map((logo, i) => (
                             <React.Fragment key={i}>
 
-                                <div className='marquee-item'>
+                                <div className={`${styles.marqueeItem}`}>
                                     <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
                                 </div>
-                                <div className='marquee-item'>
+                                <div className={`${styles.marqueeItem}`}>
                                     <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
                                 </div>
 

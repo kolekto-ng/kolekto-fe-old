@@ -4,7 +4,7 @@ import cm from '../../../assets/cm.png'
 import fundraising from '../../../assets/fundraising.png'
 import tired from '../../../assets/tired.png'
 import labeling from '../../../assets/white-labeling.png'
-import '../hwWorks/works.css'
+import '../hwWorks/works.module.css'
 
 
 const Features = () => {

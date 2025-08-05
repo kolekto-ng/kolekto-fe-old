@@ -1,6 +1,6 @@
 import Button from '@/components/Button'
 import React from 'react'
-import '../hwWorks/works.css'
+import '../hwWorks/works.module.css'
 
 const whyKolekto = () => {
     return (
