@@ -42,3 +42,7 @@
     --marquee-elements-displayed: 1; /* reduce visible items */
   }
 }
+
+.poppins {
+  font-family: "Poppins", sans-serif;
+}
