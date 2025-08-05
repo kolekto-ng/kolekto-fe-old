@@ -20,7 +20,6 @@ import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
-import { initializeAuth } from "./store";
 import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
 
@@ -30,11 +29,6 @@ const queryClient = new QueryClient();
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
-
-  // Initialize auth store when component mounts
-  useEffect(() => {
-    initializeAuth();
-  }, []);
 
   if (isLoading) {
     return (
