@@ -37,7 +37,7 @@ const steps = [
 
 const HowItWorks = () => {
     const marqueeRef = useRef(null);
-    const [isPaused, setIsPaused] = useState(false);
+    const [isPaused, setIsPaused] = useState();
 
     useEffect(() => {
         const root = document.documentElement;
@@ -58,6 +58,9 @@ const HowItWorks = () => {
     const togglePause = () => {
         setIsPaused((prev) => !prev);
     };
+
+    console.log(isPaused, "pase");
+
 
     return (
         <section className={`${styles.marquee} [background:linear-gradient(135deg,#6e8e30,#2f6b2e,#6e8e30)] py-2 px-4 text-white`}>

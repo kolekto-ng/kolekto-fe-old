@@ -19,12 +19,16 @@
   animation: scrolling var(--marquee-animation-duration) linear infinite;
 }
 
-.marqueeContent:hover {
-  animation-play-state: paused;
+/* 🖥️ Hover pause only on devices with hover capability */
+@media (hover: hover) and (pointer: fine) {
+  .marqueeContent:hover {
+    animation-play-state: paused;
+  }
 }
 
+/* ✅ Pause when user taps (adds .paused via React) */
 .paused {
-  animation-play-state: paused;
+  animation-play-state: paused !important;
 }
 
 @keyframes scrolling {
