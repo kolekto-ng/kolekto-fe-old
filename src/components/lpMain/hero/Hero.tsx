@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Link, Star } from 'lucide-react'
 import avatar1 from '../../../assets/avatar1.png'
 import avatar2 from '../../../assets/avatar2.png'
@@ -8,8 +8,7 @@ import paystack from '../../../assets/paystack.png'
 import collectionSvg from '../../../assets/collector-svg.svg'
 import IIH from '../../../assets/iih.png'
 import heroImage from '../../../assets/hero-image.png'
-import '../hwWorks/works.css'
-
+import './hero.css'
 const Hero = () => {
 
     const logos = [
@@ -135,17 +134,18 @@ const Hero = () => {
             { /* logo strip */}
             <div className='bg-white w-full min-[300px]: overflow-hidden border-t border-gray-100 py-8 mt-9'>
                 <div className='marquee-wrapper px-4 sm:px-6 lg:px-8'>
-                    <div className='marquee-content'>
+                    <div className='marquee-content' >
                         {/* original items */}
                         {logos.map((logo, i) => (
                             <React.Fragment key={i}>
 
                                 <div className='marquee-item'>
-                                    <img src={logo.src} alt='Paystack-logo' width={120} height={40} className='h-8 sm:h-10 lg:h-12 w-auto object-contain' />
+                                    <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
                                 </div>
                                 <div className='marquee-item'>
-                                    <img src={logo.src} alt='Paystack-logo' width={120} height={40} className='h-8 sm:h-10 lg:h-12 w-auto object-contain' />
+                                    <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
                                 </div>
+
                                 {/* Add more logos here if needed */}
                             </React.Fragment>
                         ))}
