@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import React from 'react'
 import simColImage from '../../../assets/sim_col_image.png'
 import Button from '@/components/Button'
@@ -14,7 +13,7 @@ const SimplifyCollection = () => {
                     Get started - it’s free
                 </Button>
             </div>
-            <Image width={600} height={700} src={simColImage} alt='simplify collection' />
+            <img width={600} height={700} src={simColImage} alt='simplify collection' />
         </section>
     )
 }

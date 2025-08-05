@@ -1,5 +1,4 @@
 import React from 'react'
-import Link from 'next/link'
 import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import '../lpMain/hwWorks/works.css'
 
@@ -14,18 +13,18 @@ const Footer = () => {
           <div className='col-span-2 lg:col-span-1'>
             <h3 className='text-2xl font-bold mb-6'> Stay Connected </h3>
             <div className='flex space-x-4'>
-              <Link href='/social/facebook' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              <a href='/social/facebook' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Facebook className='w-5 h-5 ' />
-              </Link>
-              <Link href='/social/twitter' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              </a>
+              <a href='/social/twitter' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Twitter className='w-5 h-5 ' />
-              </Link>
-              <Link href='/social/linkedin' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              </a>
+              <a href='/social/aedin' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Linkedin className='w-5 h-5 ' />
-              </Link>
-              <Link href='/social/Instagram' className='p-2 bg-red-white bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              </a>
+              <a href='/social/Instagram' className='p-2 bg-red-white bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Instagram className='w-5 h-5 ' />
-              </Link>
+              </a>
             </div>
             <p className='text-xs mt-4 text-yellow-500'> Kolekto, Inc. All Rights Reserved</p>
           </div>
@@ -34,29 +33,29 @@ const Footer = () => {
             <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'> Product</h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Create Collection
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Wallet Overview
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Contribution Tiers
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Custom Bonding
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Real Time Tracking
-                </Link>
+                </a>
               </li>
 
             </ul>
@@ -70,29 +69,29 @@ const Footer = () => {
             </h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   About
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Careers
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Contact
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Press
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Partnerships
-                </Link>
+                </a>
               </li>
             </ul>
           </div>
@@ -102,29 +101,29 @@ const Footer = () => {
             <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Resources</h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Help Center
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   FAQ
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Blog
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Guides
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Community Support
-                </Link>
+                </a>
               </li>
             </ul>
           </div>
@@ -134,29 +133,29 @@ const Footer = () => {
             <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Resources</h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Tiered Contributions
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Withdrawals Request
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Collection Analytics
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   KYC & Access Controls
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Admin Dashboard
-                </Link>
+                </a>
               </li>
             </ul>
           </div>

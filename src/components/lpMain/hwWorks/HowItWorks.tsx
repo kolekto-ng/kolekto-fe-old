@@ -1,5 +1,3 @@
-"use client"
-import Image from 'next/image'
 import React, { useEffect, useRef } from 'react'
 import contributeImage from '../../../assets/contribut.png'
 import './works.css'
@@ -68,7 +66,7 @@ const HowItWorks = () => {
                         </div>
 
                         <div className="bg-[#D4F8AB] flex justify-center items-center rounded-lg pt-4">
-                            <Image
+                            <img
                                 width={400}
                                 height={300}
                                 src={step.img}
