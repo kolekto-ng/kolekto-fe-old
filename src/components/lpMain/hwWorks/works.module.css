@@ -19,6 +19,14 @@
   animation: scrolling var(--marquee-animation-duration) linear infinite;
 }
 
+.marqueeContent:hover {
+  animation-play-state: paused;
+}
+
+.paused {
+  animation-play-state: paused;
+}
+
 @keyframes scrolling {
   0% {
     transform: translateX(0);

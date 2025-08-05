@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import contributeImage from '../../../assets/contribut.png';
 import styles from './works.module.css';
 
@@ -37,6 +37,7 @@ const steps = [
 
 const HowItWorks = () => {
     const marqueeRef = useRef(null);
+    const [isPaused, setIsPaused] = useState(false);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -54,11 +55,19 @@ const HowItWorks = () => {
         });
     }, []);
 
+    const togglePause = () => {
+        setIsPaused((prev) => !prev);
+    };
+
     return (
         <section className={`${styles.marquee} [background:linear-gradient(135deg,#6e8e30,#2f6b2e,#6e8e30)] py-2 px-4 text-white`}>
             <h2 className="font-semibold text-4xl text-center mb-10">How it works</h2>
 
-            <div className={`${styles.marqueeContent} flex gap-6 px-2 md:px-6`} ref={marqueeRef}>
+            <div
+                className={`${styles.marqueeContent} ${isPaused ? styles.paused : ''} flex gap-6 px-2 md:px-6`}
+                ref={marqueeRef}
+                onClick={togglePause} // Tap to pause/resume
+            >
                 {steps.map((step) => (
                     <div
                         key={step.id}
