@@ -48,35 +48,6 @@ export const useCollectionStore = create((set, get) => ({
   fetchCollectionById: async (id: string) => {
     set({ isLoading: true, error: null });
     try {
-      // const { data, error } = await supabase
-      //   .from("collections")
-      //   .select(
-      //     `
-      //     *,
-      //     contributions!inner(count)
-      //   `
-      //   )
-      //   .eq("contributions.status", "paid")
-      //   .eq("id", id)
-      //   .single();
-
-      // if (error) throw error;
-
-      // // Format data with proper type casting
-      // const formattedData = {
-      //   ...data,
-      //   formattedAmount: formatCurrency(data.amount),
-      //   formattedDate: formatDate(data.created_at),
-      //   form_fields: Array.isArray(data.form_fields)
-      //     ? (data.form_fields as unknown as FormField[])
-      //     : [],
-      //   pricing_tiers: Array.isArray(data.pricing_tiers)
-      //     ? (data.pricing_tiers as unknown as PriceTier[])
-      //     : [],
-      //   participants_count: Array.isArray(data.contributions)
-      //     ? data.contributions.length
-      //     : 0,
-      // };
       let currentCollection;
       set((state) => {
         currentCollection = state.collections.find(
