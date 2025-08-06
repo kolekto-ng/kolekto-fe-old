@@ -24,7 +24,7 @@ const HomePage: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       <NavBar />
 
-      <main className="flex-grow">
+      <main className="flex-grow bg-[#FAFAFA]">
         {/* Hero Section */}
         <Hero />
 

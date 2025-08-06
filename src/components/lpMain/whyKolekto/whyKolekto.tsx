@@ -13,33 +13,33 @@ const whyKolekto = () => {
 
             <div className='grid grid-cols-2 gap-8'>
                 <div>
-                    <h3 className='text-2xl font-medium'>Save time and reduce stress</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>No more chasing people for payments or keeping messy records. Kolekto helps you set up drives, automate tracking, and view everything in one place.</p>
+                    <h3 className='text-2xl font-medium mb-2'>Save time and reduce stress</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>No more chasing people for payments or keeping messy records. Kolekto helps you set up drives, automate tracking, and view everything in one place.</p>
                 </div>
 
                 <div>
-                    <h3 className='text-2xl font-medium'>Collect faster, your way</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>Use flexible options like tiered payments (Regular, VIP, VVIP) to match your contributors. Everyone pays how they can  and you get full control.</p>
+                    <h3 className='text-2xl font-medium  mb-2'>Collect faster, your way</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>Use flexible options like tiered payments (Regular, VIP, VVIP) to match your contributors. Everyone pays how they can  and you get full control.</p>
                 </div>
 
                 <div>
-                    <h3 className='text-2xl font-medium'> Customizable to fit any occasion</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>From weddings to club dues or memorial donations  Kolekto adapts to whatever you’re planning. Add custom fields, banners, and branding.</p>
+                    <h3 className='text-2xl font-medium  mb-2'> Customizable to fit any occasion</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>From weddings to club dues or memorial donations  Kolekto adapts to whatever you’re planning. Add custom fields, banners, and branding.</p>
                 </div>
 
                 <div>
-                    <h3 className='text-2xl font-medium'>See where every naira goes</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>Real-time wallets and transparent reporting help you track contributions, fees, and withdrawals  so nothing is hidden, and everything makes sense.</p>
+                    <h3 className='text-2xl font-medium  mb-2'>See where every naira goes</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>Real-time wallets and transparent reporting help you track contributions, fees, and withdrawals  so nothing is hidden, and everything makes sense.</p>
                 </div>
 
                 <div>
-                    <h3 className='text-2xl font-medium'>Build trust with contributors</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>Custom-branded receipts, contributor emails, and a professional interface make people feel confident about where their money is going.</p>
+                    <h3 className='text-2xl font-medium  mb-2'>Build trust with contributors</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>Custom-branded receipts, contributor emails, and a professional interface make people feel confident about where their money is going.</p>
                 </div>
 
                 <div>
-                    <h3 className='text-2xl font-medium'>Stay in control, even with large groups</h3>
-                    <p className='poppins text-[10px] lg:text-[16px] font-normal text-[#333333]'>Whether it’s 10 contributors or 1,000  Kolekto’s dashboard makes it easy to manage everyone without stress.</p>
+                    <h3 className='text-2xl font-medium  mb-2'>Stay in control, even with large groups</h3>
+                    <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>Whether it’s 10 contributors or 1,000  Kolekto’s dashboard makes it easy to manage everyone without stress.</p>
                 </div>
             </div>
         </section>

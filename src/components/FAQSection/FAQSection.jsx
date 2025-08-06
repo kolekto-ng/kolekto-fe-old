@@ -75,7 +75,7 @@ const FAQSection = () => {
 
                     <div className='lg:pl-12 mt-15 order-1 lg:order-2'>
                         <div className='space-y-6'>
-                            <h2 className='text-4xl lg:text-5xl font-bold text-gray-950 leading-tight'>Frequently Asked Question!</h2>
+                            <h2 className='text-[28px] lg:text-5xl font-medium text-gray-950 leading-tight'>Frequently Asked Question!</h2>
                             <p>Got any questions? We've answered some of the most common things people ask before getting started with Kolekto. If you dont find what you're looking for feel free to reach out. Thanks </p>
                         </div>
                     </div>

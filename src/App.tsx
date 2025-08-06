@@ -83,6 +83,7 @@ const AuthenticatedApp = () => {
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
+
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>

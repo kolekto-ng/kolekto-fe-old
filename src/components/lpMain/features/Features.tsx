@@ -11,11 +11,11 @@ const Features = () => {
     return (
         <section className='flex flex-col gap-7 px-4 py-12 lg:px-8 lg:py-20 max-w-[1280px] w-full mx-auto my-0'>
             <div className='flex md:flex-row justify-between items-center gap-6 flex-col-reverse'>
-                <img height={600} width={600} src={fearuresImage} />
+                <img data-aos="fade-left" height={600} width={600} src={fearuresImage} />
 
                 <div className='max-w-3xl space-y-6'>
-                    <h2 className='md:text-[20px] text-[12px]'><span className='bg-[#1C5C23] py-1 px-3 font-normal rounded-[12px] text-white mr-5'>POWERFUL</span> Collection Features</h2>
-                    <h3 className='md:text-5xl text-[28px] font-medium'>Everything You Need to Manage Group Payments Fast and Transparent</h3>
+                    <h2 className='md:text-[20px] text-[12px] font-clash'><span className='bg-[#1C5C23] py-1 px-3 font-normal rounded-[12px] text-white mr-5'>POWERFUL</span> Collection Features</h2>
+                    <h3 className='md:text-5xl text-[28px] font-medium font-clash'>Everything You Need to Manage Group Payments Fast and Transparent</h3>
                     <p className='font-normal poppins text-[14px] md:text-[20px] text-[#333333]'>Take control of your group payments with branded pages, flexible pricing, real-time tracking, and smooth withdrawals  all in one place, with zero stress.</p>
                 </div>
             </div>
