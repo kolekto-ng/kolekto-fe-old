@@ -11,7 +11,7 @@ const Footer = () => {
         <div className='grid grid-cols-2 lg:grid-cols-5 gap-8 mb-8'>
           {/* Stay Connected Section */}
           <div className='col-span-2 lg:col-span-1'>
-            <h3 className='text-2xl font-bold mb-6'> Stay Connected </h3>
+            <h3 className='text-2xl font-bold mb-6'>Stay Connected</h3>
             <div className='flex space-x-4'>
               <a href='/social/facebook' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Facebook className='w-5 h-5 ' />
@@ -79,7 +79,7 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
+                <a href='mailto:team@kolekto.com.ng' target='_blank' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
                   Contact
                 </a>
               </li>
@@ -121,7 +121,7 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
+                <a href='https://chat.whatsapp.com/JctLgtMQTEc0nFCk40C4Vj?mode=ac_t' target='_blank' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
                   Community Support
                 </a>
               </li>

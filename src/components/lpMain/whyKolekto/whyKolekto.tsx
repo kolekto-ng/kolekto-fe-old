@@ -1,6 +1,7 @@
 import Button from '@/components/Button'
 import React from 'react'
 import '../hwWorks/works.module.css'
+import { Link } from 'react-router-dom'
 
 const whyKolekto = () => {
     return (
@@ -8,7 +9,7 @@ const whyKolekto = () => {
             <div className='max-w-[490px] space-y-4'>
                 <h2 className='text-[28px] lg:text-5xl font-medium'>Why choose Kolekto?</h2>
                 <p className='text-[14px] poppins text-[#333333]'>Managing group contributions shouldn't be stressful. With Kolekto, you can create, share, and track collections effortlessly  whether it's for an event, community goal, or personal project. Our platform makes it simple, secure, and organized  so everyone stays on the same page.</p>
-                <Button>Get started - it’s free</Button>
+                <Link to="/register" className='poppins inline-block bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200'>Get started - it’s free</Link>
             </div>
 
             <div className='grid grid-cols-2 gap-8'>

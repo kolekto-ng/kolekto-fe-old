@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Link, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import avatar1 from '../../../assets/avatar1.png'
 import avatar2 from '../../../assets/avatar2.png'
 import avatar3 from '../../../assets/avatar3.png'
@@ -9,12 +9,13 @@ import collectionSvg from '../../../assets/collector-svg.svg'
 import IIH from '../../../assets/iih.png'
 import heroImage from '../../../assets/hero-image.png'
 import styles from './hero.module.css'
+import { Link } from 'react-router-dom'
 const Hero = () => {
 
     const logos = [
         { name: 'Ilorin Innovation Hub', src: IIH },
         { name: 'Paystack', src: paystack },
-        { name: 'Ilorin Innovation Hub', src: paystack },
+        { name: 'Ilorin Innovation Hub', src: IIH },
         { name: 'Paystack', src: paystack },
         { name: 'Ilorin Innovation Hub', src: IIH },
         { name: 'Paystack', src: paystack },
@@ -60,9 +61,9 @@ const Hero = () => {
 
                         <div className='flex gap-3 flex-col sm:flex-row lg:items-center'>
                             {/* <Link to="/register">Get Started</Link> */}
-                            <button className='poppins bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg'>
+                            <Link to="/register" className='poppins bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg'>
                                 Start a Contribution
-                            </button>
+                            </Link>
 
 
                             <div className='flex items-center gap-2 text-[12.8px] lg:text-lg font-normal text-gray-600'>
@@ -144,13 +145,29 @@ const Hero = () => {
                                 <div className={`${styles.marqueeItem}`}>
                                     <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
                                 </div>
-                                {/* <div className={`${styles.marqueeItem}`}>
-                                    <img src={logo.src} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
-                                </div> */}
+
 
                                 {/* Add more logos here if needed */}
                             </React.Fragment>
                         ))}
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={IIH} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={paystack} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={IIH} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={paystack} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={IIH} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
+                        <div className={`${styles.marqueeItem}`}>
+                            <img src={paystack} alt='Paystack-logo' width={100} height={100} className='w-[10ox] object-cover' />
+                        </div>
                     </div>
                 </div>
             </ div>
