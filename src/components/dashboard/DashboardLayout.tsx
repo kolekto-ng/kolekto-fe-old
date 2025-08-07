@@ -55,7 +55,7 @@ const DashboardContent = () => {
 
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuthStore();
 
   if (isLoading) {
     return (

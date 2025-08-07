@@ -22,13 +22,16 @@ import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
 import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
+import { useAuthStore } from "@/store/useAuthStore";
 
 // Create query client outside of the component to avoid React hooks issues
 const queryClient = new QueryClient();
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuthStore();
+
+  console.log(user, isLoading, "User in ProtectedRoute");
 
   if (isLoading) {
     return (
@@ -83,7 +86,6 @@ const AuthenticatedApp = () => {
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
@@ -98,3 +100,23 @@ const App = () => {
 };
 
 export default App;
+
+export function AuthSessionWatcher() {
+  const { signOut } = useAuthStore();
+
+  useEffect(() => {
+    const onFocus = () => {
+      const expiry = localStorage.getItem("auth_expiry");
+      if (expiry) {
+        const now = Math.floor(Date.now() / 1000);
+        if (now > Number(expiry)) {
+          signOut();
+        }
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [signOut]);
+
+  return null;
+}

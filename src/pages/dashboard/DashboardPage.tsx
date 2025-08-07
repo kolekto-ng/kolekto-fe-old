@@ -13,7 +13,7 @@ import { useAuthStore } from '@/store';
 import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
 
 const DashboardPage: React.FC = () => {
-  const { user, isLoading: authloading } = useAuth();
+  const { user, isLoading: authloading } = useAuthStore();
   const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
   const { contributions, fetchContributions } = useContributionStore();
   const { withdrawals, fetchWithdrawals } = useWithdrawalStore();

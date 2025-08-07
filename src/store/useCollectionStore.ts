@@ -85,6 +85,9 @@ export const useCollectionStore = create((set, get) => ({
       return res;
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
+
+      console.log("Error creating collection:", error);
+
       throw error;
     }
   },
