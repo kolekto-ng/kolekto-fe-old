@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { useAuthRedirect } from '@/hooks/useAuthRedirect';
 
+
 const HomePage: React.FC = () => {
   // Redirect authenticated users to dashboard
   useAuthRedirect({ redirectIfAuthenticated: true });
