@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '@/utils/formatters';
-import { useAuth } from '@/context/AuthContext';
+
 import { useDashboard, useDashboardStore } from '@/store/useDashboardStore';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';

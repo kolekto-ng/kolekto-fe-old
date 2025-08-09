@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/context/AuthContext";
+
 import { toast } from "sonner";
 import { useNavigate } from 'react-router-dom';
 import { useCollectionStore } from '@/store/useCollectionStore';
@@ -12,6 +12,7 @@ import UniqueCodesSection from './form/UniqueCodesSection';
 import ContributorFieldsSection from './form/ContributorFieldsSection';
 import { FormField, PriceTier } from '@/types';
 import { useAuthStore } from '@/store';
+import { collectionAPI } from '@/utils/api';
 
 interface CreateCollectionFormProps {
   onPreview?: (data: any) => void;
@@ -165,7 +166,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         status: "active" as const
       };
 
-      const data = await createCollection(collectionData);
+      // Use the new API utility for authenticated requests
+      const data = await collectionAPI.create(collectionData);
 
       toast.success("Collection created successfully!");
       console.log("Collection created:", data);
@@ -173,7 +175,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error(err.response?.data?.error || "An unexpected error occurred while creating the collection.");
+      toast.error(err.message || "An unexpected error occurred while creating the collection.");
     }
 
     setIsLoading(false);

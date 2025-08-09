@@ -3,11 +3,10 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, LogIn } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useAuthStore } from '@/store';
 
 const LoginForm: React.FC = () => {
@@ -19,6 +18,7 @@ const LoginForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const { signIn, sendMagicLink } = useAuthStore();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,13 +26,13 @@ const LoginForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const { user, error } = await signIn(email, password);
       if (error) {
         setError(error.message);
         toast.error('Login failed');
       } else {
         toast.success('Login successful!');
-        <Navigate to="/dashboard" replace />;
+        navigate('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');

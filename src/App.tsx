@@ -12,12 +12,12 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import CreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
 import CollectionsPage from "./pages/dashboard/CollectionsPage";
-import ProfilePage from "./pages/dashboard/ProfilePage";
+// import ProfilePage from "./pages/dashboard/ProfilePage";
 import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
 import ContributePage from "./pages/contribute/ContributePage";
 import NotFound from "./pages/NotFound";
 import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
 import PaymentCallback from "./components/contribute/paymentCallback";
@@ -29,7 +29,7 @@ const queryClient = new QueryClient();
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuthStore();
+  const { user, isLoading } = useAuthStore() as any;
 
   console.log(user, isLoading, "User in ProtectedRoute");
 
@@ -74,7 +74,7 @@ const AuthenticatedApp = () => {
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<CreateCollectionPage />} />
-        <Route path="profile" element={<UserProfilePage />} />
+        {/* <Route path="profile" element={<UserProfilePage />} /> */}
         <Route path="transactions" element={<TransactionHistoryPage />} />
       </Route>
 
@@ -87,36 +87,58 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <AuthProvider>
           <AuthenticatedApp />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+          {/* <AuthSessionWatcher /> */}
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
   );
 };
 
 export default App;
 
-export function AuthSessionWatcher() {
-  const { signOut } = useAuthStore();
+// export function AuthSessionWatcher() {
+//   const { user, checkAuth, signOut } = useAuthStore() as any;
 
-  useEffect(() => {
-    const onFocus = () => {
-      const expiry = localStorage.getItem("auth_expiry");
-      if (expiry) {
-        const now = Math.floor(Date.now() / 1000);
-        if (now > Number(expiry)) {
-          signOut();
-        }
-      }
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [signOut]);
+//   useEffect(() => {
+//     // Check authentication status on app load
+//     checkAuth();
+//   }, [checkAuth]);
 
-  return null;
-}
+//   useEffect(() => {
+//     const onFocus = () => {
+//       // Check auth status when window regains focus
+//       if (user) {
+//         checkAuth();
+//       }
+//     };
+
+//     const onStorageChange = (e: StorageEvent) => {
+//       // Listen for changes to auth token in other tabs
+//       if (e.key === "kolekto-auth-token") {
+//         if (!e.newValue) {
+//           // Token was removed, sign out
+//           signOut();
+//         } else {
+//           // Token was updated, check auth
+//           checkAuth();
+//         }
+//       }
+//     };
+
+//     window.addEventListener("focus", onFocus);
+//     window.addEventListener("storage", onStorageChange);
+
+//     return () => {
+//       window.removeEventListener("focus", onFocus);
+//       window.removeEventListener("storage", onStorageChange);
+//     };
+//   }, [user, checkAuth, signOut]);
+
+//   return null;
+// }

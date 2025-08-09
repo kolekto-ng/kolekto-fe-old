@@ -13,24 +13,24 @@ const Footer = () => {
           <div className='col-span-2 lg:col-span-1'>
             <h3 className='text-2xl font-bold mb-6'>Stay Connected</h3>
             <div className='flex space-x-4'>
-              <a href='/social/facebook' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              <a href='https://www.facebook.com/profile.php?id=61575665957385' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Facebook className='w-5 h-5 ' />
               </a>
-              <a href='/social/twitter' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              <a href='https://x.com/kolekto_ng' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Twitter className='w-5 h-5 ' />
               </a>
-              <a href='/social/aedin' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              <a href='https://www.linkedin.com/company/kolektong/' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Linkedin className='w-5 h-5 ' />
               </a>
-              <a href='/social/Instagram' className='p-2 bg-red-white bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
+              <a href='https://www.instagram.com/kolekto_ng/' target='_blank' className='p-2 bg-red-white bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
                 <Instagram className='w-5 h-5 ' />
               </a>
             </div>
-            <p className='text-xs mt-4 text-yellow-500'> Kolekto, Inc. All Rights Reserved</p>
+            <p className='text-xs mt-4 text-yellow-500'>Kolekto, Inc. All Rights Reserved</p>
           </div>
           {/* Product Section */}
           <div className='lg:col-span-1'>
-            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'> Product</h4>
+            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Product</h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
                 <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>

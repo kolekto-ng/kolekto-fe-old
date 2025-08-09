@@ -18,7 +18,7 @@ import {
   BarChart3,
   History
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuthStore } from '@/store';
 
