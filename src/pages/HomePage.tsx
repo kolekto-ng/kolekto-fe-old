@@ -29,7 +29,7 @@ const HomePage: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       <NavBar />
 
-      <main className="flex-grow bg-[#FAFAFA] overflow-auto">
+      <main className="flex-grow bg-[#FAFAFA] overflow-hidden">
         {/* Hero Section */}
         <Hero />
 
