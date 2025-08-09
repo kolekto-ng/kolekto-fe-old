@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import contributeImage from '../../../assets/contribut.png';
+import img2 from '../../../assets/im2.png';
+import img3 from '../../../assets/img3.png';
+import img4 from '../../../assets/img4.png';
+import img5 from '../../../assets/img5.png';
 import styles from './works.module.css';
 
 const steps = [
@@ -7,31 +11,41 @@ const steps = [
         id: 1,
         title: "Choose the Contribution Type",
         desc: "Start by selecting the type of group payment you want to collect — Regular (fixed amount), Tiered pricing, or Donation-based.",
+        color: "#D4F8AB",
+        backgroundColor: "#F1F8E9",
         img: contributeImage,
     },
     {
         id: 2,
         title: "Add the Details",
         desc: "Enter a title, description, amount(s), and any custom fields like name, matric number, phone number, etc. You’re in full control of the setup.",
-        img: contributeImage,
+        color: "#A7F2EE",
+        backgroundColor: "#E0F2F1",
+        img: img2,
     },
     {
         id: 3,
         title: "Share with Your Community",
         desc: "Once your collection is ready, you’ll get a unique link or QR code. Share it easily via WhatsApp, X (Twitter), Instagram, or email. Contributors can pay instantly—no sign-up required.",
-        img: contributeImage,
+        color: "#FFEDB0",
+        backgroundColor: "#FFF8E1",
+        img: img3,
     },
     {
         id: 4,
         title: "Track Funds in Real-Time",
         desc: "Monitor every payment as it comes in. See who contributed, how much has been raised, and what’s available—all from your live dashboard.",
-        img: contributeImage,
+        color: "#AAB8F6",
+        backgroundColor: "#D4DCFF",
+        img: img4,
     },
     {
         id: 5,
         title: "Withdraw Safely",
         desc: "Withdraw funds anytime with clear, transparent breakdowns. Kolekto uses Paystack’s trusted payment infrastructure to keep every transaction secure.",
-        img: contributeImage,
+        color: "#A7F2EE",
+        backgroundColor: "#E0F2F1",
+        img: img5,
     },
 ];
 
@@ -74,17 +88,18 @@ const HowItWorks = () => {
                 {steps.map((step) => (
                     <div
                         key={step.id}
-                        className="inline-block bg-[#f0f8e9] px-6 py-4 space-y-4 rounded-xl min-w-[400px] w-full max-w-[700px] text-left"
+                        style={{ backgroundColor: step.backgroundColor }}
+                        className="flex flex-col justify-between items-start  px-6 py-4 rounded-xl min-w-[400px] w-full max-w-[700px] text-left"
                     >
                         <div>
-                            <div className="w-10 h-10 flex items-center justify-center rounded-full bg-[#ccf17d] text-black font-bold text-lg">
+                            <div style={{ backgroundColor: step.color }} className={`w-10 h-10 flex items-center justify-center rounded-full text-black font-bold text-lg`}>
                                 {step.id}
                             </div>
                             <h3 className="text-xl md:text-2xl font-bold mt-4 text-black">{step.title}</h3>
                             <p className="text-gray-700 mt-2">{step.desc}</p>
                         </div>
 
-                        <div className="bg-[#D4F8AB] flex justify-center items-center rounded-lg pt-4">
+                        <div style={{ backgroundColor: step.color }} className={`flex mb-0 justify-center items-center rounded-lg pt-4`}>
                             <img
                                 width={400}
                                 height={300}

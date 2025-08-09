@@ -21,7 +21,7 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-auto">
       <NavBar />
 
       <main className="flex-grow bg-[#FAFAFA]">
