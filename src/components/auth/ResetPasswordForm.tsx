@@ -77,7 +77,7 @@ const ResetPasswordForm: React.FC = () => {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       <div className="space-y-2">
         <Label htmlFor="password">New Password</Label>
         <Input
@@ -89,7 +89,7 @@ const ResetPasswordForm: React.FC = () => {
           placeholder="Enter new password"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm New Password</Label>
         <Input
@@ -101,15 +101,15 @@ const ResetPasswordForm: React.FC = () => {
           placeholder="Confirm new password"
         />
       </div>
-      
-      <Button 
-        type="submit" 
-        className="w-full bg-kolekto hover:bg-kolekto/90" 
+
+      <Button
+        type="submit"
+        className="w-full bg-kolekto hover:bg-kolekto/90"
         disabled={isLoading}
       >
         {isLoading ? "Resetting..." : "Reset Password"}
       </Button>
-      
+
       <div className="text-center text-sm">
         <Link to="/login" className="text-kolekto hover:underline">
           Back to login

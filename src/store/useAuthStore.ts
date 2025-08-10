@@ -106,7 +106,6 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       // Use axios for signup since it's not in the authAPI yet
-      const { axiosInstance } = await import("../utils/axios");
       const res = await axiosInstance.post("/auth/signup", {
         email,
         password,
@@ -157,7 +156,6 @@ export const useAuthStore = create((set, get) => ({
   sendMagicLink: async (email: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { axiosInstance } = await import("../utils/axios");
       const res = await axiosInstance.post("/auth/magic-link", {
         email,
         emailRedirectTo: window.location.origin + "/login",
@@ -181,7 +179,6 @@ export const useAuthStore = create((set, get) => ({
   forgotPassword: async (email: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { axiosInstance } = await import("../utils/axios");
       const res = await axiosInstance.post("/auth/forgot-password", { email });
       if (res.status !== 200) {
         throw new Error("Failed to send password reset email");
