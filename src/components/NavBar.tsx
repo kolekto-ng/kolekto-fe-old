@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import Logo from "./Logo";
@@ -13,7 +12,7 @@ import {
 import { useAuthStore } from "@/store";
 
 const NavBar: React.FC = () => {
-  const { user, isLoading, signOut } = useAuthStore();
+  let { user, isLoading, signOut } = useAuthStore();
   const isAuthenticated = !!user;
 
   const handleSignOut = async () => {

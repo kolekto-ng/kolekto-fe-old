@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import { authAPI } from "../utils/axios";
+import { authAPI, axiosInstance } from "../utils/axios";
 
 interface SessionData {
   user: any;
@@ -11,11 +11,11 @@ interface SessionData {
 function getValidSessionFromStorage(): SessionData | null {
   const sessionStr = localStorage.getItem("kolekto-auth-token");
   if (!sessionStr) return null;
-  
+
   try {
     const session: SessionData = JSON.parse(sessionStr);
     const { expires_at } = session;
-    
+
     if (!session || !expires_at) return null;
 
     const now = Math.floor(Date.now() / 1000); // seconds
@@ -35,24 +35,29 @@ function getValidSessionFromStorage(): SessionData | null {
 }
 
 // Initial state from localStorage if valid
-// const initialSession = getValidSessionFromStorage();
-// console.log(initialSession, "Initial Session and User");
-// const user = initialSession ? initialSession.user : null;
+const initialSession = getValidSessionFromStorage();
+console.log(initialSession, "Initial Session and User");
+const user = initialSession ? initialSession.user : null;
 
 export const useAuthStore = create((set, get) => ({
-  user: null,
-  session: null,
-  isLoading: true, // loading if no session yet
+  user: user,
+  session: initialSession?.session,
+  isLoading: !!initialSession?.session, // loading if no session yet
   error: null,
 
   // Check authentication status on app load
   checkAuth: async () => {
     set({ isLoading: true });
     try {
-      const userData = await authAPI.getCurrentUser();
+      const userData = await axiosInstance.get("/auth/me");
+
+      console.log(userData);
+
       if (userData) {
         // User is authenticated, get session from storage
         const session = getValidSessionFromStorage();
+        console.log(userData);
+
         set({ user: userData, session, isLoading: false });
       } else {
         // No valid session
@@ -60,7 +65,7 @@ export const useAuthStore = create((set, get) => ({
         localStorage.removeItem("kolekto-auth-token");
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      console.error("Auth check error:", error);
       set({ user: null, session: null, isLoading: false });
       localStorage.removeItem("kolekto-auth-token");
     }
@@ -70,9 +75,12 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const data = await authAPI.signIn(email, password);
-      const { user, session } = data;
-      console.log(session, "Session");
+      const { data } = await axiosInstance.post("/auth/signin", {
+        email,
+        password,
+      });
+      const { user, session } = data.data;
+      console.log(data, data.session, "Session");
       // Save to localStorage
       localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
 
@@ -84,13 +92,18 @@ export const useAuthStore = create((set, get) => ({
 
       return { user, error: null };
     } catch (error: any) {
-      const errorMessage = error.message || 'Sign in failed';
+      const errorMessage = error.message || "Sign in failed";
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }
   },
 
-  signUp: async (email: string, password: string, fullName: string, phoneNumber?: string) => {
+  signUp: async (
+    email: string,
+    password: string,
+    fullName: string,
+    phoneNumber?: string
+  ) => {
     set({ isLoading: true, error: null });
     try {
       // Use axios for signup since it's not in the authAPI yet
@@ -105,7 +118,10 @@ export const useAuthStore = create((set, get) => ({
 
       // Save to localStorage if session is returned
       if (data.session) {
-        localStorage.setItem("kolekto-auth-token", JSON.stringify(data.session));
+        localStorage.setItem(
+          "kolekto-auth-token",
+          JSON.stringify(data.session)
+        );
       }
 
       set({
@@ -116,7 +132,8 @@ export const useAuthStore = create((set, get) => ({
 
       return { user: data.user, error: null };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Sign up failed';
+      const errorMessage =
+        error.response?.data?.message || error.message || "Sign up failed";
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }
@@ -126,11 +143,11 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      await authAPI.signOut();
+      await axiosInstance.post("auth/signout");
       localStorage.removeItem("kolekto-auth-token");
       set({ user: null, session: null, isLoading: false });
     } catch (error: any) {
-      const errorMessage = error.message || 'Sign out failed';
+      const errorMessage = error.message || "Sign out failed";
       set({ error: errorMessage, isLoading: false });
       // Still clear local state even if server call fails
       localStorage.removeItem("kolekto-auth-token");
@@ -153,7 +170,10 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to send magic link';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to send magic link";
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
     }
@@ -171,7 +191,10 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to send password reset email';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to send password reset email";
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
     }
@@ -192,20 +215,12 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to reset password';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to reset password";
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
-    }
-  },
-
-  // Create collection using the new API
-  createCollection: async (collectionData: any) => {
-    try {
-      const result = await authAPI.createCollection(collectionData);
-      return result;
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to create collection';
-      throw new Error(errorMessage);
     }
   },
 }));
