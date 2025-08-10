@@ -1,7 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
@@ -25,13 +24,10 @@ import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
 // Create query client outside of the component to avoid React hooks issues
-const queryClient = new QueryClient();
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuthStore() as any;
-
-  console.log(user, isLoading, "User in ProtectedRoute");
 
   if (isLoading) {
     return (
@@ -74,7 +70,7 @@ const AuthenticatedApp = () => {
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<CreateCollectionPage />} />
-        {/* <Route path="profile" element={<UserProfilePage />} /> */}
+        <Route path="profile" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
       </Route>
 
@@ -87,16 +83,12 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AuthProvider>
-          <AuthenticatedApp />
-          {/* <AuthSessionWatcher /> */}
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <AuthenticatedApp />
+      {/* <AuthSessionWatcher /> */}
+    </TooltipProvider>
   );
 };
 
@@ -104,6 +96,8 @@ export default App;
 
 // export function AuthSessionWatcher() {
 //   const { user, checkAuth, signOut } = useAuthStore() as any;
+//   console.log("auth watcher FaRunning...");
+
 
 //   useEffect(() => {
 //     // Check authentication status on app load

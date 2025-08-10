@@ -21,9 +21,12 @@ axiosInstance.interceptors.request.use(
     if (sessionStr) {
       try {
         const session = JSON.parse(sessionStr);
-        if (session && session.token) {
+
+        if (session && session.access_token
+        ) {
           // Add Authorization header with Bearer token
-          config.headers.Authorization = `Bearer ${session.token}`;
+          config.headers.Authorization = `Bearer ${session.access_token
+            }`;
         }
       } catch (e) {
         // Invalid token in storage, remove it
@@ -52,96 +55,4 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-// Export API functions following the backend pattern
-export const authAPI = {
-  // Sign in function
-  signIn: async (email: string, password: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/signin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // CRUCIAL: This sends cookies cross-domain
-        body: JSON.stringify({ email, password })
-      });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Sign in failed');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    }
-  },
-
-  // Get current user
-  getCurrentUser: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        credentials: 'include', // Cookies sent automatically
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          // User not authenticated
-          return null;
-        }
-        throw new Error('Failed to get user');
-      }
-
-      const data = await response.json();
-      return data.user;
-    } catch (error) {
-      console.error('Get user error:', error);
-      return null;
-    }
-  },
-
-  // Sign out
-  signOut: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/signout`, {
-        method: 'POST',
-        credentials: 'include', // Cookies sent automatically
-      });
-
-      if (!response.ok) {
-        throw new Error('Sign out failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    }
-  },
-
-  // Make authenticated requests
-  createCollection: async (collectionData: any) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/create-collection`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Cookies sent automatically
-        body: JSON.stringify({ collectionData })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create collection');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Create collection error:', error);
-      throw error;
-    }
-  }
-};
