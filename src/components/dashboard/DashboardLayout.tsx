@@ -57,9 +57,6 @@ const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const { user, isLoading } = useAuthStore();
 
-  console.log(user, "user in dahboalayout");
-
-
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">

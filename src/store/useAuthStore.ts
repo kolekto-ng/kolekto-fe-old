@@ -19,7 +19,7 @@ function getValidSessionFromStorage(): SessionData | null {
     if (!session || !expires_at) return null;
 
     const now = Math.floor(Date.now() / 1000); // seconds
-    console.log(now > Number(expires_at), "now:", now, expires_at, "expiry");
+    // console.log(now > Number(expires_at), "now:", now, expires_at, "expiry");
 
     if (now > Number(expires_at)) {
       localStorage.removeItem("kolekto-auth-token");
@@ -36,7 +36,6 @@ function getValidSessionFromStorage(): SessionData | null {
 
 // Initial state from localStorage if valid
 const initialSession = getValidSessionFromStorage();
-console.log(initialSession, "Initial Session and User");
 const user = initialSession ? initialSession.user : null;
 
 export const useAuthStore = create((set, get) => ({

@@ -21,7 +21,6 @@ axiosInstance.interceptors.request.use(
     if (sessionStr) {
       try {
         const session = JSON.parse(sessionStr);
-        console.log(session, "interceptor");
 
         if (session && session.access_token
         ) {
