@@ -4,7 +4,7 @@ import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sid
 import DashboardSidebar from './DashboardSidebar';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store';
-import { useAuth } from '@/context/AuthContext';
+
 import { Loader2 } from "lucide-react";
 
 const DashboardContent = () => {
@@ -55,7 +55,7 @@ const DashboardContent = () => {
 
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuthStore();
 
   if (isLoading) {
     return (

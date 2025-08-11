@@ -7,7 +7,7 @@ import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
-import { useAuth } from '@/context/AuthContext';
+import { useAuthStore } from '@/store';
 import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2 } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
@@ -25,7 +25,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const { fetchCollectionById, currentCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();

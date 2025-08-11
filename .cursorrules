@@ -1,0 +1,46 @@
+# Kolekto - Smart Group Payment Platform
+
+## Project Overview
+Kolekto is a React-based web application for facilitating group payments. It allows organizers to create payment collections and share links/QR codes for contributors to pay without creating accounts.
+
+## Tech Stack
+- React 18 + TypeScript + Vite
+- Tailwind CSS + shadcn/ui components
+- Zustand for state management
+- Supabase for backend
+- Paystack for payments
+- React Router DOM for routing
+- React Hook Form + Zod for forms
+- TanStack Query for data fetching
+
+## Key Features
+- Group payment collection
+- QR code generation
+- Multiple payment methods (Opay, Flutterwave, cards, bank transfers)
+- Real-time payment confirmations
+- No account required for contributors
+- Bulk payments for multiple people
+
+## File Structure
+- `/src/components/` - Reusable UI components
+- `/src/pages/` - Page components
+- `/src/context/` - React context providers
+- `/src/store/` - Zustand state management
+- `/src/components/ui/` - shadcn/ui components
+- `/src/components/home/` - Landing page components
+
+## Development Guidelines
+- Use TypeScript for all new files
+- Follow shadcn/ui component patterns
+- Use Tailwind CSS for styling
+- Implement proper error handling
+- Follow React best practices
+- Use Zustand for global state management
+- Implement proper loading states
+
+## Common Patterns
+- Use React Hook Form for form handling
+- Implement proper validation with Zod
+- Use TanStack Query for API calls
+- Follow the existing component structure
+- Use the established routing patterns

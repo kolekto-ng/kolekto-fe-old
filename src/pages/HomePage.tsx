@@ -14,8 +14,13 @@ import HowItWorks from "@/components/lpMain/hwWorks/HowItWorks";
 import FaqSection from '@/components/home/FaqSection';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { useAuthRedirect } from '@/hooks/useAuthRedirect';
+
 
 const HomePage: React.FC = () => {
+  // Redirect authenticated users to dashboard
+  useAuthRedirect({ redirectIfAuthenticated: true });
+
   const scrollToFeatures = () => {
     document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -24,7 +29,7 @@ const HomePage: React.FC = () => {
     <div className="min-h-screen flex flex-col overflow-hidden">
       <NavBar />
 
-      <main className="flex-grow bg-[#FAFAFA]">
+      <main className="flex-grow bg-[#FAFAFA] overflow-hidden">
         {/* Hero Section */}
         <Hero />
 

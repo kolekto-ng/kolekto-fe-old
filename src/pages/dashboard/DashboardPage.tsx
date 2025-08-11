@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '@/utils/formatters';
-import { useAuth } from '@/context/AuthContext';
+
 import { useDashboard, useDashboardStore } from '@/store/useDashboardStore';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
@@ -13,7 +13,7 @@ import { useAuthStore } from '@/store';
 import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
 
 const DashboardPage: React.FC = () => {
-  const { user, isLoading: authloading } = useAuth();
+  const { user, isLoading: authloading } = useAuthStore();
   const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
   const { contributions, fetchContributions } = useContributionStore();
   const { withdrawals, fetchWithdrawals } = useWithdrawalStore();

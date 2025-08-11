@@ -18,13 +18,14 @@ import {
   BarChart3,
   History
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuthStore } from '@/store';
 
 const DashboardSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut } = useAuthStore();
   const { setOpen } = useSidebar();
   const isMobile = useIsMobile();
 
@@ -55,8 +56,8 @@ const DashboardSidebar = () => {
           <Button
             variant={isActive('/dashboard') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard')
-                ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-                : 'hover:bg-kolekto/10 hover:text-kolekto'
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard')}
@@ -68,8 +69,8 @@ const DashboardSidebar = () => {
           <Button
             variant={isActive('/dashboard/collections') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/collections')
-                ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-                : 'hover:bg-kolekto/10 hover:text-kolekto'
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/collections')}
@@ -81,8 +82,8 @@ const DashboardSidebar = () => {
           <Button
             variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
-                ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-                : 'hover:bg-kolekto/10 hover:text-kolekto'
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/create-collection')}
@@ -94,8 +95,8 @@ const DashboardSidebar = () => {
           <Button
             variant={isActive('/dashboard/profile') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/profile')
-                ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-                : 'hover:bg-kolekto/10 hover:text-kolekto'
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/profile')}
@@ -107,8 +108,8 @@ const DashboardSidebar = () => {
           <Button
             variant={isActive('/dashboard/transactions') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/transactions')
-                ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-                : 'hover:bg-kolekto/10 hover:text-kolekto'
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/transactions')}

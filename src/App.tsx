@@ -1,7 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
@@ -12,23 +11,23 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import CreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
 import CollectionsPage from "./pages/dashboard/CollectionsPage";
-import ProfilePage from "./pages/dashboard/ProfilePage";
+// import ProfilePage from "./pages/dashboard/ProfilePage";
 import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
 import ContributePage from "./pages/contribute/ContributePage";
 import NotFound from "./pages/NotFound";
 import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 import UserProfilePage from "./pages/dashboard/UserProfilePage";
 import { useEffect } from "react";
 import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
+import { useAuthStore } from "@/store/useAuthStore";
 
 // Create query client outside of the component to avoid React hooks issues
-const queryClient = new QueryClient();
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuthStore() as any;
 
   if (isLoading) {
     return (
@@ -83,18 +82,57 @@ const AuthenticatedApp = () => {
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
-
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AuthenticatedApp />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <AuthenticatedApp />
+      {/* <AuthSessionWatcher /> */}
+    </TooltipProvider>
   );
 };
 
 export default App;
+
+// export function AuthSessionWatcher() {
+//   const { user, checkAuth, signOut } = useAuthStore() as any;
+//   console.log("auth watcher FaRunning...");
+
+
+//   useEffect(() => {
+//     // Check authentication status on app load
+//     checkAuth();
+//   }, [checkAuth]);
+
+//   useEffect(() => {
+//     const onFocus = () => {
+//       // Check auth status when window regains focus
+//       if (user) {
+//         checkAuth();
+//       }
+//     };
+
+//     const onStorageChange = (e: StorageEvent) => {
+//       // Listen for changes to auth token in other tabs
+//       if (e.key === "kolekto-auth-token") {
+//         if (!e.newValue) {
+//           // Token was removed, sign out
+//           signOut();
+//         } else {
+//           // Token was updated, check auth
+//           checkAuth();
+//         }
+//       }
+//     };
+
+//     window.addEventListener("focus", onFocus);
+//     window.addEventListener("storage", onStorageChange);
+
+//     return () => {
+//       window.removeEventListener("focus", onFocus);
+//       window.removeEventListener("storage", onStorageChange);
+//     };
+//   }, [user, checkAuth, signOut]);
+
+//   return null;
+// }

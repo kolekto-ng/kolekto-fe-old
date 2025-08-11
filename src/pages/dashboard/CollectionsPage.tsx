@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import CollectionCard from '@/components/collections/CollectionCard';
 import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
+
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { Loader2 } from 'lucide-react';
+import { useAuthStore } from '@/store';
 
 const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const { collections, isLoading, error, fetchCollections } = useCollectionStore();
 
   useEffect(() => {

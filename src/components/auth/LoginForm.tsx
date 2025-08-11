@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, LogIn } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { useAuthStore } from '@/store';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,21 +16,23 @@ const LoginForm: React.FC = () => {
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [isMagicLinkSent, setIsMagicLinkSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const { signIn, sendMagicLink } = useAuth();
+
+  const { signIn, sendMagicLink } = useAuthStore();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    
+
     try {
-      const { error } = await signIn(email, password);
+      const { user, error } = await signIn(email, password);
       if (error) {
         setError(error.message);
         toast.error('Login failed');
       } else {
         toast.success('Login successful!');
+        navigate('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
@@ -43,14 +45,14 @@ const LoginForm: React.FC = () => {
   const handleMagicLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     setError(null);
-    
+
     if (!email.trim()) {
       setError('Please enter your email address first');
       return;
     }
-    
+
     setIsMagicLinkLoading(true);
-    
+
     try {
       const { error } = await sendMagicLink(email);
       if (error) {
@@ -81,7 +83,7 @@ const LoginForm: React.FC = () => {
           Click the link in your email to sign in to your account.
         </p>
         <div className="mt-4">
-          <button 
+          <button
             onClick={() => setIsMagicLinkSent(false)}
             className="text-kolekto hover:underline"
           >
@@ -99,7 +101,7 @@ const LoginForm: React.FC = () => {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
@@ -111,7 +113,7 @@ const LoginForm: React.FC = () => {
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
-      
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="password">Password</Label>
@@ -127,15 +129,15 @@ const LoginForm: React.FC = () => {
           onChange={(e) => setPassword(e.target.value)}
         />
       </div>
-      
-      <Button 
-        type="submit" 
-        className="w-full bg-kolekto hover:bg-kolekto/90" 
+
+      <Button
+        type="submit"
+        className="w-full bg-kolekto hover:bg-kolekto/90"
         disabled={isLoading}
       >
         {isLoading ? "Signing in..." : "Sign In with Password"}
       </Button>
-      
+
       <div className="relative mt-4">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-gray-200"></div>
@@ -144,18 +146,18 @@ const LoginForm: React.FC = () => {
           <span className="px-2 bg-white text-gray-500">Or</span>
         </div>
       </div>
-      
-      <Button 
+
+      <Button
         type="button"
-        variant="outline" 
-        className="w-full" 
+        variant="outline"
+        className="w-full"
         onClick={handleMagicLink}
         disabled={isMagicLinkLoading}
       >
         <Mail className="mr-2 h-4 w-4" />
         {isMagicLinkLoading ? "Sending..." : "Sign In with Magic Link"}
       </Button>
-      
+
       <div className="text-center text-sm">
         Don't have an account?{" "}
         <Link to="/register" className="text-kolekto hover:underline">
