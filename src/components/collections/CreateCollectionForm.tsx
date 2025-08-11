@@ -12,7 +12,6 @@ import UniqueCodesSection from './form/UniqueCodesSection';
 import ContributorFieldsSection from './form/ContributorFieldsSection';
 import { FormField, PriceTier } from '@/types';
 import { useAuthStore } from '@/store';
-import { collectionAPI } from '@/utils/api';
 
 interface CreateCollectionFormProps {
   onPreview?: (data: any) => void;
@@ -167,7 +166,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       };
 
       // Use the new API utility for authenticated requests
-      const data = await collectionAPI.create(collectionData);
+      const data = await createCollection(collectionData);
 
       toast.success("Collection created successfully!");
       console.log("Collection created:", data);
