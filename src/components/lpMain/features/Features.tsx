@@ -14,28 +14,28 @@ const Features = () => {
                 <img data-aos="fade-left" height={600} width={600} src={fearuresImage} />
 
                 <div className='max-w-3xl space-y-6'>
-                    <h2 className='md:text-[20px] text-[12px] font-clash'><span className='bg-[#1C5C23] py-1 px-3 font-normal rounded-[12px] text-white mr-5'>POWERFUL</span> Collection Features</h2>
-                    <h3 className='md:text-5xl text-[28px] font-medium font-clash'>Everything You Need to Manage Group Payments Fast and Transparent</h3>
-                    <p className='font-normal poppins text-[14px] md:text-[20px] text-[#333333]'>Take control of your group payments with branded pages, flexible pricing, real-time tracking, and smooth withdrawals  all in one place, with zero stress.</p>
+                    <h2 data-aos="fade-up" className='md:text-[20px] text-[12px] font-clash'><span className='bg-[#1C5C23] py-1 px-3 font-normal rounded-[12px] text-white mr-5'>POWERFUL</span> Collection Features</h2>
+                    <h3 data-aos="fade-up" className='md:text-5xl text-[28px] font-medium font-clash'>Everything You Need to Manage Group Payments Fast and Transparent</h3>
+                    <p data-aos="fade-up" className='font-normal poppins text-[14px] md:text-[20px] text-[#333333]'>Take control of your group payments with branded pages, flexible pricing, real-time tracking, and smooth withdrawals  all in one place, with zero stress.</p>
                 </div>
             </div>
             <div className='flex gap-1 flex-col md:flex-row justify-between items-center'>
-                <div className='flex flex-col gap-1 lg:gap-7'>
+                <div data-aos="fade-right" className='flex flex-col gap-1 lg:gap-7'>
                     <img height={400} width={400} src={cm} alt='collection managementbimage' />
                     <h3 className='font-medium text-2xl'>Collection Management</h3>
                     <p className='text-[#333333]'>Whether it’s for a party, project, or dues set up your contribution drive with everything you need, fast and easy.</p>
                 </div>
-                <div className='flex flex-col gap-1'>
+                <div data-aos="fade-left" className='flex flex-col gap-1'>
                     <img height={400} width={400} src={tired} alt='Tiered Contributions' />
                     <h3 className='font-medium text-2xl'>Tiered Contributions</h3>
                     <p className='text-[#333333]'>Give your contributors more control  add multiple tiers with different amounts and benefits, and watch your collections grow faster.</p>
                 </div>
-                <div className='flex flex-col gap-1'>
+                <div data-aos="fade-right" className='flex flex-col gap-1'>
                     <img height={400} width={400} src={fundraising} alt='Fundraising' />
                     <h3 className='font-medium text-2xl'>Fundraising</h3>
                     <p className='text-[#333333]'>Empower your donors with flexible giving options. Offer multiple tiers with different amounts and perks to boost your fundraising success.</p>
                 </div>
-                <div className='flex flex-col gap-1'>
+                <div data-aos="fade-left" className='flex flex-col gap-1'>
                     <img height={400} width={400} src={labeling} alt='White-Label Branding' />
                     <h3 className='font-medium text-2xl'>White-Label Branding</h3>
                     <p className='text-[#333333]'>Make your collections feel truly yours by adding your logo and brand name  it shows on receipts, forms, and emails sent to contributors.</p>
