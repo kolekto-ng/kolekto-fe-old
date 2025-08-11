@@ -30,7 +30,7 @@ const Hero = () => {
 
             {/* Main Hero Content */}
 
-            <div data-aos="fade-zoom-in" className='flex-1 px-4 lg:px-8 py-8 lg:py-12 max-w-[1280px] w-full mx-auto my-0'>
+            <div data-aos="fade-up" className='flex-1 px-4 lg:px-8 py-8 lg:py-12 max-w-[1280px] w-full mx-auto my-0'>
                 <div className='grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center'>
 
                     {/* Left Content */}

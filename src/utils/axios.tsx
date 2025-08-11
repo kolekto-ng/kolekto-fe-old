@@ -1,9 +1,12 @@
+import { useAuthStore } from "@/store";
 import axios from "axios";
 
 // API configuration following the backend pattern
 const API_BASE_URL = import.meta.env.MODE === 'production'
   ? import.meta.env.VITE_API_URL || 'https://api.kolekto.com.ng/api'
   : import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+// const { session } = useAuthStore()
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -21,11 +24,12 @@ axiosInstance.interceptors.request.use(
     if (sessionStr) {
       try {
         const session = JSON.parse(sessionStr);
+        // console.log(session, "session in axios interceptor");
 
         if (session && session.access_token
         ) {
           // Add Authorization header with Bearer token
-          config.headers.Authorization = `Bearer ${session.access_token
+          config.headers.Authorization = `Bearer ${session?.access_token
             }`;
         }
       } catch (e) {
