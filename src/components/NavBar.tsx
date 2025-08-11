@@ -1,9 +1,8 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import Logo from "./Logo";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/context/AuthContext";
+
 import { LogIn, LogOut, LayoutDashboard, User } from "lucide-react";
 import {
   Sheet,
@@ -13,7 +12,7 @@ import {
 import { useAuthStore } from "@/store";
 
 const NavBar: React.FC = () => {
-  const { user, isLoading, signOut } = useAuth();
+  let { user, isLoading, signOut } = useAuthStore();
   const isAuthenticated = !!user;
 
   const handleSignOut = async () => {

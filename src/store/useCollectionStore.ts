@@ -15,6 +15,8 @@ export const useCollectionStore = create((set, get) => ({
     try {
       // Fetch collections with contributions and filter by paid status
       const res = await axiosInstance.get("/collections");
+      // console.log("Fetched collections:", res.data);
+
       const data = res.data.data;
       // Format data with proper type casting
       const formattedData =
@@ -85,6 +87,9 @@ export const useCollectionStore = create((set, get) => ({
       return res;
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
+
+      console.log("Error creating collection:", error);
+
       throw error;
     }
   },

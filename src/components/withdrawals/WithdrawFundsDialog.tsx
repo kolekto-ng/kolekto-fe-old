@@ -10,7 +10,7 @@ import {
 import WithdrawForm from './WithdrawForm';
 import { toast } from 'sonner';
 import { useWithdrawalStore } from '@/store';
-import { useAuth } from '@/context/AuthContext';
+import { useAuthStore } from '@/store';
 import { axiosInstance } from '@/utils/axios';
 
 interface WithdrawFundsDialogProps {
@@ -32,7 +32,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { createWithdrawal } = useWithdrawalStore();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const handleWithdraw = async (data: {
     amount: number;
