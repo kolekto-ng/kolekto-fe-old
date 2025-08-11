@@ -15,7 +15,7 @@ export const useCollectionStore = create((set, get) => ({
     try {
       // Fetch collections with contributions and filter by paid status
       const res = await axiosInstance.get("/collections");
-      console.log("Fetched collections:", res.data);
+      // console.log("Fetched collections:", res.data);
 
       const data = res.data.data;
       // Format data with proper type casting
