@@ -46,7 +46,7 @@ const FAQSection = () => {
 
                     <div className='space-y-4 order-2 lg:order-1'>
                         {faqs.map((faq, index) => (
-                            <div key={index} className='bg-white rounded-lg shadow-sm border border-gray-200'>
+                            <div data-aos='flip-down' key={index} className='bg-white rounded-lg shadow-sm border border-gray-200'>
                                 <button onClick={() => toggleQuestion(index)} className='w-full flex px-6 py-4 text-left justify-between items-center hover:bg-gray-50 transition-colors'>
                                     <h3 className='text-lg font-medium text-gray-950 flex-1'>{faq.question}</h3>
                                     <div className=''>
@@ -74,7 +74,7 @@ const FAQSection = () => {
                     {/* Right Content - Title and Description */}
 
                     <div className='lg:pl-12 mt-15 order-1 lg:order-2'>
-                        <div className='space-y-6'>
+                        <div data-aos='fade-up-left' className='space-y-6'>
                             <h2 className='text-[28px] lg:text-5xl font-medium text-gray-950 leading-tight'>Frequently Asked Question!</h2>
                             <p>Got any questions? We've answered some of the most common things people ask before getting started with Kolekto. If you dont find what you're looking for feel free to reach out. Thanks </p>
                         </div>

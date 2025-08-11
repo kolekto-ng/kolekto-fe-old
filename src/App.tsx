@@ -23,6 +23,8 @@ import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 // Create query client outside of the component to avoid React hooks issues
 
 // Protected route component
@@ -82,6 +84,23 @@ const AuthenticatedApp = () => {
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
+
+  useEffect(
+    () => {
+      AOS.init({
+        offset: 120, // offset (in px) from the original trigger point
+        delay: 0, // delay in ms
+        duration: 1000, // animation duration
+        easing: 'ease', // easing option
+        once: false, // whether animation should happen only once
+        mirror: false, // whether elements animate out while scrolling past
+        anchorPlacement: 'top-bottom', // defines trigger position
+      });
+    }
+    , [])
+
+
+
   return (
     <TooltipProvider>
       <Toaster />
