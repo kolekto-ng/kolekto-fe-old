@@ -677,8 +677,8 @@ const ContributionForm = ({
       <Card>
         <CardHeader>
           <CardTitle>{collectionTitle}</CardTitle>
-          {max_contributions && <span> max collection: {max_contributions}</span>}
-          {total_contributions ? (<span> total contributions: {total_contributions}</span>) : null}
+          {max_contributions && <span> Maximum contributions we are accepting: {max_contributions}</span>}
+          {total_contributions ? (<span> Total cntributions so far: {total_contributions}</span>) : null}
 
           <CardDescription>
             {description && <div className="mt-2">{description}</div>}
