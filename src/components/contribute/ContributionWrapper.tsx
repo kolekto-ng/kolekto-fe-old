@@ -21,6 +21,8 @@ interface ContributionWrapperProps {
   fields: Field[];
   description?: string;
   deadline?: string;
+  max_contributions?: number;
+  total_contributions?: number;
 }
 
 const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
@@ -31,6 +33,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   fields,
   description,
   deadline,
+  max_contributions,
+  total_contributions
 }) => {
   const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
   const [participantDetails, setParticipantDetails] = useState<any[]>([]);
@@ -83,7 +87,14 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   return (
     <>
       <PaymentErrorHandler error={error} onRetry={handleRetry} />
-
+      {max_contributions == total_contributions && (
+        <div className="text-center py-8">
+          <h2 className="text-xl font-bold mb-2">Collection Full</h2>
+          <p className="text-gray-600">
+            This collection has reached its maximum number of contributions and is no longer accepting new contributions.
+          </p>
+        </div>
+      )}
       {isExpired ? (
         <div className="text-center py-8">
           <h2 className="text-xl font-bold mb-2">Collection Expired</h2>
