@@ -21,6 +21,8 @@ interface ContributionWrapperProps {
   fields: Field[];
   description?: string;
   deadline?: string;
+  max_contributions?: number;
+  total_contributions?: number;
 }
 
 const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
@@ -31,6 +33,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   fields,
   description,
   deadline,
+  max_contributions,
+  total_contributions
 }) => {
   const [isPaymentSuccessful, setIsPaymentSuccessful] = useState(false);
   const [participantDetails, setParticipantDetails] = useState<any[]>([]);
@@ -80,28 +84,40 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   //     <Maintenance />
   //   </div>);
 
+  if (max_contributions == total_contributions) {
+    return (
+      <div className="text-center py-8">
+        <h2 className="text-xl font-bold mb-2">Collection Full</h2>
+        <p className="text-gray-600">
+          This collection has reached its maximum number of contributions and is no longer accepting new contributions.
+        </p>
+      </div>
+    )
+  } else if (isExpired) {
+    return (
+      <div className="text-center py-8">
+        <h2 className="text-xl font-bold mb-2">Collection Expired</h2>
+        <p className="text-gray-600">
+          The deadline for this collection has passed and it is no longer
+          accepting contributions.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <>
       <PaymentErrorHandler error={error} onRetry={handleRetry} />
 
-      {isExpired ? (
-        <div className="text-center py-8">
-          <h2 className="text-xl font-bold mb-2">Collection Expired</h2>
-          <p className="text-gray-600">
-            The deadline for this collection has passed and it is no longer
-            accepting contributions.
-          </p>
-        </div>
-      ) : (
-        <ContributionForm
-          collectionId={collectionId}
-          collectionTitle={collectionTitle}
-          amount={amount}
-          amountBreakdown={amountBreakdown}
-          fields={fields}
-          description={description}
-        />
-      )}
+      <ContributionForm
+        collectionId={collectionId}
+        collectionTitle={collectionTitle}
+        amount={amount}
+        amountBreakdown={amountBreakdown}
+        fields={fields}
+        description={description}
+      />
+
 
       {/* <PaymentSuccessful
         open={isPaymentSuccessful}
