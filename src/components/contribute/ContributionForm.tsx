@@ -52,6 +52,8 @@ const ContributionForm = ({
   amountBreakdown,
   fields,
   description,
+  max_contributions,
+  total_contributions,
 }) => {
   const [step, setStep] = useState<"details" | "contact" | "payment">("details"); // 1. Start at "details"
   const [numberOfParticipants, setNumberOfParticipants] = useState(1);
@@ -675,6 +677,9 @@ const ContributionForm = ({
       <Card>
         <CardHeader>
           <CardTitle>{collectionTitle}</CardTitle>
+          {max_contributions && <span> Maximum contributions we are accepting: {max_contributions}</span>}
+          {total_contributions ? (<span> Total cntributions so far: {total_contributions}</span>) : null}
+
           <CardDescription>
             {description && <div className="mt-2">{description}</div>}
             <div className="mt-2">
