@@ -72,7 +72,7 @@ const AuthenticatedApp = () => {
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<CreateCollectionPage />} />
-        <Route path="profile" element={<UserProfilePage />} />
+        <Route path="settings" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
       </Route>
 

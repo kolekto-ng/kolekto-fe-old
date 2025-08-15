@@ -10,7 +10,8 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store';
 
 const RegisterForm: React.FC = () => {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +40,7 @@ const RegisterForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { user, error } = await signUp(email, password, fullName, phoneNumber);
+      const { user, error } = await signUp(email, password, firstName, lastName, phoneNumber);
 
       if (error) {
         setError(error.message);
@@ -90,14 +91,26 @@ const RegisterForm: React.FC = () => {
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="fullName">Full Name</Label>
+        <Label htmlFor="firstName">First Name</Label>
         <Input
-          id="fullName"
+          id="firstName"
           type="text"
           placeholder="John Doe"
           required
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          className="w-full"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="fullName">Last Name</Label>
+        <Input
+          id="lastName"
+          type="text"
+          placeholder="John Doe"
+          required
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
           className="w-full"
         />
       </div>

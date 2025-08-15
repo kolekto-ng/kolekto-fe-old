@@ -93,16 +93,16 @@ const DashboardSidebar = () => {
           </Button>
 
           <Button
-            variant={isActive('/dashboard/profile') ? 'default' : 'ghost'}
+            variant={isActive('/dashboard/settings') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/profile')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
               : 'hover:bg-kolekto/10 hover:text-kolekto'
               }`}
             size="sm"
-            onClick={() => handleNavigation('/dashboard/profile')}
+            onClick={() => handleNavigation('/dashboard/settings')}
           >
             <User className="mr-2 h-4 w-4" />
-            Profile & Settings
+            Settings
           </Button>
 
           <Button

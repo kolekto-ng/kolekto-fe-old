@@ -24,6 +24,7 @@ const ContributePage: React.FC = () => {
 
   useEffect(() => {
     const fetchCollection = async () => {
+
       if (!collectionId) {
         setError('Collection ID is missing');
         setLoading(false);
@@ -32,6 +33,7 @@ const ContributePage: React.FC = () => {
 
       try {
         const data = await fetchCollectionById(collectionId);
+        console.log(data, 'colllection details');
 
         if (!data) {
           throw new Error('Collection not found');

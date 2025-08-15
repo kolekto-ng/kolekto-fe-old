@@ -100,7 +100,8 @@ export const useAuthStore = create((set, get) => ({
   signUp: async (
     email: string,
     password: string,
-    fullName: string,
+    firstName: string,
+    lastName: string,
     phoneNumber?: string
   ) => {
     set({ isLoading: true, error: null });
@@ -109,7 +110,8 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.post("/auth/signup", {
         email,
         password,
-        fullName,
+        firstName,
+        lastName,
         phoneNumber,
       });
       const { data } = res;
