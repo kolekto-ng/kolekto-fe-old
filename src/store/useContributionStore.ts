@@ -17,7 +17,7 @@ export const useContributionStore = create((set, get) => ({
         params: { collectionId },
       });
 
-      // Format data
+      // Format dataa
       const formattedData = {
         ...res.data.data,
         formattedAmount: formatCurrency(res.data.data.amount),
