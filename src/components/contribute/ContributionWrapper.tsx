@@ -116,6 +116,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
         amountBreakdown={amountBreakdown}
         fields={fields}
         description={description}
+        max_contributions={max_contributions}
+        total_contributions={total_contributions}
       />
 
 
