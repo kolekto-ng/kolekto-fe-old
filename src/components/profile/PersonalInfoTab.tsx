@@ -30,7 +30,7 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [securityData] = useState({
-    lastPasswordChange: '2024-01-15',
+    lastPasswordChange: '',
     loginAttempts: [
       {
         id: 1,
@@ -80,9 +80,9 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
   const [formData, setFormData] = useState({
     fullName: user.user_metadata?.full_name || 'John Doe',
     email: user.email || '',
-    phone: user.user_metadata?.phone || '+234 123 4567',
-    dateOfBirth: user.user_metadata?.dob || '1995-06-15',
-    address: user.user_metadata?.address || '123 Victoria Island, Lagos',
+    phone: user.user_metadata?.phone || '+234',
+    dateOfBirth: user.user_metadata?.dob || '',
+    address: user.user_metadata?.address || '',
   });
 
   const handleSave = () => {

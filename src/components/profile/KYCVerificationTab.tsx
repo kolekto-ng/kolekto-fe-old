@@ -715,26 +715,26 @@ const KYCVerificationTab = () => {
       lastUpdated: '2024-01-18'
     },
     identityVerification: {
-      status: REJECTED,
+      status: PENDING,
       documents: [
-        { type: 'National ID', status: REJECTED, uploadedAt: '2024-01-15' },
-        { type: 'Passport Photo', status: REJECTED, uploadedAt: '2024-01-15' }
+        { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
+        { type: 'Passport Photo', status: PENDING, uploadedAt: '2024-01-15' }
       ]
     },
     addressVerification: {
-      status: REJECTED,
+      status: PENDING,
       documents: [
-        { type: 'Utility Bill', status: REJECTED, uploadedAt: '2024-01-16' }
+        { type: 'Utility Bill', status: PENDING, uploadedAt: '2024-01-16' }
       ]
     },
     phoneVerification: {
       phoneNumber: '+2341234567890',
-      status: REJECTED,
+      status: PENDING,
       verifiedAt: '2024-01-10'
     },
     emailVerification: {
       email: '',
-      status: REJECTED,
+      status: PENDING,
       verifiedAt: '2024-01-10'
     },
     bankVerification: {
@@ -742,7 +742,7 @@ const KYCVerificationTab = () => {
       accountNumber: '1234567890',
       bvn: '12345678901',
       accountName: 'John Doe',
-      status: REJECTED,
+      status: PENDING,
       verifiedAt: '2024-01-17'
     }
   });
