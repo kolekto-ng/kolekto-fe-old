@@ -5,27 +5,28 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Edit2, Camera, Check, Key, Eye,
-  EyeOff
-} from 'lucide-react';
+import { Edit2, Camera, Check, Key, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store';
 import PaymentAccounts from './PaymentAccount';
 import ProfilePictureUpload from '../settings/profile-picture-upload';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
+import KYCVerificationTab from './KYCVerificationTab';
 
-
-const profile = {
-  kyc_status: "pending",
-  bvn: '',
-  nin: '',
-}
-
-const PersonalInfoTab: React.FC = () => {
-
+const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
   const { user } = useAuthStore() as any;
-  console.log('user in PersonalInfoTab:', user.user_metadata);
+
+  const kycComplete = kycStatus === 'verified';
+  const kycNotStarted = kycStatus === 'not_started';
+  const kycPending = kycStatus === 'pending';
+
+  const profile = {
+    kyc_status: kycStatus || 'pending',
+    bvn: '',
+    nin: '',
+  };
+
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [securityData] = useState({
@@ -74,23 +75,18 @@ const PersonalInfoTab: React.FC = () => {
     ]
   });
 
-
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: user.user_metadata.full_name || 'John',
-    // lastName: 'Doe',
+    fullName: user.user_metadata?.full_name || 'John Doe',
     email: user.email || '',
-    phone: user.user_metadata.phone || '+234 123 4567',
-    dateOfBirth: '1995-06-15',
-    address: '123 Victoria Island, Lagos',
+    phone: user.user_metadata?.phone || '+234 123 4567',
+    dateOfBirth: user.user_metadata?.dob || '1995-06-15',
+    address: user.user_metadata?.address || '123 Victoria Island, Lagos',
   });
 
   const handleSave = () => {
     setIsEditing(false);
-    // Here you would typically send the updated data to your API
-    // user should input pin/password to confirm changes
-
     toast({
       title: "Profile Updated",
       description: "Your personal information has been updated successfully.",
@@ -115,29 +111,33 @@ const PersonalInfoTab: React.FC = () => {
         <CardContent className="pt-6">
           <div className="flex items-center space-x-6">
             <div className="relative">
-              {/* <Avatar className="h-24 w-24">
-                <AvatarImage src="/placeholder.svg" alt="Profile" />
-                <AvatarFallback className="text-xl">JD</AvatarFallback>
-              </Avatar>
-              <Button
-                size="sm"
-                className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0"
-                variant="outline"
-              >
-                <Camera className="h-4 w-4" />
-              </Button> */}
-
               <ProfilePictureUpload />
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold">{formData.fullName}</h2>
               <p className="text-muted-foreground">{formData.email}</p>
-              {profile.kyc_status === "pending" ? <div>Complete your kyc</div> : <div className="flex items-center space-x-2 mt-2">
-                <Badge variant="outline" className="text-green-600 border-green-600">
-                  <Check className="h-3 w-3 mr-1" />
-                  Verified Account
-                </Badge>
-              </div>}
+
+              {!kycComplete && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="link" className="p-0 h-auto text-blue-600">
+                      {kycNotStarted ? 'Start KYC Verification' : 'Complete KYC Verification'}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <KYCVerificationTab />
+                  </DialogContent>
+                </Dialog>
+              )}
+
+              {kycComplete && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <Badge variant="outline" className="text-green-600 border-green-600">
+                    <Check className="h-3 w-3 mr-1" />
+                    Verified Account
+                  </Badge>
+                </div>
+              )}
             </div>
             <Button
               onClick={() => isEditing ? handleSave() : setIsEditing(true)}
@@ -169,23 +169,9 @@ const PersonalInfoTab: React.FC = () => {
                 <p className="text-foreground font-medium">{formData.fullName}</p>
               )}
             </div>
-            {/* <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
-              {isEditing ? (
-                <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => handleChange('lastName', e.target.value)}
-                />
-              ) : (
-                <p className="text-foreground font-medium">{formData.lastName}</p>
-              )}
-            </div> */}
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
-
               <p className="text-foreground font-medium">{formData.email}</p>
-
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
@@ -227,8 +213,8 @@ const PersonalInfoTab: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-      {/* Password Settings */}
 
+      {/* Password & Authentication */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -265,11 +251,7 @@ const PersonalInfoTab: React.FC = () => {
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                 >
-                  {showCurrentPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -289,11 +271,7 @@ const PersonalInfoTab: React.FC = () => {
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowNewPassword(!showNewPassword)}
                 >
-                  {showNewPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -314,22 +292,16 @@ const PersonalInfoTab: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="bvn">Bank Verification Number (BVN)</Label>
-              <div className="flex items-center space-x-2">
-
-                <p className="text-foreground font-medium">{profile.bvn || 'Not Provided'}</p>
-
-              </div>
+              <p className="text-foreground font-medium">{profile.bvn || 'Not Provided'}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="nin">National Identification Number (NIN)</Label>
-              <div className="flex items-center space-x-2">
-                <p className="text-foreground font-medium">{profile.nin || 'Not Provided'}</p>
-
-              </div>
+              <p className="text-foreground font-medium">{profile.nin || 'Not Provided'}</p>
             </div>
           </div>
         </CardContent>
       </Card>
+
       <PaymentAccounts />
     </div>
   );

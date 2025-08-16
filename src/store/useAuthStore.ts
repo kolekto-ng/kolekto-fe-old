@@ -115,18 +115,12 @@ export const useAuthStore = create((set, get) => ({
         phoneNumber,
       });
       const { data } = res;
+      console.log(data, "Sign up data");
 
       // Save to localStorage if session is returned
-      if (data.session) {
-        localStorage.setItem(
-          "kolekto-auth-token",
-          JSON.stringify(data.session)
-        );
-      }
-
       set({
-        user: data.user,
-        session: data.session,
+        // user: data.user,
+        // session: data.session,
         isLoading: false,
       });
 

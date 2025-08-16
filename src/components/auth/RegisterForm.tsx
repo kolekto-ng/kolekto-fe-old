@@ -32,6 +32,13 @@ const RegisterForm: React.FC = () => {
       return;
     }
 
+    const isValidE164 = (phone: string) => /^\+[1-9]\d{1,14}$/.test(phone);
+
+    if (!isValidE164(phoneNumber)) {
+      setError("Phone number must be in international format, e.g. +2348012345678");
+      return;
+    }
+
     if (phoneNumber && phoneNumber.replace(/\D/g, '').length < 10) {
       setError('Phone number must be at least 10 digits');
       return;
@@ -49,9 +56,6 @@ const RegisterForm: React.FC = () => {
         setIsSignupComplete(true);
         toast.success('Registration successful! Check your email to confirm your account.');
         // If user is returned, they might be auto-signed in, so redirect to dashboard
-        if (user) {
-          navigate('/dashboard');
-        }
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');

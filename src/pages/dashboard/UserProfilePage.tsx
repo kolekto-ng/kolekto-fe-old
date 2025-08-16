@@ -1,11 +1,14 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PersonalInfoTab from '@/components/profile/PersonalInfoTab';
 import KYCVerificationTab from '@/components/profile/KYCVerificationTab';
-import SecuritySettingsTab from '@/components/profile/SecuritySettingsTab';
+import { useAuthStore } from '@/store';
 
 const ProfilePage: React.FC = () => {
+  const { user } = useAuthStore() as any;
+  const kycStatus = user?.verification_status || 'not_started';
+  const kycComplete = kycStatus === 'verified';
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
@@ -16,21 +19,20 @@ const ProfilePage: React.FC = () => {
       <Tabs defaultValue="personal" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="personal">Personal Info</TabsTrigger>
-          <TabsTrigger value="kyc">KYC Verification</TabsTrigger>
-          {/* <TabsTrigger value="security">Security</TabsTrigger> */}
+          {!kycComplete && (
+            <TabsTrigger value="kyc">KYC Verification</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="personal">
-          <PersonalInfoTab />
+          <PersonalInfoTab kycStatus={kycStatus} />
         </TabsContent>
 
-        <TabsContent value="kyc">
-          <KYCVerificationTab />
-        </TabsContent>
-
-        {/* <TabsContent value="security">
-          <SecuritySettingsTab />
-        </TabsContent> */}
+        {!kycComplete && (
+          <TabsContent value="kyc">
+            <KYCVerificationTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

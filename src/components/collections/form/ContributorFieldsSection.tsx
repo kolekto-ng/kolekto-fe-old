@@ -191,7 +191,8 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
 
   return (
     <div className="border-t pt-6">
-      <h3 className="font-medium text-lg mb-4">Contribution Information Fields</h3>
+      <h3 className="font-medium text-lg">Contribution Information Fields</h3>
+      <p className='mb-4'>Configure what information you want to collect from contributors</p>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId={droppableId}>
