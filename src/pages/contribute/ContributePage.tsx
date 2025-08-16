@@ -33,7 +33,7 @@ const ContributePage: React.FC = () => {
 
       try {
         const data = await fetchCollectionById(collectionId);
-        console.log(data, 'colllection details');
+        console.log(data, 'Fetched collection data');
 
         if (!data) {
           throw new Error('Collection not found');
@@ -280,6 +280,9 @@ const ContributePage: React.FC = () => {
             fields={collection.contributions_fields}
             description={collection.description}
             deadline={collection.deadline}
+            max_contributions={collection.max_contributions}
+            total_contributions={collection.total_contributions}
+
           />
           <div className="mt-12 text-center">
             <h2 className="text-2xl font-bold mb-4">
