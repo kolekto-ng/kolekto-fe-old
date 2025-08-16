@@ -10,7 +10,8 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store';
 
 const RegisterForm: React.FC = () => {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -31,6 +32,13 @@ const RegisterForm: React.FC = () => {
       return;
     }
 
+    const isValidE164 = (phone: string) => /^\+[1-9]\d{1,14}$/.test(phone);
+
+    if (!isValidE164(phoneNumber)) {
+      setError("Phone number must be in international format, e.g. +2348012345678");
+      return;
+    }
+
     if (phoneNumber && phoneNumber.replace(/\D/g, '').length < 10) {
       setError('Phone number must be at least 10 digits');
       return;
@@ -39,7 +47,7 @@ const RegisterForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { user, error } = await signUp(email, password, fullName, phoneNumber);
+      const { user, error } = await signUp(email, password, firstName, lastName, phoneNumber);
 
       if (error) {
         setError(error.message);
@@ -48,9 +56,6 @@ const RegisterForm: React.FC = () => {
         setIsSignupComplete(true);
         toast.success('Registration successful! Check your email to confirm your account.');
         // If user is returned, they might be auto-signed in, so redirect to dashboard
-        if (user) {
-          navigate('/dashboard');
-        }
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
@@ -90,14 +95,26 @@ const RegisterForm: React.FC = () => {
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="fullName">Full Name</Label>
+        <Label htmlFor="firstName">First Name</Label>
         <Input
-          id="fullName"
+          id="firstName"
           type="text"
           placeholder="John Doe"
           required
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          className="w-full"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="fullName">Last Name</Label>
+        <Input
+          id="lastName"
+          type="text"
+          placeholder="John Doe"
+          required
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
           className="w-full"
         />
       </div>

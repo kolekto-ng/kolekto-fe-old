@@ -24,6 +24,7 @@ const ContributePage: React.FC = () => {
 
   useEffect(() => {
     const fetchCollection = async () => {
+
       if (!collectionId) {
         setError('Collection ID is missing');
         setLoading(false);
