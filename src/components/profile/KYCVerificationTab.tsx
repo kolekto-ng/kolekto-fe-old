@@ -717,18 +717,18 @@ const KYCVerificationTab = () => {
     identityVerification: {
       status: PENDING,
       documents: [
-        { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
-        { type: 'Passport Photo', status: PENDING, uploadedAt: '2024-01-15' }
+        // { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
+        // { type: 'Passport Photo', status: PENDING, uploadedAt: '2024-01-15' }
       ]
     },
     addressVerification: {
       status: PENDING,
       documents: [
-        { type: 'Utility Bill', status: PENDING, uploadedAt: '2024-01-16' }
+        // { type: 'Utility Bill', status: PENDING, uploadedAt: '2024-01-16' }
       ]
     },
     phoneVerification: {
-      phoneNumber: '+2341234567890',
+      phoneNumber: '',
       status: PENDING,
       verifiedAt: '2024-01-10'
     },
