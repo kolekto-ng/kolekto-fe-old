@@ -71,7 +71,7 @@ const RegisterForm: React.FC = () => {
         <div className="bg-green-50 text-green-700 p-4 rounded-md">
           <h3 className="font-medium">Registration successful!</h3>
           <p className="text-sm mt-1">
-            Please check your email to confirm your account.
+            Please check your email inbox and spam to confirm your account.
           </p>
         </div>
         <p className="text-sm text-gray-600">
