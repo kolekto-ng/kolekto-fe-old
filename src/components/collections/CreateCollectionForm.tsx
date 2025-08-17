@@ -27,7 +27,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const [generateUniqueCodes, setGenerateUniqueCodes] = useState(false);
   const [codePrefix, setCodePrefix] = useState('');
   const [formFields, setFormFields] = useState<FormField[]>([
-    { id: '1', name: 'Contributor Info', type: 'text', required: false },
+    { id: '1', name: '', type: 'text', required: false },
   ]);
 
   const [usePriceTiers, setUsePriceTiers] = useState(false);

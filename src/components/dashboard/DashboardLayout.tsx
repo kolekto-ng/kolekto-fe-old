@@ -28,8 +28,8 @@ const DashboardContent = () => {
         return 'Collections';
       case '/dashboard/create-collection':
         return 'Create Collection';
-      case '/dashboard/profile':
-        return 'Profile';
+      case '/dashboard/settings':
+        return 'Settings';
       case '/dashboard/transactions':
         return 'Wallet Overview';
       default:

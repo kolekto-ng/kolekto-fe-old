@@ -70,7 +70,7 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
 
     // Add default options for select/radio fields
     if (fieldType === 'select' || fieldType === 'radio') {
-      newField.options = ['Option 1', 'Option 2'];
+      newField.options = ['', ''];
     }
 
     setFormFields([...formFields, newField]);
@@ -191,7 +191,8 @@ const ContributorFieldsSection: React.FC<ContributorFieldsSectionProps> = ({
 
   return (
     <div className="border-t pt-6">
-      <h3 className="font-medium text-lg mb-4">Contribution Information Fields</h3>
+      <h3 className="font-medium text-lg">Contribution Information Fields</h3>
+      <p className='mb-4'>Input what information you want to collect from contributors</p>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId={droppableId}>
