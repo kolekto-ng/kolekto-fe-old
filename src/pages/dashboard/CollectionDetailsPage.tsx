@@ -8,14 +8,16 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2 } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, X } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as RechartsBarChart } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+// 423
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -26,6 +28,8 @@ const CollectionDetailsPage: React.FC = () => {
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuthStore();
+
+
 
   const { fetchCollectionById, currentCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
@@ -261,8 +265,148 @@ const CollectionDetailsPage: React.FC = () => {
     c => c.contributor_unique_code
   );
 
+
+
+  const [openCollectionModal, setOpenCollectionModal] = useState<boolean | null>(false);
+
+  const [collectionFormData, setCollectionFormData] = useState({ title: "", description: "", Deadline: "", numberOfContributors: "", stopCollection: false });
+
+  const handleCollectionModal = () => {
+    setOpenCollectionModal(!openCollectionModal)
+  }
+
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type, checked } = e.target;
+    setCollectionFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+
+      {
+        openCollectionModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg relative border border-gray-200 dark:border-gray-700 transform transition-all scale-100 animate-fadeIn">
+
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
+                  Edit Your Collection
+                </h2>
+                <button
+                  onClick={() => setOpenCollectionModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <X className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form className="px-6 py-6 space-y-5">
+                <div className="space-y-1">
+                  <Label htmlFor="title">Collection Title</Label>
+                  <Input
+                    id="title"
+                    type="text"
+                    placeholder="Contribution Title"
+                    name="title"
+                    value={collectionFormData.title}
+                    onChange={handleCollectionChange}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    type="text"
+                    placeholder="Short description"
+                    name="description"
+                    value={collectionFormData.description}
+                    onChange={handleCollectionChange}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="deadline">Deadline</Label>
+                  <Input
+                    id="deadline"
+                    type="date"
+                    name="deadline"
+                    value={collectionFormData.Deadline}
+                    onChange={handleCollectionChange}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="numberOfContributors">Number of Contributors</Label>
+                  <Input
+                    id="numberOfContributors"
+                    type="number"
+                    placeholder="e.g. 50"
+                    name="numberOfContributors"
+                    value={collectionFormData.numberOfContributors}
+                    onChange={handleCollectionChange}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label
+                    htmlFor="stopCollection"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    Stop Collection
+                  </Label>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCollectionFormData((prev) => ({
+                        ...prev,
+                        stopCollection: !prev.stopCollection,
+                      }))
+                    }
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${collectionFormData.stopCollection
+                        ? "bg-green-900"
+                        : "bg-gray-300 dark:bg-gray-600"
+                      }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${collectionFormData.stopCollection ? "translate-x-6" : "translate-x-1"
+                        }`}
+                    />
+                  </button>
+                </div>
+
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setOpenCollectionModal(false)}
+                    className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-lg bg-green-900 text-white font-medium hover:bg-green-700 transition-colors"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
+      }
+
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -413,6 +557,15 @@ const CollectionDetailsPage: React.FC = () => {
                         >
                           {shareUrl.split('/').pop()}
                         </a>
+                      </div>
+
+                      <div>
+                        <Button
+                          onClick={handleCollectionModal}
+                          className="w-full flex items-center justify-center"
+                        >
+                          Edit Collection
+                        </Button>
                       </div>
                     </div>
                   </div>
