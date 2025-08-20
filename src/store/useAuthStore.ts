@@ -40,6 +40,7 @@ const user = initialSession ? initialSession.user : null;
 
 export const useAuthStore = create((set, get) => ({
   user: user,
+  profile: null,
   session: initialSession?.session,
   isLoading: !!initialSession?.session, // loading if no session yet
   error: null,
@@ -50,7 +51,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       const userData = await axiosInstance.get("/auth/me");
 
-      console.log(userData);
+      console.log(userData, "auth/me");
 
       if (userData) {
         // User is authenticated, get session from storage
@@ -78,13 +79,14 @@ export const useAuthStore = create((set, get) => ({
         email,
         password,
       });
-      const { user, session } = data.data;
-      console.log(data, data.session, "Session");
+      const { user, session, profile } = data.data;
+      console.log(data, "Session");
       // Save to localStorage
       localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
 
       set({
         user: user,
+        profile,
         session: session,
         isLoading: false,
       });
