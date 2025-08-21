@@ -9,6 +9,7 @@ interface ContributorLimitSectionProps {
   setIsMaxContributorsEnabled: (value: boolean) => void;
   maxContributors: string;
   setMaxContributors: (value: string) => void;
+  priceTiers?: boolean
 }
 
 const ContributorLimitSection: React.FC<ContributorLimitSectionProps> = ({
@@ -16,32 +17,38 @@ const ContributorLimitSection: React.FC<ContributorLimitSectionProps> = ({
   setIsMaxContributorsEnabled,
   maxContributors,
   setMaxContributors,
+  priceTiers
 }) => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 sm:space-x-4">
-      <div className="flex items-center space-x-2">
-        <Switch
-          id="maxContributorsToggle"
-          checked={isMaxContributorsEnabled}
-          onCheckedChange={setIsMaxContributorsEnabled}
-        />
-        <Label htmlFor="maxContributorsToggle">Max number of contributions</Label>
-      </div>
+      {!priceTiers &&
 
-      {isMaxContributorsEnabled && (
-        <div className="w-full sm:w-32">
-          <Input
-            id="maxContributors"
-            type="number"
-            min="1"
-            required={isMaxContributorsEnabled}
-            placeholder="e.g. 50"
-            value={maxContributors}
-            onChange={(e) => setMaxContributors(e.target.value)}
-            className="w-full"
-          />
-        </div>
-      )}
+        (<>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="maxContributorsToggle"
+              checked={isMaxContributorsEnabled}
+              onCheckedChange={setIsMaxContributorsEnabled}
+            />
+            <Label htmlFor="maxContributorsToggle">Max number of contributions</Label>
+          </div>
+
+          {isMaxContributorsEnabled && (
+            <div className="w-full sm:w-32">
+              <Input
+                id="maxContributors"
+                type="number"
+                min="1"
+                required={isMaxContributorsEnabled}
+                placeholder="e.g. 50"
+                value={maxContributors}
+                onChange={(e) => setMaxContributors(e.target.value)}
+                className="w-full"
+              />
+            </div>
+          )}
+        </>)
+      }
     </div>
   );
 };
