@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import NavBar from '@/components/NavBar';
@@ -24,7 +23,6 @@ const ContributePage: React.FC = () => {
 
   useEffect(() => {
     const fetchCollection = async () => {
-
       if (!collectionId) {
         setError('Collection ID is missing');
         setLoading(false);
@@ -60,15 +58,17 @@ const ContributePage: React.FC = () => {
     };
 
     fetchCollection();
-  }, [collectionId]);
+  }, [collectionId, fetchCollectionById]);
 
   // Process form fields from collection
   const getFormFields = () => {
     if (!collection) return [];
+    console.log(collection, 'loooking for conyribution fields');
 
-    // Use the form_fields from the collection if available
-    if (collection.contributions_fields && Array.isArray(collection.contributions_fields)) {
-      return collection.contributions_fields.map((field: any) => ({
+    // Use the form_fields or contributions_fields from the collection if available
+    const formFields = collection.contributions_fields || collection.form_fields;
+    if (formFields && Array.isArray(formFields)) {
+      return formFields.map((field: any) => ({
         name: field.name,
         type: field.type,
         required: field.required,
@@ -87,63 +87,69 @@ const ContributePage: React.FC = () => {
   // Check if collection has price tiers
   const hasPriceTiers = () => {
     return collection &&
-      collection.pricing_tiers &&
-      Array.isArray(collection.pricing_tiers) &&
-      collection.pricing_tiers.length > 0;
+      collection.price_tiers &&
+      Array.isArray(collection.price_tiers) &&
+      collection.price_tiers.length > 0;
   };
+
+  // Custom navigation component for contribution page
+  const ContributionNavBar = () => (
+    <nav className="border-b py-3 bg-white">
+      <div className="container mx-auto px-4 flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          <Link to="/" className="flex items-center">
+            <Logo size="md" />
+          </Link>
+          <div className="flex items-center space-x-3">
+            <a
+              href="https://x.com/kolektng"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Twitter"
+            >
+              <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
+            </a>
+            <a
+              href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Facebook"
+            >
+              <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
+            </a>
+            <a
+              href="https://www.instagram.com/kolekto.ng"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+            >
+              <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
+            </a>
+            <a
+              href="https://wa.me/+2349019840377"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="WhatsApp"
+            >
+              <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
 
   // If still loading
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <nav className="border-b py-3 bg-white">
-          <div className="container mx-auto px-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="flex items-center">
-                <Logo size="md" />
-              </Link>
-              <div className="flex items-center space-x-3">
-                <a
-                  href="https://x.com/kolektng"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Twitter"
-                >
-                  <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Facebook"
-                >
-                  <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://www.instagram.com/kolekto.ng"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Instagram"
-                >
-                  <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://wa.me/+2349019840377"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="WhatsApp"
-                >
-                  <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <ContributionNavBar />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <div className="text-center">
             <p>Loading collection details...</p>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
@@ -152,67 +158,20 @@ const ContributePage: React.FC = () => {
   if (error || !collection) {
     return (
       <div className="min-h-screen flex flex-col">
-        <nav className="border-b py-3 bg-white">
-          <div className="container mx-auto px-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="flex items-center">
-                <Logo size="md" />
-              </Link>
-              <div className="flex items-center space-x-3">
-                <a
-                  href="https://x.com/kolektng"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Twitter"
-                >
-                  <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Facebook"
-                >
-                  <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://www.instagram.com/kolekto.ng"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Instagram"
-                >
-                  <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-                <a
-                  href="https://wa.me/+2349019840377"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="WhatsApp"
-                >
-                  <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </nav>
-
+        <ContributionNavBar />
         <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
           <Card className="w-full max-w-md">
             <CardContent className="pt-6 text-center">
-              <h2 className="text-xl font-bold mb-4">
-                Collection Not Available
-              </h2>
+              <h2 className="text-xl font-bold mb-4">Collection Not Available</h2>
               <p className="mb-6 text-gray-600">
-                {error || "The requested collection could not be found"}
+                {error || 'The requested collection could not be found'}
               </p>
-              <Button onClick={() => navigate("/")}>Return to Home</Button>
+              <Button onClick={() => navigate('/')}>Return to Home</Button>
             </CardContent>
           </Card>
         </main>
         <div className="mt-12 text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            Ready to Start Collecting?
-          </h2>
+          <h2 className="text-2xl font-bold mb-4">Ready to Start Collecting?</h2>
           <p className="text-gray-600 mb-6">
             Join thousands of organizers across Africa who use Kolekto to
             simplify group payments.
@@ -221,73 +180,32 @@ const ContributePage: React.FC = () => {
             <Link to="/register">Create Your Account</Link>
           </Button>
         </div>
+        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex flex-col">
-      <nav className="border-b py-3 bg-white">
-        <div className="container flex justify-between items-center">
-          <div className="container mx-auto px-4 flex justify-between items-center">
-            <Link to="/" className="">
-              <Logo size="md" />
-            </Link>
-            <div className="flex items-center space-x-3">
-              <a
-                href="https://x.com/kolektng"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Twitter"
-              >
-                <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
-              </a>
-              <a
-                href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook"
-              >
-                <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
-              </a>
-              <a
-                href="https://www.instagram.com/kolekto.ng"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-              >
-                <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
-              </a>
-              <a
-                href="https://wa.me/+2349019840377"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="WhatsApp"
-              >
-                <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
-              </a>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <ContributionNavBar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
           <ContributionWrapper
             collectionId={collection.id}
             collectionTitle={collection.title}
             amount={collection.amount}
-            amountBreakdown={collection.wallets[0].fee_breakdown}
-            fields={collection.contributions_fields}
+            fee_bearer={collection.fee_bearer}
+            amountBreakdown={collection.wallets?.[0]?.fee_breakdown}
+            wallet={collection.wallets?.[0]}
+            fields={getFormFields()}
             description={collection.description}
             deadline={collection.deadline}
             max_contributions={collection.max_contributions}
             total_contributions={collection.total_contributions}
-
+            priceTiers={hasPriceTiers() ? collection.price_tiers : undefined}
           />
           <div className="mt-12 text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              Ready to Start Collecting?
-            </h2>
+            <h2 className="text-2xl font-bold mb-4">Ready to Start Collecting?</h2>
             <p className="text-gray-600 mb-6">
               Join thousands of organizers across Africa who use Kolekto to
               simplify group payments.
@@ -298,6 +216,7 @@ const ContributePage: React.FC = () => {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 };
