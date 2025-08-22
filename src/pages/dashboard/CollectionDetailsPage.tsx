@@ -8,7 +8,7 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, X, Plus, Trash2 } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
@@ -16,9 +16,8 @@ import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChar
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -29,22 +28,11 @@ const CollectionDetailsPage: React.FC = () => {
   const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const { user } = useAuthStore();
 
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [tierFilter, setTierFilter] = useState("all");
-  // Move these state declarations to the top level
-  const [openCollectionModal, setOpenCollectionModal] = useState<boolean>(false);
-  const [collectionFormData, setCollectionFormData] = useState({
-    title: "",
-    description: "",
-    deadline: "",
-    numberOfContributors: "",
-    stopCollection: false,
-    price_tiers: [] as any[]
-  });
-
-  const { fetchCollectionById, currentCollection, updateCollection } = useCollectionStore();
+  const { fetchCollectionById, currentCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
 
@@ -63,20 +51,6 @@ const CollectionDetailsPage: React.FC = () => {
   }, [id, fetchCollectionById, fetchContributions]);
 
   useEffect(() => {
-    // Initialize form data when currentCollection changes
-    if (currentCollection) {
-      setCollectionFormData({
-        title: currentCollection.title || "",
-        description: currentCollection.description || "",
-        deadline: currentCollection.deadline ? new Date(currentCollection.deadline).toISOString().split('T')[0] : "",
-        numberOfContributors: currentCollection.max_participants?.toString() || "",
-        stopCollection: currentCollection.status === "closed",
-        price_tiers: currentCollection.price_tiers || []
-      });
-    }
-  }, [currentCollection]);
-
-  useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.get('share') === 'true') {
       setIsShareDrawerOpen(true);
@@ -89,205 +63,92 @@ const CollectionDetailsPage: React.FC = () => {
     setIsShareDrawerOpen(true);
   };
 
-
-  const [amountFilter, setAmountFilter] = useState("all");
-  const [minAmount, setMinAmount] = useState("");
-  const [maxAmount, setMaxAmount] = useState("");
-  // static fields we want to always display
-  const staticFields = [
-    "name",
-    "email",
-    "status",
-    "formattedAmount",
-    "formattedDate",
-  ];
-
-
-  // Only show paid contributors
-  const filteredContributors = (contributions || []).filter(
-    (contribution) =>
-      (contribution.status === "paid") &&
-      (
-        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-  ) || [];
-
-  // dynamic fields except TierAmount
-  const allDynamicFields = Array.from(
-    new Set(
-      filteredContributors.flatMap(contributor =>
-        (contributor.contributor_information || []).flatMap(info =>
-          Object.keys(info)
-        )
-      )
-    )
-  ).filter(field => field !== "TierAmount");
-
-  // searchable fields
-  const searchableFields = [...staticFields, ...allDynamicFields];
-
-  // filtering logic
-  const filteredData = filteredContributors.filter(contributor => {
-    const search = searchTerm.toLowerCase();
-
-    // 🔍 search across static & dynamic fields
-    const matchesSearch = searchableFields.some(field => {
-      if (staticFields.includes(field)) {
-        return contributor[field]?.toString().toLowerCase().includes(search);
+  // Function to apply filters to contributions
+  const applyFilters = (data: any[]) => {
+    if (Object.keys(filters).length === 0 && !searchTerm) return data;
+    
+    return data.filter(contribution => {
+      // Apply search term filter
+      if (searchTerm) {
+        const matchesSearch = 
+          (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        if (!matchesSearch) return false;
       }
-      return (contributor.contributor_information || []).some(info =>
-        info[field]?.toString().toLowerCase().includes(search)
-      );
+      
+      // Apply field filters
+      for (const [field, value] of Object.entries(filters)) {
+        if (value) {
+          const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
+          if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
     });
+  };
 
-    // ✅ status filter
-    const matchesStatus =
-      statusFilter === "all" || contributor.status === statusFilter;
-
-    // ✅ tier filter
-    const contributorTier =
-      (contributor.contributor_information || [])[0]?.Tier || "";
-    const matchesTier =
-      tierFilter === "all" || contributorTier === tierFilter;
-
-    const tierAmount =
-      (contributor.contributor_information || [])[0]?.TierAmount || 0;
-
-    let matchesAmount = true;
-    if (minAmount !== "" && tierAmount < Number(minAmount)) {
-      matchesAmount = false;
-    }
-    if (maxAmount !== "" && tierAmount > Number(maxAmount)) {
-      matchesAmount = false;
+  const exportToCSV = () => {
+    // Apply filters to get the data to export
+    const paidContributions = (contributions || []).filter(c => c.status === "paid");
+    const filteredData = applyFilters(paidContributions);
+    
+    if (filteredData.length === 0) {
+      toast.info("No paid contributors data to export");
+      return;
     }
 
-    return matchesSearch && matchesStatus && matchesTier && matchesAmount;
-  });
-const exportToCSV = () => {
-  if (!filteredData || filteredData.length === 0) {
-    toast.info("No filtered contributors data to export");
-    return;
-  }
-
-  // 1. Collect all unique dynamic fields from contributor_information
-  const allDynamicFields = Array.from(
-    new Set(
-      filteredData.flatMap(contributor =>
-        (contributor.contributor_information || []).flatMap(info =>
-          Object.keys(info)
+    // 1. Collect all unique dynamic fields from contributor_information
+    const allDynamicFields = Array.from(
+      new Set(
+        filteredData.flatMap(contributor =>
+          (contributor.contributor_information || []).flatMap(info =>
+            Object.keys(info)
+          )
         )
       )
-    )
-  );
+    );
 
-  // 2. Check if any contributor has a unique code
-  const hasUniqueCode = filteredData.some(
-    c => c.contributor_unique_code
-  );
+    // 2. Check if any contributor has a unique code
+    const hasUniqueCode = filteredData.some(
+      c => c.contributor_unique_code
+    );
 
-  // 3. Define headers for CSV
-  const headers = [
-    ...allDynamicFields,
-    ...(hasUniqueCode ? ['Unique Code'] : []),
-    "name",
-    "email",
-    "Status",
-    "Amount",
-    "Date",
-  ];
-
-  let csvContent = headers.join(',') + '\n';
-
-  filteredData.forEach((contribution) => {
-    const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
-
-    const infoObject = Object.assign({}, ...(contribution.contributor_information || []));
-    const row = [
-      ...allDynamicFields.map(field => infoObject[field] || ''),
-      ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-      contribution.name || '',
-      contribution.email || '',
-      contribution.status || '',
-      contribution.amount || '',
-      formattedDate || ''
+    // 3. Define headers for CSV
+    const headers = [
+      ...allDynamicFields,
+      ...(hasUniqueCode ? ['Unique Code'] : []),
     ];
 
-    csvContent += row.map(val =>
-      typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-    ).join(',') + '\n';
-  });
+    let csvContent = headers.join(',') + '\n';
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    filteredData.forEach((contribution) => {
+      const row = [
+        ...allDynamicFields.map(field =>
+          (contribution.contributor_information || [])[0]?.[field] || ''
+        ),
+        ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+      ];
+      csvContent += row.map(val =>
+        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+      ).join(',') + '\n';
+    });
 
-  toast.success('Filtered contributor data exported successfully!');
-};
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-
-//   const exportToCSV = () => {
-//   // Use all filtered data directly
-//   const contributions = filteredData || [];
-
-//   if (contributions.length === 0) {
-//     toast.info("No contributor data to export");
-//     return;
-//   }
-
-//   // 1. Collect all unique dynamic fields from contributor_information
-//   const allDynamicFields = Array.from(
-//     new Set(
-//       contributions.flatMap(contributor =>
-//         (contributor.contributor_information || []).flatMap(info =>
-//           Object.keys(info)
-//         )
-//       )
-//     )
-//   );
-
-//   // 2. Check if any contributor has a unique code
-//   const hasUniqueCode = contributions.some(
-//     c => c.contributor_unique_code
-//   );
-
-//   // 3. Define headers for CSV
-//   const headers = [
-//     ...allDynamicFields,
-//     ...(hasUniqueCode ? ['Unique Code'] : []),
-//   ];
-
-//   let csvContent = headers.join(',') + '\n';
-
-//   contributions.forEach((contribution) => {
-//     const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
-//     const row = [
-//       ...allDynamicFields.map(field =>
-//         (contribution.contributor_information || [])[0]?.[field] || ''
-//       ),
-//       ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-//     ];
-//     csvContent += row.map(val =>
-//       typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-//     ).join(',') + '\n';
-//   });
-
-//   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-//   const url = URL.createObjectURL(blob);
-//   const link = document.createElement('a');
-//   link.href = url;
-//   link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
-//   document.body.appendChild(link);
-//   link.click();
-//   document.body.removeChild(link);
-
-//   toast.success('Contributor data exported successfully!');
-// };
+    toast.success('Contributor data exported successfully!');
+  };
 
   const handleWithdraw = () => {
     setIsWithdrawDialogOpen(true);
@@ -362,6 +223,11 @@ const exportToCSV = () => {
     }
   };
 
+  // Only show paid contributors
+  const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
+  
+  // Apply filters to get the final list of contributors to display
+  const filteredContributors = applyFilters(paidContributions);
 
   // Group contributions by date for chart data
   const contributionsByDate = contributions?.reduce((acc, curr) => {
@@ -382,82 +248,7 @@ const exportToCSV = () => {
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
 
-  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
-
-  const handleCollectionModal = () => {
-    setOpenCollectionModal(!openCollectionModal)
-  }
-
-  const handleCollectionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target;
-    setCollectionFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
-
-  const handlePriceTierChange = (index: number, field: string, value: string | number) => {
-    const updatedTiers = [...collectionFormData.price_tiers];
-    updatedTiers[index] = {
-      ...updatedTiers[index],
-      [field]: value
-    };
-    setCollectionFormData(prev => ({
-      ...prev,
-      price_tiers: updatedTiers
-    }));
-  };
-
-  const addPriceTier = () => {
-    setCollectionFormData(prev => ({
-      ...prev,
-      price_tiers: [
-        ...prev.price_tiers,
-        { name: '', amount: 0, description: '' }
-      ]
-    }));
-  };
-
-  const removePriceTier = (index: number) => {
-    const updatedTiers = [...collectionFormData.price_tiers];
-    updatedTiers.splice(index, 1);
-    setCollectionFormData(prev => ({
-      ...prev,
-      price_tiers: updatedTiers
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!id) return;
-
-    try {
-      await updateCollection(id, {
-        title: collectionFormData.title,
-        description: collectionFormData.description,
-        deadline: collectionFormData.deadline,
-        max_participants: collectionFormData.numberOfContributors ? parseInt(collectionFormData.numberOfContributors) : null,
-        status: collectionFormData.stopCollection ? "closed" : "active",
-        price_tiers: collectionFormData.price_tiers
-      });
-
-      toast.success('Collection updated successfully!');
-      setOpenCollectionModal(false);
-      // Refresh the collection data
-      fetchCollectionById(id);
-    } catch (error: any) {
-      console.error('Error updating collection:', error);
-      toast.error(error.message || 'Failed to update collection');
-    }
-  };
-
-
-
-
-  // 2. Check if any contributor has a unique code
-  const hasUniqueCode = filteredContributors.some(
-    c => c.contributor_unique_code
-  );
+  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
 
   if (!currentCollection) {
     return (
@@ -471,205 +262,45 @@ const exportToCSV = () => {
     );
   }
 
-  console.log(currentCollection)
+  // 1. Collect all unique dynamic fields from contributor_information
+  const allDynamicFields = Array.from(
+    new Set(
+      paidContributions.flatMap(contributor => {
+        return (contributor.contributor_information || []).flatMap(info =>
+          Object.keys(info)
+        )
+      })
+    )
+  ).filter(field => field !== "TierAmount");
 
+  console.log(allDynamicFields);
+  console.log(paidContributions)
 
+  // 2. Check if any contributor has a unique code
+  const hasUniqueCode = paidContributions.some(
+    c => c.contributor_unique_code
+  );
+
+  // Function to handle filter changes
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => {
+      if (value === '') {
+        const newFilters = { ...prev };
+        delete newFilters[field];
+        return newFilters;
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  // Function to clear all filters
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchTerm('');
+  };
 
   return (
-    <div className="space-y-6 relative">
-      {/* Modal component - always in the DOM but conditionally shown */}
-      {openCollectionModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl relative border border-gray-200 dark:border-gray-700 transform transition-all scale-100 animate-fadeIn max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
-                Edit Your Collection
-              </h2>
-              <button
-                onClick={() => setOpenCollectionModal(false)}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <X className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500" />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
-              <div className="space-y-1">
-                <Label htmlFor="title">Collection Title</Label>
-                <Input
-                  id="title"
-                  type="text"
-                  placeholder="Contribution Title"
-                  name="title"
-                  value={collectionFormData.title}
-                  onChange={handleCollectionChange}
-                  className="w-full"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Short description"
-                  name="description"
-                  value={collectionFormData.description}
-                  onChange={handleCollectionChange}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="deadline">Deadline</Label>
-                <Input
-                  id="deadline"
-                  type="date"
-                  name="deadline"
-                  value={collectionFormData.deadline}
-                  onChange={handleCollectionChange}
-                  className="w-full"
-                />
-              </div>
-
-              {/* <div className="space-y-1">
-                <Label htmlFor="numberOfContributors">Maximum Number of Contributors</Label>
-                <Input
-                  id="numberOfContributors"
-                  type="number"
-                  placeholder="e.g. 50"
-                  name="numberOfContributors"
-                  value={collectionFormData.numberOfContributors}
-                  onChange={handleCollectionChange}
-                  className="w-full"
-                  min="1"
-                />
-              </div> */}
-
-              {/* Price Tiers Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Price Tiers</Label>
-                  <Button
-                    type="button"
-                    onClick={addPriceTier}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Tier
-                  </Button>
-                </div>
-
-                {collectionFormData.price_tiers.map((tier, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-3 relative">
-                    <button
-                      type="button"
-                      onClick={() => removePriceTier(index)}
-                      className="absolute top-3 right-3 text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <div className="space-y-1">
-                      <Label htmlFor={`tier-name-${index}`}>Tier Name</Label>
-                      <Input
-                        id={`tier-name-${index}`}
-                        type="text"
-                        placeholder="e.g., Basic, Premium, VIP"
-                        value={tier.name}
-                        onChange={(e) => handlePriceTierChange(index, 'name', e.target.value)}
-                        className="w-full"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label htmlFor={`tier-amount-${index}`}>Amount (₦)</Label>
-                      <Input
-                        id={`tier-amount-${index}`}
-                        type="number"
-                        placeholder="e.g., 5000"
-                        value={tier.price}
-                        onChange={(e) => handlePriceTierChange(index, 'amount', parseInt(e.target.value) || 0)}
-                        className="w-full"
-                        min="0"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label htmlFor={`tier-description-${index}`}>Description</Label>
-                      <Textarea
-                        id={`tier-description-${index}`}
-                        placeholder="What does this tier include?"
-                        value={tier.description}
-                        onChange={(e) => handlePriceTierChange(index, 'description', e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {collectionFormData.price_tiers.length === 0 && (
-                  <div className="text-center py-4 text-gray-500 border rounded-lg">
-                    No price tiers added yet. Click "Add Tier" to create one.
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label
-                  htmlFor="stopCollection"
-                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Stop Collection
-                </Label>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCollectionFormData((prev) => ({
-                      ...prev,
-                      stopCollection: !prev.stopCollection,
-                    }))
-                  }
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${collectionFormData.stopCollection
-                    ? "bg-green-900"
-                    : "bg-gray-300 dark:bg-gray-600"
-                    }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${collectionFormData.stopCollection ? "translate-x-6" : "translate-x-1"
-                      }`}
-                  />
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setOpenCollectionModal(false)}
-                  className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-green-900 text-white font-medium hover:bg-green-700 transition-colors"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -739,15 +370,8 @@ const exportToCSV = () => {
                 <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0
-                    ? `₦${currentCollection.price_tiers[0].amount?.toLocaleString()}+`
-                    : `₦${currentCollection.amount.toLocaleString()}`
-                  }
-                </div>
-                {/* <p className="text-sm text-gray-500">
-                  {currentCollection.type === 'tiered' ? 'Multiple tiers available' : 'Per contributor'}
-                </p> */}
+                <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
+                <p className="text-sm text-gray-500">Per contributor</p>
               </CardContent>
             </Card>
 
@@ -817,16 +441,6 @@ const exportToCSV = () => {
                         <span className="text-gray-600">Current Contributors</span>
                         <span className="font-medium">{contributorsCount}</span>
                       </div>
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Collection Type</span>
-                        <span className="font-medium capitalize">{currentCollection.type}</span>
-                      </div>
-                      {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0 && (
-                        <div className="flex justify-between border-b pb-2">
-                          <span className="text-gray-600">Price Tiers</span>
-                          <span className="font-medium">{currentCollection.price_tiers.length}</span>
-                        </div>
-                      )}
                       <div className="flex justify-between pb-2">
                         <span className="text-gray-600">Unique Payment Link</span>
                         <a
@@ -837,15 +451,6 @@ const exportToCSV = () => {
                         >
                           {shareUrl.split('/').pop()}
                         </a>
-                      </div>
-
-                      <div>
-                        <Button
-                          onClick={handleCollectionModal}
-                          className="w-full flex items-center justify-center"
-                        >
-                          Edit Collection
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -895,71 +500,23 @@ const exportToCSV = () => {
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle>Contributors & Input Data</CardTitle>
-
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                {/* Search */}
-                <input
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Input
                   type="text"
                   placeholder="Search contributors..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
-
-                {/* Status filter */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-1 border rounded"
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center whitespace-nowrap"
                 >
-                  <option value="all">All Status</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                </select>
-
-                {/* Tier filter */}
-                <select
-                  value={tierFilter}
-                  onChange={(e) => setTierFilter(e.target.value)}
-                  className="px-3 py-1 border rounded"
-                >
-                  <option value="all">All Tiers</option>
-                  {Array.from(
-                    new Set(
-                      filteredContributors.map(
-                        (c) => (c.contributor_information || [])[0]?.Tier
-                      )
-                    )
-                  )
-                    .filter(Boolean)
-                    .map((tier) => (
-                      <option key={tier} value={tier}>
-                        {tier}
-                      </option>
-                    ))}
-                </select>
-
-                {/* Amount filter with min & max */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    placeholder="Min ₦"
-                    value={minAmount}
-                    onChange={(e) => setMinAmount(e.target.value)}
-                    className="px-3 py-1 border rounded w-24"
-                  />
-                  <span> - </span>
-                  <input
-                    type="number"
-                    placeholder="Max ₦"
-                    value={maxAmount}
-                    onChange={(e) => setMaxAmount(e.target.value)}
-                    className="px-3 py-1 border rounded w-24"
-                  />
-                </div>
-
-                {/* Export button */}
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
                 <Button
                   onClick={exportToCSV}
                   variant="outline"
@@ -970,43 +527,114 @@ const exportToCSV = () => {
                   Export Data
                 </Button>
               </div>
-
             </CardHeader>
+            
+            {/* Filter section */}
+            {showFilters && (
+              <div className="px-6 py-4 border-t border-b bg-gray-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium">Filter Contributors</h3>
+                  <div className="flex items-center gap-2">
+                    {(Object.keys(filters).length > 0 || searchTerm) && (
+                      <Button
+                        onClick={clearAllFilters}
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-8"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Clear All
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => setShowFilters(false)}
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {allDynamicFields.map(field => (
+                    <div key={field} className="space-y-2">
+                      <label className="text-sm font-medium">{field}</label>
+                      <Input
+                        type="text"
+                        placeholder={`Filter by ${field}`}
+                        value={filters[field] || ''}
+                        onChange={(e) => handleFilterChange(field, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Active filters badges */}
+                {(Object.keys(filters).length > 0 || searchTerm) && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {searchTerm && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        Search: {searchTerm}
+                        <X 
+                          className="h-3 w-3 cursor-pointer" 
+                          onClick={() => setSearchTerm('')}
+                        />
+                      </Badge>
+                    )}
+                    {Object.entries(filters).map(([field, value]) => (
+                      value && (
+                        <Badge key={field} variant="secondary" className="flex items-center gap-1">
+                          {field}: {value}
+                          <X 
+                            className="h-3 w-3 cursor-pointer" 
+                            onClick={() => handleFilterChange(field, '')}
+                          />
+                        </Badge>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
                   <Table className="min-w-[700px]">
-                    <TableHeader>
+                    <TableHeader className='overflow-x-auto'>
                       <TableRow>
-                        {staticFields.map((field) => (
-                          <TableHead key={field}>{field}</TableHead>
+                        {allDynamicFields.map(field => (
+                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
-                        {allDynamicFields.map((field) => (
-                          <TableHead key={field}>{field}</TableHead>
-                        ))}
+                        {hasUniqueCode && (
+                          <TableHead className="lg:table-cell">Unique Code</TableHead>
+                        )}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredData.map((contributor) => (
+                      {filteredContributors.map(contributor => (
                         <TableRow key={contributor.id}>
-                          {staticFields.map((field) => (
-                            <TableCell key={field}>
-                              {contributor[field] || ""}
+                          {allDynamicFields.map(field => (
+                            <TableCell key={field} className="lg:table-cell">
+                              {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
-                          {allDynamicFields.map((field) => (
-                            <TableCell key={field}>
-                              {(contributor.contributor_information || [])[0]?.[field] || ""}
+                          {hasUniqueCode && (
+                            <TableCell className="lg:table-cell">
+                              {contributor.contributor_unique_code || ''}
                             </TableCell>
-                          ))}
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
-
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
-                    {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
+                    {searchTerm || Object.keys(filters).length > 0 
+                      ? 'No contributors match your filters' 
+                      : 'No contributors yet'}
                   </div>
                 )}
               </div>
@@ -1031,7 +659,7 @@ const exportToCSV = () => {
               <h3 className="font-medium mb-4">Recent Contributions</h3>
               {filteredContributors.length > 0 ? (
                 <div className="space-y-4">
-                  {filteredContributors.map((contributor) => {
+                  {filteredContributors.slice(0, 5).map((contributor) => {
                     if (contributor.status != "paid") return;
                     return (
                       <div
