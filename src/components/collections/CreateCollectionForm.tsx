@@ -164,8 +164,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         amount: usePriceTiers ? 0 : parseFloat(amount),
         max_participants: maxContributorsValue,
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
-        form_fields: formFields,
-        pricing_tiers: formattedPriceTiers,
+        contributions_fields: formFields,
+        price_tiers: formattedPriceTiers,
         fee_bearer: feeBearer,
         status: "active" as const
       };
