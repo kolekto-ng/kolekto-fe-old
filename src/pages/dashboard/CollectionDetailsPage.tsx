@@ -164,63 +164,130 @@ const CollectionDetailsPage: React.FC = () => {
 
     return matchesSearch && matchesStatus && matchesTier && matchesAmount;
   });
+const exportToCSV = () => {
+  if (!filteredData || filteredData.length === 0) {
+    toast.info("No filtered contributors data to export");
+    return;
+  }
 
-
-  const exportToCSV = () => {
-    const paidContributions = (filteredData || []).filter(c => c.status === "paid");
-    if (paidContributions.length === 0) {
-      toast.info("No paid contributors data to export");
-      return;
-    }
-
-    // 1. Collect all unique dynamic fields from contributor_information
-    const allDynamicFields = Array.from(
-      new Set(
-        paidContributions.flatMap(contributor =>
-          (contributor.contributor_information || []).flatMap(info =>
-            Object.keys(info)
-          )
+  // 1. Collect all unique dynamic fields from contributor_information
+  const allDynamicFields = Array.from(
+    new Set(
+      filteredData.flatMap(contributor =>
+        (contributor.contributor_information || []).flatMap(info =>
+          Object.keys(info)
         )
       )
-    );
+    )
+  );
 
-    // 2. Check if any contributor has a unique code
-    const hasUniqueCode = paidContributions.some(
-      c => c.contributor_unique_code
-    );
+  // 2. Check if any contributor has a unique code
+  const hasUniqueCode = filteredData.some(
+    c => c.contributor_unique_code
+  );
 
-    // 3. Define headers for CSV
-    const headers = [
-      ...allDynamicFields,
-      ...(hasUniqueCode ? ['Unique Code'] : []),
+  // 3. Define headers for CSV
+  const headers = [
+    ...allDynamicFields,
+    ...(hasUniqueCode ? ['Unique Code'] : []),
+    "name",
+    "email",
+    "Status",
+    "Amount",
+    "Date",
+  ];
+
+  let csvContent = headers.join(',') + '\n';
+
+  filteredData.forEach((contribution) => {
+    const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
+
+    const infoObject = Object.assign({}, ...(contribution.contributor_information || []));
+    const row = [
+      ...allDynamicFields.map(field => infoObject[field] || ''),
+      ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+      contribution.name || '',
+      contribution.email || '',
+      contribution.status || '',
+      contribution.amount || '',
+      formattedDate || ''
     ];
 
-    let csvContent = headers.join(',') + '\n';
+    csvContent += row.map(val =>
+      typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+    ).join(',') + '\n';
+  });
 
-    paidContributions.forEach((contribution) => {
-      const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
-      const row = [
-        ...allDynamicFields.map(field =>
-          (contribution.contributor_information || [])[0]?.[field] || ''
-        ),
-        ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-      ];
-      csvContent += row.map(val =>
-        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-      ).join(',') + '\n';
-    });
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  toast.success('Filtered contributor data exported successfully!');
+};
 
-    toast.success('Contributor data exported successfully!');
-  };
+
+//   const exportToCSV = () => {
+//   // Use all filtered data directly
+//   const contributions = filteredData || [];
+
+//   if (contributions.length === 0) {
+//     toast.info("No contributor data to export");
+//     return;
+//   }
+
+//   // 1. Collect all unique dynamic fields from contributor_information
+//   const allDynamicFields = Array.from(
+//     new Set(
+//       contributions.flatMap(contributor =>
+//         (contributor.contributor_information || []).flatMap(info =>
+//           Object.keys(info)
+//         )
+//       )
+//     )
+//   );
+
+//   // 2. Check if any contributor has a unique code
+//   const hasUniqueCode = contributions.some(
+//     c => c.contributor_unique_code
+//   );
+
+//   // 3. Define headers for CSV
+//   const headers = [
+//     ...allDynamicFields,
+//     ...(hasUniqueCode ? ['Unique Code'] : []),
+//   ];
+
+//   let csvContent = headers.join(',') + '\n';
+
+//   contributions.forEach((contribution) => {
+//     const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
+//     const row = [
+//       ...allDynamicFields.map(field =>
+//         (contribution.contributor_information || [])[0]?.[field] || ''
+//       ),
+//       ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+//     ];
+//     csvContent += row.map(val =>
+//       typeof val === 'string' && val.includes(',') ? `"${val}"` : val
+//     ).join(',') + '\n';
+//   });
+
+//   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+//   const url = URL.createObjectURL(blob);
+//   const link = document.createElement('a');
+//   link.href = url;
+//   link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
+//   document.body.appendChild(link);
+//   link.click();
+//   document.body.removeChild(link);
+
+//   toast.success('Contributor data exported successfully!');
+// };
 
   const handleWithdraw = () => {
     setIsWithdrawDialogOpen(true);
