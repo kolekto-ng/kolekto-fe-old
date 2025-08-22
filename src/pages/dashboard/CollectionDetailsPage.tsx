@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -30,13 +31,15 @@ const CollectionDetailsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuthStore();
 
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all");
   // Move these state declarations to the top level
   const [openCollectionModal, setOpenCollectionModal] = useState<boolean>(false);
-  const [collectionFormData, setCollectionFormData] = useState({ 
-    title: "", 
-    description: "", 
-    deadline: "", 
-    numberOfContributors: "", 
+  const [collectionFormData, setCollectionFormData] = useState({
+    title: "",
+    description: "",
+    deadline: "",
+    numberOfContributors: "",
     stopCollection: false,
     price_tiers: [] as any[]
   });
@@ -86,8 +89,85 @@ const CollectionDetailsPage: React.FC = () => {
     setIsShareDrawerOpen(true);
   };
 
+
+  const [amountFilter, setAmountFilter] = useState("all");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  // static fields we want to always display
+  const staticFields = [
+    "name",
+    "email",
+    "status",
+    "formattedAmount",
+    "formattedDate",
+  ];
+
+
+  // Only show paid contributors
+  const filteredContributors = (contributions || []).filter(
+    (contribution) =>
+      (contribution.status === "paid") &&
+      (
+        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+  ) || [];
+
+  // dynamic fields except TierAmount
+  const allDynamicFields = Array.from(
+    new Set(
+      filteredContributors.flatMap(contributor =>
+        (contributor.contributor_information || []).flatMap(info =>
+          Object.keys(info)
+        )
+      )
+    )
+  ).filter(field => field !== "TierAmount");
+
+  // searchable fields
+  const searchableFields = [...staticFields, ...allDynamicFields];
+
+  // filtering logic
+  const filteredData = filteredContributors.filter(contributor => {
+    const search = searchTerm.toLowerCase();
+
+    // 🔍 search across static & dynamic fields
+    const matchesSearch = searchableFields.some(field => {
+      if (staticFields.includes(field)) {
+        return contributor[field]?.toString().toLowerCase().includes(search);
+      }
+      return (contributor.contributor_information || []).some(info =>
+        info[field]?.toString().toLowerCase().includes(search)
+      );
+    });
+
+    // ✅ status filter
+    const matchesStatus =
+      statusFilter === "all" || contributor.status === statusFilter;
+
+    // ✅ tier filter
+    const contributorTier =
+      (contributor.contributor_information || [])[0]?.Tier || "";
+    const matchesTier =
+      tierFilter === "all" || contributorTier === tierFilter;
+
+    const tierAmount =
+      (contributor.contributor_information || [])[0]?.TierAmount || 0;
+
+    let matchesAmount = true;
+    if (minAmount !== "" && tierAmount < Number(minAmount)) {
+      matchesAmount = false;
+    }
+    if (maxAmount !== "" && tierAmount > Number(maxAmount)) {
+      matchesAmount = false;
+    }
+
+    return matchesSearch && matchesStatus && matchesTier && matchesAmount;
+  });
+
+
   const exportToCSV = () => {
-    const paidContributions = (contributions || []).filter(c => c.status === "paid");
+    const paidContributions = (filteredData || []).filter(c => c.status === "paid");
     if (paidContributions.length === 0) {
       toast.info("No paid contributors data to export");
       return;
@@ -215,15 +295,6 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  // Only show paid contributors
-  const filteredContributors = (contributions || []).filter(
-    (contribution) =>
-      (contribution.status === "paid") &&
-      (
-        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-  ) || [];
 
   // Group contributions by date for chart data
   const contributionsByDate = contributions?.reduce((acc, curr) => {
@@ -313,17 +384,8 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  // 1. Collect all unique dynamic fields from contributor_information
-  const allDynamicFields = Array.from(
-    new Set(
-      filteredContributors.flatMap(contributor => {
-        return (contributor.contributor_information || []).flatMap(info =>
-          Object.keys(info)
-        )
-      }
-      )
-    )
-  );
+
+
 
   // 2. Check if any contributor has a unique code
   const hasUniqueCode = filteredContributors.some(
@@ -341,6 +403,10 @@ const CollectionDetailsPage: React.FC = () => {
       </div>
     );
   }
+
+  console.log(currentCollection)
+
+
 
   return (
     <div className="space-y-6 relative">
@@ -401,7 +467,7 @@ const CollectionDetailsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-1">
+              {/* <div className="space-y-1">
                 <Label htmlFor="numberOfContributors">Maximum Number of Contributors</Label>
                 <Input
                   id="numberOfContributors"
@@ -413,7 +479,7 @@ const CollectionDetailsPage: React.FC = () => {
                   className="w-full"
                   min="1"
                 />
-              </div>
+              </div> */}
 
               {/* Price Tiers Section */}
               <div className="space-y-4">
@@ -460,7 +526,7 @@ const CollectionDetailsPage: React.FC = () => {
                         id={`tier-amount-${index}`}
                         type="number"
                         placeholder="e.g., 5000"
-                        value={tier.amount}
+                        value={tier.price}
                         onChange={(e) => handlePriceTierChange(index, 'amount', parseInt(e.target.value) || 0)}
                         className="w-full"
                         min="0"
@@ -505,8 +571,8 @@ const CollectionDetailsPage: React.FC = () => {
                     }))
                   }
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${collectionFormData.stopCollection
-                      ? "bg-green-900"
-                      : "bg-gray-300 dark:bg-gray-600"
+                    ? "bg-green-900"
+                    : "bg-gray-300 dark:bg-gray-600"
                     }`}
                 >
                   <span
@@ -607,14 +673,14 @@ const CollectionDetailsPage: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0 
-                    ? `₦${currentCollection.price_tiers[0].amount?.toLocaleString()}+` 
+                  {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0
+                    ? `₦${currentCollection.price_tiers[0].amount?.toLocaleString()}+`
                     : `₦${currentCollection.amount.toLocaleString()}`
                   }
                 </div>
-                <p className="text-sm text-gray-500">
+                {/* <p className="text-sm text-gray-500">
                   {currentCollection.type === 'tiered' ? 'Multiple tiers available' : 'Per contributor'}
-                </p>
+                </p> */}
               </CardContent>
             </Card>
 
@@ -762,7 +828,9 @@ const CollectionDetailsPage: React.FC = () => {
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle>Contributors & Input Data</CardTitle>
-              <div className="flex gap-2 w-full sm:w-auto">
+
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {/* Search */}
                 <input
                   type="text"
                   placeholder="Search contributors..."
@@ -770,6 +838,61 @@ const CollectionDetailsPage: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
+
+                {/* Status filter */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-3 py-1 border rounded"
+                >
+                  <option value="all">All Status</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                </select>
+
+                {/* Tier filter */}
+                <select
+                  value={tierFilter}
+                  onChange={(e) => setTierFilter(e.target.value)}
+                  className="px-3 py-1 border rounded"
+                >
+                  <option value="all">All Tiers</option>
+                  {Array.from(
+                    new Set(
+                      filteredContributors.map(
+                        (c) => (c.contributor_information || [])[0]?.Tier
+                      )
+                    )
+                  )
+                    .filter(Boolean)
+                    .map((tier) => (
+                      <option key={tier} value={tier}>
+                        {tier}
+                      </option>
+                    ))}
+                </select>
+
+                {/* Amount filter with min & max */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min ₦"
+                    value={minAmount}
+                    onChange={(e) => setMinAmount(e.target.value)}
+                    className="px-3 py-1 border rounded w-24"
+                  />
+                  <span> - </span>
+                  <input
+                    type="number"
+                    placeholder="Max ₦"
+                    value={maxAmount}
+                    onChange={(e) => setMaxAmount(e.target.value)}
+                    className="px-3 py-1 border rounded w-24"
+                  />
+                </div>
+
+                {/* Export button */}
                 <Button
                   onClick={exportToCSV}
                   variant="outline"
@@ -780,37 +903,39 @@ const CollectionDetailsPage: React.FC = () => {
                   Export Data
                 </Button>
               </div>
+
             </CardHeader>
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
                   <Table className="min-w-[700px]">
-                    <TableHeader className='overflow-x-auto'>
+                    <TableHeader>
                       <TableRow>
-                        {allDynamicFields.map(field => (
-                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
+                        {staticFields.map((field) => (
+                          <TableHead key={field}>{field}</TableHead>
                         ))}
-                        {hasUniqueCode && (
-                          <TableHead className="lg:table-cell">Unique Code</TableHead>
-                        )}
+                        {allDynamicFields.map((field) => (
+                          <TableHead key={field}>{field}</TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredContributors.map(contributor => (
+                      {filteredData.map((contributor) => (
                         <TableRow key={contributor.id}>
-                          {allDynamicFields.map(field => (
-                            <TableCell key={field} className="lg:table-cell">
-                              {(contributor.contributor_information || [])[0]?.[field] || ''}
+                          {staticFields.map((field) => (
+                            <TableCell key={field}>
+                              {contributor[field] || ""}
                             </TableCell>
                           ))}
-                          {hasUniqueCode && (
-                            <TableCell className="lg:table-cell">
-                              {contributor.contributor_unique_code || ''}
+                          {allDynamicFields.map((field) => (
+                            <TableCell key={field}>
+                              {(contributor.contributor_information || [])[0]?.[field] || ""}
                             </TableCell>
-                          )}
+                          ))}
                         </TableRow>
                       ))}
                     </TableBody>
+
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
