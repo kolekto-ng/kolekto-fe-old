@@ -8,7 +8,7 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, X } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
@@ -17,7 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// 423
+import { Textarea } from '@/components/ui/textarea';
+
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -29,9 +30,18 @@ const CollectionDetailsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuthStore();
 
+  // Move these state declarations to the top level
+  const [openCollectionModal, setOpenCollectionModal] = useState<boolean>(false);
+  const [collectionFormData, setCollectionFormData] = useState({ 
+    title: "", 
+    description: "", 
+    deadline: "", 
+    numberOfContributors: "", 
+    stopCollection: false,
+    price_tiers: [] as any[]
+  });
 
-
-  const { fetchCollectionById, currentCollection } = useCollectionStore();
+  const { fetchCollectionById, currentCollection, updateCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
 
@@ -48,6 +58,20 @@ const CollectionDetailsPage: React.FC = () => {
       });
     }
   }, [id, fetchCollectionById, fetchContributions]);
+
+  useEffect(() => {
+    // Initialize form data when currentCollection changes
+    if (currentCollection) {
+      setCollectionFormData({
+        title: currentCollection.title || "",
+        description: currentCollection.description || "",
+        deadline: currentCollection.deadline ? new Date(currentCollection.deadline).toISOString().split('T')[0] : "",
+        numberOfContributors: currentCollection.max_participants?.toString() || "",
+        stopCollection: currentCollection.status === "closed",
+        price_tiers: currentCollection.price_tiers || []
+      });
+    }
+  }, [currentCollection]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -87,14 +111,8 @@ const CollectionDetailsPage: React.FC = () => {
 
     // 3. Define headers for CSV
     const headers = [
-      // 'Name',
-      // 'Email',
-      // 'Phone',
-      // 'Amount',
-      // 'Date Contributed',
       ...allDynamicFields,
       ...(hasUniqueCode ? ['Unique Code'] : []),
-      // 'Status'
     ];
 
     let csvContent = headers.join(',') + '\n';
@@ -102,16 +120,10 @@ const CollectionDetailsPage: React.FC = () => {
     paidContributions.forEach((contribution) => {
       const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
       const row = [
-        // contribution.contributor_name || contribution.name || '',
-        // contribution.contributor_email || contribution.email || '',
-        // contribution.contributor_phone || contribution.phone || '',
-        // contribution.amount || '',
-        // formattedDate,
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-        // contribution.status || ''
       ];
       csvContent += row.map(val =>
         typeof val === 'string' && val.includes(',') ? `"${val}"` : val
@@ -150,7 +162,6 @@ const CollectionDetailsPage: React.FC = () => {
       toast.success('Withdrawal request submitted successfully!');
       setTimeout(() => {
         window.location.reload();
-
       }, 2000);
     } catch (error: any) {
       console.error('Withdrawal error:', error);
@@ -235,23 +246,77 @@ const CollectionDetailsPage: React.FC = () => {
 
   const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
 
-  if (!currentCollection) {
-    return (
-      <div className="py-10 text-center">
-        <h2 className="text-2xl font-bold text-gray-700 mb-4">Collection Not Found</h2>
-        <p className="text-gray-600 mb-6">The collection you're looking for doesn't exist or you may not have permission to view it.</p>
-        <Button onClick={() => navigate('/dashboard/collections')} className="bg-kolekto hover:bg-kolekto/90">
-          Go to Collections
-        </Button>
-      </div>
-    );
+  const handleCollectionModal = () => {
+    setOpenCollectionModal(!openCollectionModal)
   }
+
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type, checked } = e.target;
+    setCollectionFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handlePriceTierChange = (index: number, field: string, value: string | number) => {
+    const updatedTiers = [...collectionFormData.price_tiers];
+    updatedTiers[index] = {
+      ...updatedTiers[index],
+      [field]: value
+    };
+    setCollectionFormData(prev => ({
+      ...prev,
+      price_tiers: updatedTiers
+    }));
+  };
+
+  const addPriceTier = () => {
+    setCollectionFormData(prev => ({
+      ...prev,
+      price_tiers: [
+        ...prev.price_tiers,
+        { name: '', amount: 0, description: '' }
+      ]
+    }));
+  };
+
+  const removePriceTier = (index: number) => {
+    const updatedTiers = [...collectionFormData.price_tiers];
+    updatedTiers.splice(index, 1);
+    setCollectionFormData(prev => ({
+      ...prev,
+      price_tiers: updatedTiers
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+
+    try {
+      await updateCollection(id, {
+        title: collectionFormData.title,
+        description: collectionFormData.description,
+        deadline: collectionFormData.deadline,
+        max_participants: collectionFormData.numberOfContributors ? parseInt(collectionFormData.numberOfContributors) : null,
+        status: collectionFormData.stopCollection ? "closed" : "active",
+        price_tiers: collectionFormData.price_tiers
+      });
+
+      toast.success('Collection updated successfully!');
+      setOpenCollectionModal(false);
+      // Refresh the collection data
+      fetchCollectionById(id);
+    } catch (error: any) {
+      console.error('Error updating collection:', error);
+      toast.error(error.message || 'Failed to update collection');
+    }
+  };
 
   // 1. Collect all unique dynamic fields from contributor_information
   const allDynamicFields = Array.from(
     new Set(
       filteredContributors.flatMap(contributor => {
-
         return (contributor.contributor_information || []).flatMap(info =>
           Object.keys(info)
         )
@@ -265,147 +330,212 @@ const CollectionDetailsPage: React.FC = () => {
     c => c.contributor_unique_code
   );
 
-
-
-  const [openCollectionModal, setOpenCollectionModal] = useState<boolean | null>(false);
-
-  const [collectionFormData, setCollectionFormData] = useState({ title: "", description: "", Deadline: "", numberOfContributors: "", stopCollection: false });
-
-  const handleCollectionModal = () => {
-    setOpenCollectionModal(!openCollectionModal)
+  if (!currentCollection) {
+    return (
+      <div className="py-10 text-center">
+        <h2 className="text-2xl font-bold text-gray-700 mb-4">Collection Not Found</h2>
+        <p className="text-gray-600 mb-6">The collection you're looking for doesn't exist or you may not have permission to view it.</p>
+        <Button onClick={() => navigate('/dashboard/collections')} className="bg-kolekto hover:bg-kolekto/90">
+          Go to Collections
+        </Button>
+      </div>
+    );
   }
 
-  const handleCollectionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target;
-    setCollectionFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
   return (
     <div className="space-y-6 relative">
+      {/* Modal component - always in the DOM but conditionally shown */}
+      {openCollectionModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl relative border border-gray-200 dark:border-gray-700 transform transition-all scale-100 animate-fadeIn max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
+                Edit Your Collection
+              </h2>
+              <button
+                onClick={() => setOpenCollectionModal(false)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500" />
+              </button>
+            </div>
 
-      {
-        openCollectionModal && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg relative border border-gray-200 dark:border-gray-700 transform transition-all scale-100 animate-fadeIn">
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="px-6 py-6 space-y-5">
+              <div className="space-y-1">
+                <Label htmlFor="title">Collection Title</Label>
+                <Input
+                  id="title"
+                  type="text"
+                  placeholder="Contribution Title"
+                  name="title"
+                  value={collectionFormData.title}
+                  onChange={handleCollectionChange}
+                  className="w-full"
+                  required
+                />
+              </div>
 
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
-                  Edit Your Collection
-                </h2>
-                <button
-                  onClick={() => setOpenCollectionModal(false)}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              <div className="space-y-1">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Short description"
+                  name="description"
+                  value={collectionFormData.description}
+                  onChange={handleCollectionChange}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="deadline">Deadline</Label>
+                <Input
+                  id="deadline"
+                  type="date"
+                  name="deadline"
+                  value={collectionFormData.deadline}
+                  onChange={handleCollectionChange}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="numberOfContributors">Maximum Number of Contributors</Label>
+                <Input
+                  id="numberOfContributors"
+                  type="number"
+                  placeholder="e.g. 50"
+                  name="numberOfContributors"
+                  value={collectionFormData.numberOfContributors}
+                  onChange={handleCollectionChange}
+                  className="w-full"
+                  min="1"
+                />
+              </div>
+
+              {/* Price Tiers Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Price Tiers</Label>
+                  <Button
+                    type="button"
+                    onClick={addPriceTier}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Tier
+                  </Button>
+                </div>
+
+                {collectionFormData.price_tiers.map((tier, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3 relative">
+                    <button
+                      type="button"
+                      onClick={() => removePriceTier(index)}
+                      className="absolute top-3 right-3 text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+
+                    <div className="space-y-1">
+                      <Label htmlFor={`tier-name-${index}`}>Tier Name</Label>
+                      <Input
+                        id={`tier-name-${index}`}
+                        type="text"
+                        placeholder="e.g., Basic, Premium, VIP"
+                        value={tier.name}
+                        onChange={(e) => handlePriceTierChange(index, 'name', e.target.value)}
+                        className="w-full"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor={`tier-amount-${index}`}>Amount (₦)</Label>
+                      <Input
+                        id={`tier-amount-${index}`}
+                        type="number"
+                        placeholder="e.g., 5000"
+                        value={tier.amount}
+                        onChange={(e) => handlePriceTierChange(index, 'amount', parseInt(e.target.value) || 0)}
+                        className="w-full"
+                        min="0"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor={`tier-description-${index}`}>Description</Label>
+                      <Textarea
+                        id={`tier-description-${index}`}
+                        placeholder="What does this tier include?"
+                        value={tier.description}
+                        onChange={(e) => handlePriceTierChange(index, 'description', e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {collectionFormData.price_tiers.length === 0 && (
+                  <div className="text-center py-4 text-gray-500 border rounded-lg">
+                    No price tiers added yet. Click "Add Tier" to create one.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="stopCollection"
+                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
-                  <X className="w-6 h-6 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-500" />
+                  Stop Collection
+                </Label>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCollectionFormData((prev) => ({
+                      ...prev,
+                      stopCollection: !prev.stopCollection,
+                    }))
+                  }
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${collectionFormData.stopCollection
+                      ? "bg-green-900"
+                      : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${collectionFormData.stopCollection ? "translate-x-6" : "translate-x-1"
+                      }`}
+                  />
                 </button>
               </div>
 
-              {/* Form */}
-              <form className="px-6 py-6 space-y-5">
-                <div className="space-y-1">
-                  <Label htmlFor="title">Collection Title</Label>
-                  <Input
-                    id="title"
-                    type="text"
-                    placeholder="Contribution Title"
-                    name="title"
-                    value={collectionFormData.title}
-                    onChange={handleCollectionChange}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    type="text"
-                    placeholder="Short description"
-                    name="description"
-                    value={collectionFormData.description}
-                    onChange={handleCollectionChange}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="deadline">Deadline</Label>
-                  <Input
-                    id="deadline"
-                    type="date"
-                    name="deadline"
-                    value={collectionFormData.Deadline}
-                    onChange={handleCollectionChange}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="numberOfContributors">Number of Contributors</Label>
-                  <Input
-                    id="numberOfContributors"
-                    type="number"
-                    placeholder="e.g. 50"
-                    name="numberOfContributors"
-                    value={collectionFormData.numberOfContributors}
-                    onChange={handleCollectionChange}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Label
-                    htmlFor="stopCollection"
-                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Stop Collection
-                  </Label>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCollectionFormData((prev) => ({
-                        ...prev,
-                        stopCollection: !prev.stopCollection,
-                      }))
-                    }
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${collectionFormData.stopCollection
-                        ? "bg-green-900"
-                        : "bg-gray-300 dark:bg-gray-600"
-                      }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${collectionFormData.stopCollection ? "translate-x-6" : "translate-x-1"
-                        }`}
-                    />
-                  </button>
-                </div>
-
-
-                {/* Action Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={() => setOpenCollectionModal(false)}
-                    className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-lg bg-green-900 text-white font-medium hover:bg-green-700 transition-colors"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-900 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenCollectionModal(false)}
+                  className="px-4 py-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-green-900 text-white font-medium hover:bg-green-700 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
-        )
-      }
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
@@ -476,8 +606,15 @@ const CollectionDetailsPage: React.FC = () => {
                 <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
-                <p className="text-sm text-gray-500">Per contributor</p>
+                <div className="text-2xl font-bold">
+                  {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0 
+                    ? `₦${currentCollection.price_tiers[0].amount?.toLocaleString()}+` 
+                    : `₦${currentCollection.amount.toLocaleString()}`
+                  }
+                </div>
+                <p className="text-sm text-gray-500">
+                  {currentCollection.type === 'tiered' ? 'Multiple tiers available' : 'Per contributor'}
+                </p>
               </CardContent>
             </Card>
 
@@ -547,6 +684,16 @@ const CollectionDetailsPage: React.FC = () => {
                         <span className="text-gray-600">Current Contributors</span>
                         <span className="font-medium">{contributorsCount}</span>
                       </div>
+                      <div className="flex justify-between border-b pb-2">
+                        <span className="text-gray-600">Collection Type</span>
+                        <span className="font-medium capitalize">{currentCollection.type}</span>
+                      </div>
+                      {currentCollection.type === 'tiered' && currentCollection.price_tiers?.length > 0 && (
+                        <div className="flex justify-between border-b pb-2">
+                          <span className="text-gray-600">Price Tiers</span>
+                          <span className="font-medium">{currentCollection.price_tiers.length}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between pb-2">
                         <span className="text-gray-600">Unique Payment Link</span>
                         <a
@@ -640,55 +787,27 @@ const CollectionDetailsPage: React.FC = () => {
                   <Table className="min-w-[700px]">
                     <TableHeader className='overflow-x-auto'>
                       <TableRow>
-                        {/* <TableHead>Name</TableHead>
-                        <TableHead className="hidden sm:table-cell">Email</TableHead>
-                        <TableHead className="hidden md:table-cell">Amount</TableHead>
-                        <TableHead className="hidden md:table-cell">Date</TableHead>
-                        <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
-                        {/* Render dynamic fields */}
                         {allDynamicFields.map(field => (
                           <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
-                        {/* Unique code column if present */}
                         {hasUniqueCode && (
                           <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
-                        {/* <TableHead className="lg:table-cell">Status</TableHead> */}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredContributors.map(contributor => (
                         <TableRow key={contributor.id}>
-                          {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
-                          <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
-                          <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {contributor.formattedDate ||
-                              new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
-                          {/* Render dynamic fields */}
                           {allDynamicFields.map(field => (
                             <TableCell key={field} className="lg:table-cell">
                               {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
-                          {/* Unique code column if present */}
                           {hasUniqueCode && (
                             <TableCell className="lg:table-cell">
                               {contributor.contributor_unique_code || ''}
                             </TableCell>
                           )}
-                          {/* <TableCell className="hidden lg:table-cell">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
-                              ? 'bg-green-100 text-green-800'
-                              : contributor.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                              }`}>
-                              {contributor.status}
-                            </span>
-                          </TableCell> */}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -717,44 +836,10 @@ const CollectionDetailsPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )} */}
-
               <h3 className="font-medium mb-4">Recent Contributions</h3>
               {filteredContributors.length > 0 ? (
                 <div className="space-y-4">
-                  {filteredContributors.slice(0, 5).map((contributor) => {
+                  {filteredContributors.map((contributor) => {
                     if (contributor.status != "paid") return;
                     return (
                       <div
@@ -797,85 +882,6 @@ const CollectionDetailsPage: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* <TabsContent value="activity" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Contribution Activity</CardTitle>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Available for withdrawal</div>
-                <div className="font-bold text-lg">₦{withdrawableAmount.toLocaleString()}</div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )}
-
-              <h3 className="font-medium mb-4">Recent Contributions</h3>
-              {contributions && contributions.length > 0 ? (
-                <div className="space-y-4">
-                  {contributions.slice(0, 5).map((contributor) => (
-                    <div key={contributor.id} className="flex justify-between items-center border-b pb-2">
-                      <div>
-                        <div className="font-medium">{contributor.contributor_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                        </div>
-                      </div>
-                      <div className="font-bold">₦{contributor.amount?.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-gray-500">
-                  No contributions yet
-                </div>
-              )}
-
-              <div className="mt-6">
-                <Button
-                  onClick={handleWithdraw}
-                  className="w-full bg-kolekto hover:bg-kolekto/90"
-                  disabled={withdrawableAmount <= 0}
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Withdraw Funds
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent> */}
       </Tabs>
 
       <Drawer open={isShareDrawerOpen} onOpenChange={setIsShareDrawerOpen}>
