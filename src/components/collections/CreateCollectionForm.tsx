@@ -670,7 +670,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       const newTier: PriceTier = {
                         id: Date.now().toString(),
                         name: '',
-                        price: '0',
+                        price: '',
                         description: '',
                         quantity: ''
                       };
