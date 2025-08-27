@@ -77,6 +77,7 @@ const CollectionsPage: React.FC = () => {
               amount={collection.amount}
               deadline={collection.deadline || new Date().toISOString()}
               status={collection.status as 'active' | 'expired' | 'completed'}
+              type={collection.type as 'flat' | 'tier'}
               participantsCount={collection.total_contributions || 0}
               maxParticipants={collection.max_contributions || undefined}
               dateCreated={collection.created_at}

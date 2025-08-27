@@ -153,10 +153,20 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   // Handles validation for each step
 
   const validateStep1 = () => {
+
+    if (!title.trim() && deadline.trim() === '') {
+      toast.error("Please enter a collection title and deadline");
+      return false;
+    }
     if (!title.trim()) {
       toast.error("Please enter a collection title");
       return false;
     }
+    if (Date.now() > new Date(deadline).getTime() || deadline.trim() === '') {
+      toast.error("Please enter a valid collection deadline");
+      return false;
+    }
+
     return true;
   };
 
@@ -169,8 +179,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         toast.error("Each price tier must have a name and a valid price greater than zero");
         return false;
       }
-    } else if (!amount || parseFloat(amount) <= 0) {
-      toast.error("Please enter a valid amount greater than zero");
+    } else if (!amount || parseFloat(amount) <= 100) {
+      toast.error("Please enter a valid amount greater than 100");
       return false;
     }
     return true;
@@ -184,7 +194,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const nextStep = () => {
     let isValid = false;
-    
+
     switch (currentStep) {
       case 1:
         isValid = validateStep1();
@@ -217,21 +227,19 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       {[1, 2, 3].map((step) => (
         <div key={step} className="flex items-center">
           <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 ${
-              step === currentStep
-                ? 'bg-green-600 text-white border-green-600'
-                : step < currentStep
+            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 ${step === currentStep
+              ? 'bg-green-600 text-white border-green-600'
+              : step < currentStep
                 ? 'bg-green-600 text-white border-green-600'
                 : 'bg-white text-gray-500 border-gray-300'
-            }`}
+              }`}
           >
             {step}
           </div>
           {step < 3 && (
             <div
-              className={`w-16 h-0.5 mx-2 ${
-                step < currentStep ? 'bg-green-600' : 'bg-gray-300'
-              }`}
+              className={`w-16 h-0.5 mx-2 ${step < currentStep ? 'bg-green-600' : 'bg-gray-300'
+                }`}
             />
           )}
         </div>
@@ -242,10 +250,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const StepTitles = () => {
     const titles = [
       'Basic Information',
-      'Amount & Payment', 
+      'Amount & Payment',
       'Contributor Details'
     ];
-    
+
     return (
       <div className="flex justify-center items-center mb-6">
         {titles.map((title, index) => (
@@ -367,10 +375,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Amount & Payment</h2>
               <p className="text-gray-600">Configure fees, choose collection type, and set pricing</p>
             </div>
-            
+
             <div className="space-y-4">
               <h3 className="text-lg font-medium text-gray-900">Fee Configuration</h3>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Who pays the platform fees?
@@ -384,7 +392,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       value="organizer"
                       checked={feeBearer === 'organizer'}
                       onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                      className="h-4 w-4 border-gray-300"
                     />
                     <label htmlFor="organizer-pays" className="ml-3 block text-sm text-gray-700">
                       <span className="font-medium">Organizer pays</span>
@@ -399,7 +407,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       value="contributor"
                       checked={feeBearer === 'contributor'}
                       onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                      className="h-4 w-4 border-gray-300"
                     />
                     <label htmlFor="contributor-pays" className="ml-3 block text-sm text-gray-700">
                       <span className="font-medium">Contributors pay</span>
@@ -408,17 +416,29 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   </div>
                 </div>
               </div>
-            </div>
 
+              {/* Fee Structure Information */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="text-sm">
+                  <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
+                  <ul className="list-disc pl-5 text-gray-600 space-y-1">
+                    <li>₦0 – ₦999: 3.0% fee</li>
+                    <li>₦1,000 – ₦4,999: 2.5% fee</li>
+                    <li>₦5,000 – ₦19,999: 2.0% fee</li>
+                    <li>₦20,000 and above: 1.5% fee</li>
+                    <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
             {/* Handles Colection Types */}
 
             <div className="space-y-4 border-t pt-6">
               <h3 className="text-lg font-medium text-gray-900">Collection Type</h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                    !usePriceTiers ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-                  }`}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${!usePriceTiers ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
+                    }`}
                   onClick={() => setUsePriceTiers(false)}
                 >
                   <div className="flex items-center">
@@ -429,15 +449,14 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       className="mr-3"
                     />
                     <div>
-                      <h4 className="font-medium">Fixed Amount</h4>
+                      <h4 className="font-medium">Fixed Contribution</h4>
                       <p className="text-sm text-gray-600">Single price for all contributors</p>
                     </div>
                   </div>
                 </div>
                 <div
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                    usePriceTiers ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-                  }`}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${usePriceTiers ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
+                    }`}
                   onClick={() => setUsePriceTiers(true)}
                 >
                   <div className="flex items-center">
@@ -448,7 +467,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       className="mr-3"
                     />
                     <div>
-                      <h4 className="font-medium">Price Tiers</h4>
+                      <h4 className="font-medium">Tiered Contribution</h4>
                       <p className="text-sm text-gray-600">Multiple pricing options</p>
                     </div>
                   </div>
@@ -517,7 +536,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                           </button>
                         )}
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -554,7 +573,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                           />
                         </div>
                       </div>
-                      
+
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Description (Optional)
@@ -571,7 +590,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                           placeholder="Brief description of this tier"
                         />
                       </div>
-                      
+
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Max Number Of Contributor (Optional)
@@ -600,7 +619,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                           {(() => {
                             const price = parseFloat(tier.price);
                             const fees = calculateTierFees(price);
-                            
+
                             return (
                               <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
@@ -622,7 +641,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                                 <div className="flex justify-between">
                                   <span className="text-blue-700 font-medium">Amount Payable:</span>
                                   <span className="font-medium text-blue-700">
-                                    ₦{feeBearer === 'contributor' 
+                                    ₦{feeBearer === 'contributor'
                                       ? Math.round(fees.totalPayable)
                                       : price
                                     }
@@ -631,7 +650,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                                 <div className="flex justify-between">
                                   <span className="text-green-700 font-medium">You'll Receive:</span>
                                   <span className="font-medium text-green-700">
-                                    ₦{feeBearer === 'contributor' 
+                                    ₦{feeBearer === 'contributor'
                                       ? price
                                       : Math.round(price - fees.kolektoFee - fees.paymentGatewayFee)
                                     }
@@ -644,7 +663,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       )}
                     </div>
                   ))}
-                  
+
                   <button
                     type="button"
                     onClick={() => {
@@ -670,32 +689,36 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
             {!usePriceTiers && amount && (
               <div className="bg-blue-100 p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-3">Fee Breakdown</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Collection Amount:</span>
-                    <span className="font-medium">₦{parseFloat(amount).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Kolekto Fee ({getKolektoFeePercentage()}):</span>
-                    <span className="font-medium">₦{kolektoFee.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Payment Gateway Fee (1.5%, max ₦2,000):</span>
-                    <span className="font-medium">₦{paymentGatewayFee.toLocaleString()}</span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between font-semibold">
-                    <span>
-                      {feeBearer === 'contributor' ? 'Total Payable by Contributors:' : 'You Receive:'}
-                    </span>
-                    <span>₦{totalPayable.toLocaleString()}</span>
-                  </div>
-                  {/* Thus handles quatinty in fixed fees breakdown */}
 
+                <div className="grid grid-cols-2 gap-2 text-sm border-t border-gray-200 pt-3">
+                  <div>Base Amount:</div>
+                  <div className="text-right font-medium">₦{parseFloat(amount).toLocaleString()}</div>
+
+                  <div>Kolekto Fee ({getKolektoFeePercentage()}):</div>
+                  <div className="text-right">₦{kolektoFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
+                  <div>Payment Gateway (1.5%):</div>
+                  <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
+                  <div className="border-t border-gray-200 pt-1 font-medium">Total Fees:</div>
+                  <div className="border-t border-gray-200 pt-1 text-right font-medium">₦{totalFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
+                  {feeBearer && (
+                    <>
+                      <div className="pt-3 font-bold">Amount Payable (by contributor):</div>
+                      <div className="pt-3 text-right font-bold">₦{totalPayable.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+
+                      <div className="pt-3 font-bold">Amount collection would receive:</div>
+                      <div className="pt-3 text-right font-bold">₦{(feeBearer === 'organizer' ? parseFloat(amount) - totalFees : parseFloat(amount)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    </>
+                  )}
+
+                  {/* Handles quantity in fixed fees breakdown */}
                   {fixedPriceQuantity && parseInt(fixedPriceQuantity) > 0 && (
-                    <div className="border-t pt-2 flex justify-between text-blue-700 font-medium">
-                      <span>Available Slots:</span>
-                      <span>{parseInt(fixedPriceQuantity).toLocaleString()}</span>
-                    </div>
+                    <>
+                      <div className="border-t border-gray-200 pt-2 text-blue-700 font-medium">Available Slots:</div>
+                      <div className="border-t border-gray-200 pt-2 text-right text-blue-700 font-medium">{parseInt(fixedPriceQuantity).toLocaleString()}</div>
+                    </>
                   )}
                 </div>
               </div>
@@ -722,7 +745,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               formFields={formFields}
               setFormFields={setFormFields}
             />
-            
+
             <UniqueCodesSection
               generateUniqueCodes={generateUniqueCodes}
               setGenerateUniqueCodes={setGenerateUniqueCodes}
@@ -741,12 +764,12 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     <div className="max-w-2xl mx-auto px-4 sm:px-0">
       <StepIndicator />
       <StepTitles />
-      
+
       <div className="bg-white">
         {renderStepContent()}
-        
+
         {/* Handles Button Navigation */}
-        
+
         <div className="border-t pt-6 mt-8">
           <div className="flex justify-between">
             <Button
@@ -754,11 +777,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               variant="outline"
               onClick={prevStep}
               disabled={currentStep === 1}
-              className="px-6 hover:bg-amber-400" 
+              className="px-6 hover:bg-amber-400"
             >
               Previous
             </Button>
-            
+
             <div className="flex gap-3">
               {onPreview && currentStep === totalSteps && (
                 <Button
@@ -785,7 +808,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   Preview
                 </Button>
               )}
-              
+
               {currentStep < totalSteps ? (
                 <Button
                   type="button"
