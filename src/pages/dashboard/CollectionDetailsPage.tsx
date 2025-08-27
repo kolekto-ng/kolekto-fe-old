@@ -344,7 +344,7 @@ const CollectionDetailsPage: React.FC = () => {
 
                     return (<div key={i} >
                       <div className=' text-2xl font-bold flex justify-between items-center mb-2'>
-                        <div>Tier: {tier.name}</div>
+                        <div>{tier.name}</div>
                         <div className="text-2xl font-bold">₦{tier.price}</div>
                       </div>
 
