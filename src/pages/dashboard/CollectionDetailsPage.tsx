@@ -31,6 +31,9 @@ const CollectionDetailsPage: React.FC = () => {
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
 
+  console.log(currentCollection, 'current coll');
+
+
   useEffect(() => {
     if (id) {
       fetchCollectionById(id).catch((err) => {
@@ -83,14 +86,8 @@ const CollectionDetailsPage: React.FC = () => {
 
     // 3. Define headers for CSV
     const headers = [
-      // 'Name',
-      // 'Email',
-      // 'Phone',
-      // 'Amount',
-      // 'Date Contributed',
       ...allDynamicFields,
       ...(hasUniqueCode ? ['Unique Code'] : []),
-      // 'Status'
     ];
 
     let csvContent = headers.join(',') + '\n';
@@ -98,16 +95,10 @@ const CollectionDetailsPage: React.FC = () => {
     paidContributions.forEach((contribution) => {
       const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
       const row = [
-        // contribution.contributor_name || contribution.name || '',
-        // contribution.contributor_email || contribution.email || '',
-        // contribution.contributor_phone || contribution.phone || '',
-        // contribution.amount || '',
-        // formattedDate,
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-        // contribution.status || ''
       ];
       csvContent += row.map(val =>
         typeof val === 'string' && val.includes(',') ? `"${val}"` : val
@@ -327,15 +318,45 @@ const CollectionDetailsPage: React.FC = () => {
 
         <TabsContent value="overview" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
-                <p className="text-sm text-gray-500">Per contributor</p>
-              </CardContent>
-            </Card>
+
+            {
+              currentCollection.type === "fixed" && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
+                    <p className="text-sm text-gray-500">Per contributor</p>
+                  </CardContent>
+                </Card>
+              )
+
+            }
+
+            {currentCollection.type === "tiered" && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Collection Tier(s)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {currentCollection.price_tiers.map((tier, i) => {
+
+                    return (<div key={i} >
+                      <div className=' text-2xl font-bold flex justify-between items-center mb-2'>
+                        <div>Tier: {tier.name}</div>
+                        <div className="text-2xl font-bold">₦{tier.price}</div>
+                      </div>
+
+                    </div>)
+                  })}
+
+                  <p className="text-sm text-gray-500">Per contributor</p>
+                </CardContent>
+              </Card>
+
+            )}
+
 
             <Card>
               <CardHeader className="pb-2">

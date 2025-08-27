@@ -331,6 +331,9 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         status: "active" as const
       };
 
+      console.log(collectionData, 'collection data');
+
+
       const data = await createCollection(collectionData);
       console.log(collectionData, 'collection data');
 

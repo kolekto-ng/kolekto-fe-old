@@ -88,7 +88,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
             <p className="text-sm text-gray-600">Amount</p>
-            <p className="font-medium">₦{amount?.toFixed(2)}</p>
+            <p className="font-medium">₦{amount > 0 ? amount.toFixed(2) : "__"}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Deadline</p>
