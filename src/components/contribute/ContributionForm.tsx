@@ -366,9 +366,8 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   // Render functions
   const renderPricingForm = () => (
     <div className="space-y-4">
-      <h3 className="font-medium text-lg flex items-center gap-2">
-        <DollarSign className="h-5 w-5" />
-        Select Amount
+      <h3 className="font-medium text-lg">
+        Select Tier
       </h3>
       <RadioGroup value={selectedTier} onValueChange={handleTierChange}>
         {pricingTiers?.map((tier, index) => (
@@ -865,7 +864,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
               )}
               {amountBreakdown && selectedAmount !== amountBreakdown.totalPayable && (
                 <span className="text-sm text-gray-600">
-                  {" + fees: "}
+                  {fees > 0 && " + fees: "}
                   {amountBreakdown.platformFee && `₦${amountBreakdown.platformFee} (platform) `}
                   {amountBreakdown.paymentGatewayFee && `₦${amountBreakdown.paymentGatewayFee} (gateway)`}
                   {fees > 0 && ` ₦${fees} (contributor fees)`}

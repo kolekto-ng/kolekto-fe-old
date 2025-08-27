@@ -612,8 +612,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       {/* This Handles the Inline Fee Breakdown for each price tier */}
 
                       {tier.price && parseFloat(tier.price) > 0 && !isNaN(parseFloat(tier.price)) && (
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                          <h5 className="font-medium text-blue-800 mb-3 text-center bg-blue-100 py-2 rounded">
+                        <div className="bg-green-50 p-4 rounded-lg">
+                          <h5 className="font-medium text-green-800 mb-3 text-center bg-green-100 py-2 rounded">
                             Fee Breakdown for this tier
                           </h5>
                           {(() => {
@@ -687,10 +687,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
             {/* This Handles the Fee Breakdown for fixed amount collections */}
 
             {!usePriceTiers && amount && (
-              <div className="bg-blue-100 p-4 rounded-lg">
+              <div className="bg-green-100 p-4 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-3">Fee Breakdown</h4>
 
-                <div className="grid grid-cols-2 gap-2 text-sm border-t border-gray-200 pt-3">
+                <div className="grid grid-cols-2 gap-2 text-sm border-t border-t-slate-400 pt-3">
                   <div>Base Amount:</div>
                   <div className="text-right font-medium">₦{parseFloat(amount).toLocaleString()}</div>
 
@@ -700,8 +700,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   <div>Payment Gateway (1.5%):</div>
                   <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
-                  <div className="border-t border-gray-200 pt-1 font-medium">Total Fees:</div>
-                  <div className="border-t border-gray-200 pt-1 text-right font-medium">₦{totalFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                  <div className="border-t border-t-slate-300 pt-1 font-medium">Total Fees:</div>
+                  <div className="border-t border-t-slate-300 pt-1 text-right font-medium">₦{totalFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
                   {feeBearer && (
                     <>
@@ -716,21 +716,21 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   {/* Handles quantity in fixed fees breakdown */}
                   {fixedPriceQuantity && parseInt(fixedPriceQuantity) > 0 && (
                     <>
-                      <div className="border-t border-gray-200 pt-2 text-blue-700 font-medium">Available Slots:</div>
-                      <div className="border-t border-gray-200 pt-2 text-right text-blue-700 font-medium">{parseInt(fixedPriceQuantity).toLocaleString()}</div>
+                      <div className="border-t border-t-slate-400 pt-2 text-blue-700 font-medium">Available Slots:</div>
+                      <div className="border-t border-t-slate-400 pt-2 text-right text-blue-700 font-medium">{parseInt(fixedPriceQuantity).toLocaleString()}</div>
                     </>
                   )}
                 </div>
               </div>
             )}
 
-            <ContributorLimitSection
+            {/* <ContributorLimitSection
               priceTiers={priceTiers}
               isMaxContributorsEnabled={isMaxContributorsEnabled}
               setIsMaxContributorsEnabled={setIsMaxContributorsEnabled}
               maxContributors={maxContributors}
               setMaxContributors={setMaxContributors}
-            />
+            /> */}
           </div>
         );
 
