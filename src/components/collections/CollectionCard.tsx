@@ -12,6 +12,7 @@ interface CollectionCardProps {
   amount: number;
   deadline: string;
   status: 'active' | 'expired' | 'completed';
+  type: 'flat' | 'tier';
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
@@ -26,6 +27,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   amount,
   deadline,
   status,
+  type,
   participantsCount,
   maxParticipants,
   dateCreated,
@@ -69,9 +71,14 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <h3 className="font-semibold text-lg">{title}</h3>
-          <Badge className={statusColors[computedStatus]}>
-            {computedStatus === 'active' ? 'Active' : computedStatus === 'expired' ? 'Expired' : 'Completed'}
-          </Badge>
+          <div className='spaxe-x-1 flex gap-1'>
+            <Badge className={''}>
+              {type === 'flat' ? 'Fixed' : 'Tier'}
+            </Badge>
+            <Badge className={statusColors[computedStatus]}>
+              {computedStatus === 'active' ? 'Active' : computedStatus === 'expired' ? 'Expired' : 'Completed'}
+            </Badge>
+          </div>
         </div>
         {description && (
           <p className="text-sm text-gray-600 mt-1">{description}</p>

@@ -18,7 +18,6 @@ const LoginPage: React.FC = () => {
       <main className="flex-grow flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <Logo className="mx-auto" />
             <h1 className="text-2xl font-bold mt-4">Welcome back</h1>
             <p className="text-gray-600 mt-2">
               Sign in to your account to continue
@@ -31,7 +30,6 @@ const LoginPage: React.FC = () => {
         </div>
       </main>
 
-      <Footer />
     </div>
   );
 };
