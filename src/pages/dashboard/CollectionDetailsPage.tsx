@@ -18,6 +18,8 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, Dr
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
+import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +29,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [showQR, setShowQR] = useState(false);
   const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -37,7 +40,6 @@ const CollectionDetailsPage: React.FC = () => {
   const { createWithdrawal } = useWithdrawalStore();
 
   console.log(currentCollection, 'current coll');
-
 
   useEffect(() => {
     if (id) {
@@ -66,21 +68,37 @@ const CollectionDetailsPage: React.FC = () => {
     setIsShareDrawerOpen(true);
   };
 
+  const handleEditCollection = () => {
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCollectionDeleted = () => {
+    navigate('/dashboard/collections');
+  };
+
+  const handleEditSuccess = () => {
+    // Refetch collection data after successful edit
+    if (id) {
+      fetchCollectionById(id);
+    }
+    toast.success('Collection updated successfully');
+  };
+
   // Function to apply filters to contributions
   const applyFilters = (data: any[]) => {
     if (Object.keys(filters).length === 0 && !searchTerm) return data;
-    
+
     return data.filter(contribution => {
       // Apply search term filter
       if (searchTerm) {
-        const matchesSearch = 
+        const matchesSearch =
           (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
-        
+            contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
+
         if (!matchesSearch) return false;
       }
-      
+
       // Apply field filters
       for (const [field, value] of Object.entries(filters)) {
         if (value) {
@@ -90,7 +108,7 @@ const CollectionDetailsPage: React.FC = () => {
           }
         }
       }
-      
+
       return true;
     });
   };
@@ -99,7 +117,7 @@ const CollectionDetailsPage: React.FC = () => {
     // Apply filters to get the data to export
     const paidContributions = (contributions || []).filter(c => c.status === "paid");
     const filteredData = applyFilters(paidContributions);
-    
+
     if (filteredData.length === 0) {
       toast.info("No paid contributors data to export");
       return;
@@ -228,7 +246,7 @@ const CollectionDetailsPage: React.FC = () => {
 
   // Only show paid contributors
   const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
-  
+
   // Apply filters to get the final list of contributors to display
   const filteredContributors = applyFilters(paidContributions);
 
@@ -312,6 +330,11 @@ const CollectionDetailsPage: React.FC = () => {
               {getDeadlineStatusIcon()}
               {getDeadlineStatus()}
             </span>
+            <CollectionManagementMenu
+              collectionId={id as string}
+              onEditClick={handleEditCollection}
+              onDeleteSuccess={handleCollectionDeleted}
+            />
           </div>
           {currentCollection.description && (
             <p className="text-gray-600 mt-1">{currentCollection.description}</p>
@@ -561,7 +584,7 @@ const CollectionDetailsPage: React.FC = () => {
                 </Button>
               </div>
             </CardHeader>
-            
+
             {/* Filter section */}
             {showFilters && (
               <div className="px-6 py-4 border-t border-b bg-gray-50">
@@ -589,7 +612,7 @@ const CollectionDetailsPage: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {allDynamicFields.map(field => (
                     <div key={field} className="space-y-2">
@@ -603,15 +626,15 @@ const CollectionDetailsPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Active filters badges */}
                 {(Object.keys(filters).length > 0 || searchTerm) && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {searchTerm && (
                       <Badge variant="secondary" className="flex items-center gap-1">
                         Search: {searchTerm}
-                        <X 
-                          className="h-3 w-3 cursor-pointer" 
+                        <X
+                          className="h-3 w-3 cursor-pointer"
                           onClick={() => setSearchTerm('')}
                         />
                       </Badge>
@@ -620,8 +643,8 @@ const CollectionDetailsPage: React.FC = () => {
                       value && (
                         <Badge key={field} variant="secondary" className="flex items-center gap-1">
                           {field}: {value}
-                          <X 
-                            className="h-3 w-3 cursor-pointer" 
+                          <X
+                            className="h-3 w-3 cursor-pointer"
                             onClick={() => handleFilterChange(field, '')}
                           />
                         </Badge>
@@ -631,7 +654,7 @@ const CollectionDetailsPage: React.FC = () => {
                 )}
               </div>
             )}
-            
+
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
@@ -665,8 +688,8 @@ const CollectionDetailsPage: React.FC = () => {
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
-                    {searchTerm || Object.keys(filters).length > 0 
-                      ? 'No contributors match your filters' 
+                    {searchTerm || Object.keys(filters).length > 0
+                      ? 'No contributors match your filters'
                       : 'No contributors yet'}
                   </div>
                 )}
@@ -791,6 +814,22 @@ const CollectionDetailsPage: React.FC = () => {
           collectionTitle={currentCollection?.title || ''}
         />
       )}
+
+      <EditCollectionDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        collectionId={id || ''}
+        initialData={{
+          title: currentCollection.title,
+          description: currentCollection.description || '',
+          deadline: currentCollection.deadline,
+          type: currentCollection.type,
+          price_tiers: currentCollection.price_tiers,
+          code_prefix: currentCollection.code_prefix || '',
+          contributions_fields: currentCollection.contributions_fields || [],
+        }}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   );
 };
