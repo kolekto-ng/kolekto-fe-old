@@ -12,7 +12,7 @@ interface CollectionCardProps {
   amount: number;
   deadline: string;
   status: 'active' | 'expired' | 'paused' | 'completed';
-  type: 'flat' | 'tier';
+  type: 'fixed' | 'tier';
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
@@ -75,8 +75,8 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         <div className="flex justify-between items-start">
           <h3 className="font-semibold text-lg">{title}</h3>
           <div className='spaxe-x-1 flex gap-1'>
-            <Badge className={''}>
-              {type === 'flat' ? 'Fixed' : 'Tier'}
+            <Badge className={'bg-purple-100 text-purple-800'}>
+              {type === 'fixed' ? 'Fixed' : 'Tier'}
             </Badge>
             <Badge className={statusColors[computedStatus]}>
               {computedStatus === 'paused' ? 'Paused' : ''}

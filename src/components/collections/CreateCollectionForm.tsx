@@ -307,25 +307,15 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         }))
         : [];
 
-      // This handles fixed price tier when not using price tiers
-
-      const fixedPriceTier = !usePriceTiers && amount ? [{
-        id: '1',
-        name: 'Standard',
-        price: parseFloat(amount),
-        description: '',
-        quantity: fixedPriceQuantity ? parseInt(fixedPriceQuantity) : null
-      }] : [];
-
       const collectionData = {
         organizer_id: user.id,
         title,
         description: description || null,
-        amount: usePriceTiers ? 0 : parseFloat(amount),
+        amount: usePriceTiers ? null : parseFloat(amount),
         max_participants: maxContributorsValue,
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
         contributions_fields: formFields,
-        price_tiers: usePriceTiers ? formattedPriceTiers : fixedPriceTier,
+        price_tiers: usePriceTiers ? formattedPriceTiers : null,
         fixed_price_quantity: !usePriceTiers && fixedPriceQuantity ? parseInt(fixedPriceQuantity) : null,
         fee_bearer: feeBearer,
         status: "active" as const
@@ -726,14 +716,6 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                 </div>
               </div>
             )}
-
-            {/* <ContributorLimitSection
-              priceTiers={priceTiers}
-              isMaxContributorsEnabled={isMaxContributorsEnabled}
-              setIsMaxContributorsEnabled={setIsMaxContributorsEnabled}
-              maxContributors={maxContributors}
-              setMaxContributors={setMaxContributors}
-            /> */}
           </div>
         );
 
@@ -786,7 +768,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
             </Button>
 
             <div className="flex gap-3">
-              {onPreview && currentStep === totalSteps && (
+              {/* {onPreview && currentStep === totalSteps && (
                 <Button
                   type="button"
                   variant="outline"
@@ -810,7 +792,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                 >
                   Preview
                 </Button>
-              )}
+              )} */}
 
               {currentStep < totalSteps ? (
                 <Button
