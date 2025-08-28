@@ -100,31 +100,13 @@ export const useCollectionStore = create((set, get) => ({
       const updateData: any = {};
 
       // Only include defined properties in the update
-      if (collectionData.title !== undefined)
-        updateData.title = collectionData.title;
-      if (collectionData.description !== undefined)
-        updateData.description = collectionData.description;
-      if (collectionData.amount !== undefined)
-        updateData.amount = collectionData.amount;
-      if (collectionData.deadline !== undefined)
-        updateData.deadline = collectionData.deadline;
-      if (collectionData.max_participants !== undefined)
-        updateData.max_participants = collectionData.max_participants;
-      if (collectionData.form_fields !== undefined)
-        updateData.form_fields = collectionData.form_fields;
-      if (collectionData.pricing_tiers !== undefined)
-        updateData.pricing_tiers = collectionData.pricing_tiers;
-      if (collectionData.status !== undefined)
-        updateData.status = collectionData.status;
+      const res = await axiosInstance.put("/collections/update/" + id, {
+        id,
+        ...collectionData,
+      });
 
-      const { data, error } = await supabase
-        .from("collections")
-        .update(updateData)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      const { collection: data } = res;
+      console.log("Updated collection data:", data, "----", res);
 
       // Format the updated collection data with proper type casting
       const formattedCollection = {
@@ -164,7 +146,42 @@ export const useCollectionStore = create((set, get) => ({
 
       return formattedCollection;
     } catch (error: any) {
-      console.log(error)
+      console.log(error);
+      set({ error: error.message, isLoading: false });
+      throw error;
+    }
+  },
+
+  updateCollectionStatus: async (id, newStatus) => {
+    set({ isLoading: true, error: null });
+    try {
+      const res = await axiosInstance.put("/collections/status/" + id, {
+        collectionId: id,
+        newStatus,
+      });
+
+      // Update the collection status in the state
+      set((state) => {
+        const updatedCollections = state.collections.map((collection) =>
+          collection.id === id
+            ? { ...collection, status: newStatus }
+            : collection
+        );
+
+        const updatedCurrentCollection =
+          state.currentCollection?.id === id
+            ? { ...state.currentCollection, status: newStatus }
+            : state.currentCollection;
+
+        return {
+          collections: updatedCollections,
+          currentCollection: updatedCurrentCollection,
+          isLoading: false,
+        };
+      });
+
+      return res;
+    } catch (error: any) {
       set({ error: error.message, isLoading: false });
       throw error;
     }
