@@ -333,6 +333,7 @@ const CollectionDetailsPage: React.FC = () => {
             <CollectionManagementMenu
               collectionId={id as string}
               onEditClick={handleEditCollection}
+              currentStatus={currentCollection.status || 'active'}
               onDeleteSuccess={handleCollectionDeleted}
             />
           </div>

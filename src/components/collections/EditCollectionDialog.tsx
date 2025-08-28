@@ -22,6 +22,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useCollectionStore } from '@/store';
 
 interface ContributionField {
   id: string;
@@ -81,6 +82,8 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
     initialData.price_tiers || []
   );
   const [isLoading, setIsLoading] = useState(false);
+
+  const { updateCollection } = useCollectionStore()
 
   // Check if collection has contributions to determine what can be edited
   const hasContributions = (initialData.total_contributions || 0) > 0;
@@ -153,22 +156,20 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         title,
         description,
         deadline: deadlineISO,
-        fee_bearer: feeBearerState,
+        collectionType,
+        // fee_bearer: feeBearerState,
         max_contributions: collectionType === 'flat' ? (maxContributions || null) : null,
-        code_prefix: codePrefix || null,
+        // code_prefix: codePrefix || null,
         contributions_fields: contributionFields.length > 0 ? contributionFields : null,
         price_tiers: collectionType === 'tiered' ? priceTiers : null,
         updated_at: new Date().toISOString()
       };
 
-      const { error } = await supabase
-        .from('collections')
-        .update(updateData)
-        .eq('id', collectionId);
+      console.log(updateData, 'updating collection with ID:', collectionId);
 
-      if (error) {
-        throw error;
-      }
+
+      const res = updateCollection(collectionId, updateData)
+      console.log(res);
 
       toast.success('Collection updated successfully');
       onOpenChange(false);
@@ -261,7 +262,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
-            <div className="grid gap-2">
+            {/* <div className="grid gap-2">
               <Label htmlFor="feeBearer">Fee Bearer</Label>
               <Select value={feeBearerState} onValueChange={setFeeBearerState}>
                 <SelectTrigger>
@@ -272,7 +273,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
                   <SelectItem value="organizer">Organizer pays fees</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div> */}
 
             {collectionType === 'flat' && (
               <div className="grid gap-2">
@@ -343,7 +344,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
               </div>
             )}
 
-            <div className="grid gap-2">
+            {/* <div className="grid gap-2">
               <Label htmlFor="codePrefix">Code Prefix</Label>
               <Input
                 id="codePrefix"
@@ -352,7 +353,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
                 placeholder="Optional prefix for contributor codes (e.g., EVENT-)"
                 maxLength={10}
               />
-            </div>
+            </div> */}
           </TabsContent>
 
           <TabsContent value="fields" className="space-y-4">

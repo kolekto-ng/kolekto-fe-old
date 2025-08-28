@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { MoreVertical, Edit, Trash2, Pause, Play, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useCollectionStore } from '@/store';
 
 interface CollectionManagementMenuProps {
   collectionId: string;
@@ -44,6 +45,8 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const { updateCollectionStatus } = useCollectionStore();
 
   const handleDeleteCollection = async () => {
     if (!collectionId) return;
@@ -69,15 +72,13 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
   };
 
   const handleUpdateStatus = async (newStatus: 'active' | 'paused' | 'closed') => {
+    console.log(collectionId, newStatus, 'updating status');
+
     if (!collectionId) return;
     setIsUpdatingStatus(true);
     try {
-      const { error } = await supabase
-        .from('collections')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', collectionId);
 
-      if (error) throw error;
+      const res = await updateCollectionStatus(collectionId, newStatus);
 
       toast.success(
         newStatus === 'paused'

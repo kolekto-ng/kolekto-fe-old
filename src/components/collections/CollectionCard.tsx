@@ -11,7 +11,7 @@ interface CollectionCardProps {
   description?: string;
   amount: number;
   deadline: string;
-  status: 'active' | 'expired' | 'completed';
+  status: 'active' | 'expired' | 'paused' | 'completed';
   type: 'flat' | 'tier';
   participantsCount: number;
   maxParticipants?: number;
@@ -36,6 +36,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
 }) => {
   const statusColors = {
     active: 'bg-green-100 text-green-800',
+    paused: 'bg-blue-100 text-blue-800',
     expired: 'bg-red-100 text-red-800',
     completed: 'bg-blue-100 text-blue-800'
   };
@@ -43,8 +44,10 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   const deadlineDate = new Date(deadline);
   const now = new Date();
   // Determine status based on deadline
-  let computedStatus: 'active' | 'expired' | 'completed' = status;
-  if (status !== 'completed') {
+  let computedStatus: 'active' | 'paused' | 'expired' | 'completed' = status;
+  if (status === 'paused') {
+    computedStatus = 'paused';
+  } else if (status !== 'completed' || status !== 'paused') {
     computedStatus = deadlineDate > now ? 'active' : 'expired';
   }
 
@@ -76,7 +79,9 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
               {type === 'flat' ? 'Fixed' : 'Tier'}
             </Badge>
             <Badge className={statusColors[computedStatus]}>
-              {computedStatus === 'active' ? 'Active' : computedStatus === 'expired' ? 'Expired' : 'Completed'}
+              {computedStatus === 'paused' ? 'Paused' : ''}
+              {computedStatus === 'active' ? 'Active' : ''}
+              {computedStatus === 'expired' ? 'Expired' : ''}
             </Badge>
           </div>
         </div>
