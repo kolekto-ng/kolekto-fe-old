@@ -262,10 +262,31 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
     setIsLoading(true);
 
     try {
-      const totalAmount = selectedAmount;
-      console.log(totalAmount, 'totalAmount');
 
       // Use new payment flow if amountBreakdown exists (second version)
+      let payableAmount = selectedAmount;
+
+      console.log(selectedAmount, payableAmount, 'selectedAmount');
+      if (props?.fee_bearer == "contributor" && amountBreakdown && props.collection?.amount) {
+        payableAmount = amountBreakdown.totalPayable
+      }
+
+      if (pricingTiers && pricingTiers.length > 0) {
+        baseAmount = selectedAmount
+      }
+
+
+      let fees = 0;
+      if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
+        fees = amountBreakdown.totalFees;
+        payableAmount = selectedAmount + fees;
+      }
+      if (props.fee_bearer == "contributor" && pricingTiers) {
+
+        fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
+
+        payableAmount = selectedAmount + fees;
+      }
       if (amountBreakdown || selectedAmount) {
         console.log('paymet initialize');
 
@@ -274,14 +295,14 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
             name: contactInfo.name,
             email: contactInfo.email,
             phoneNumber: contactInfo.phone,
-            amount: totalAmount,
+            amount: payableAmount,
             contributionInformation: participants.map((participant) => {
 
               if (pricingTiers && pricingTiers.length > 0) {
                 return ({
                   ...participant.data,
                   Tier: selectedTier,
-                  TierAmount: pricingTiers.find(t => t.name === selectedTier)?.price || selectedAmount
+                  TierAmount: payableAmount
                 });
               }
 
@@ -296,11 +317,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
           fullName: contactInfo.name,
           email: contactInfo.email,
           phoneNumber: contactInfo.phone,
-          amount: selectedAmount,
-
-          // selectedAmount !== amountBreakdown?.totalPayable
-          //   ? amountBreakdown?.totalFees + totalAmount
-          //   : selectedAmount,
+          amount: payableAmount,
           collectionId,
           callback_url: `${window.location.origin}/payment/verify`,
         };
@@ -315,43 +332,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
 
         window.location.href = paymentResponse.authorization_url;
       }
-      // else {
-      //   // Use legacy payment flow (first version)
-      //   const contributionData = {
-      //     collection_id: collectionId,
-      //     contributor_id: 'anonymous',
-      //     contributor_name: contactInfo.name,
-      //     contributor_email: contactInfo.email,
-      //     contributor_phone: contactInfo.phone,
-      //     amount: totalAmount,
-      //     payment_method: 'card',
-      //     status: 'pending',
-      //     receipt_details: {
-      //       ...participants[0]?.data,
-      //       selectedTier: selectedTier || 'Standard'
-      //     },
-      //     contact_info: {
-      //       name: contactInfo.name,
-      //       email: contactInfo.email,
-      //       phone: contactInfo.phone
-      //     }
-      //   };
 
-      //   const contribution = await createContribution(contributionData);
-
-      //   const paymentData = await initiatePayment({
-      //     email: contactInfo.email,
-      //     amount: totalAmount * 100, // Convert to kobo
-      //     metadata: {
-      //       collection_id: collectionId,
-      //       contribution_id: contribution.id,
-      //       contributor_name: contactInfo.name,
-      //       custom_fields: participants[0]?.data
-      //     }
-      //   });
-
-      //   window.location.href = paymentData.authorization_url;
-      // }
     } catch (error: any) {
       console.error("Payment error:", error);
       setIsLoading(false);

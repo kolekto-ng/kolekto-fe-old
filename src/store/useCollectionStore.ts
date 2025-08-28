@@ -164,6 +164,7 @@ export const useCollectionStore = create((set, get) => ({
 
       return formattedCollection;
     } catch (error: any) {
+      console.log(error)
       set({ error: error.message, isLoading: false });
       throw error;
     }
