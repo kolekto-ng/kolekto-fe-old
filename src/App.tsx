@@ -25,6 +25,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 import AOS from 'aos';
 import 'aos/dist/aos.css';
+import WhatsAppButton from "./components/WhatsappFloatButton";
 // Create query client outside of the component to avoid React hooks issues
 
 // Protected route component
@@ -106,6 +107,7 @@ const App = () => {
       <Toaster />
       <Sonner />
       <AuthenticatedApp />
+      <WhatsAppButton />
       {/* <AuthSessionWatcher /> */}
     </TooltipProvider>
   );

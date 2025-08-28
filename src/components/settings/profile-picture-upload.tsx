@@ -1,5 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera } from 'lucide-react';
+import { useAuthStore } from '@/store';
+import { axiosInstance } from '@/utils/axios';
+import { useSettings } from '@/store/useSettings';
 
 // Avatar Components
 const Avatar = ({ className, children }) => (
@@ -49,9 +52,66 @@ const Button = ({ children, className = "", size = "default", variant = "default
 };
 
 export default function ProfilePictureUpload() {
-  const [profileImage, setProfileImage] = useState(null);
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+  const { user } = useAuthStore() as any;
+  const [profileImage, setProfileImage] = useState(null);
+  const { profile, getProfile } = useSettings()
+
+  let userId = user.id
+  useEffect(() => {
+    (async () => {
+      const res = await getProfile()
+      console.log(res, res);
+
+      setProfileImage(profile?.avatar_url)
+
+    })()
+    console.log(profile, 'res');
+
+  }, [profile?.avatar_url])
+
+  console.log(profile?.avatar_url, 'user avatar');
+
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true);
+      if (!e.target.files || e.target.files.length === 0) {
+        throw new Error('Please select a file');
+      }
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}.${fileExt}`;
+      const filePath = `${userId}/${fileName}`;
+
+
+      const formData = new FormData();
+      formData.append('avatar', file); // 'file' should match your server's expected field name
+      formData.append('additionalData', JSON.stringify({ key: 'value' }));
+
+      try {
+        const response = await axiosInstance.post('settings/upload-avatar', formData);
+        console.log(response, 'avatar image');
+
+        setProfileImage(profile.avatar_url)
+        setUploading(false)
+        // return response.data;
+      } catch (error) {
+        console.error('Upload error:', error);
+        throw error;
+      }
+
+      // Delete existing avatar if any
+      // await supabase.storage.from('avatars').remove([filePath]);
+
+    } catch (error) {
+      alert('Upload failed: ' + error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
@@ -119,7 +179,7 @@ export default function ProfilePictureUpload() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        onChange={handleImageUpload}
+        onChange={handleUpload}
         className="hidden"
       />
 

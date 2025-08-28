@@ -374,6 +374,7 @@ import {
   X,
   CreditCard
 } from 'lucide-react';
+import second from '../settings/comprehensive-kyc-system.js'
 
 const VERIFIED = 'verified';
 const PENDING = 'pending';
@@ -389,6 +390,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DocumentUploadForm } from './forms/DocumentUploadForm';
+import ComprehensiveKYC from '../settings/comprehensive-kyc-system.js';
 
 // BVN Verification Form Component
 const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
@@ -698,15 +701,15 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
 };
 
 // Mock components for other forms (replace with your actual imports)
-const DocumentUploadForm = ({ open, onOpenChange, type, onSuccess }) => null;
-const ComprehensiveKYC = () => null;
+// const DocumentUploadForm = ({ open, onOpenChange, type, onSuccess }) => null;
+// const ComprehensiveKYC = () => null;
 
 const KYCVerificationTab = () => {
   const [showBVNForm, setShowBVNForm] = useState(false);
   const [showIdentityForm, setShowIdentityForm] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [kycData, setKycData] = useState({
-    overallStatus: 'pending', // 'pending', 'verified', 'rejected'
+    overallStatus: 'rejected', // 'pending', 'verified', 'rejected'
     completionPercentage: 75,
     bvnVerification: {
       status: PENDING,
@@ -717,14 +720,14 @@ const KYCVerificationTab = () => {
     identityVerification: {
       status: PENDING,
       documents: [
-        // { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
+        { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
         // { type: 'Passport Photo', status: PENDING, uploadedAt: '2024-01-15' }
       ]
     },
     addressVerification: {
-      status: PENDING,
+      status: REJECTED,
       documents: [
-        // { type: 'Utility Bill', status: PENDING, uploadedAt: '2024-01-16' }
+        { type: 'Utility Bill', status: REJECTED, uploadedAt: '2024-01-16' }
       ]
     },
     phoneVerification: {
@@ -1143,7 +1146,6 @@ const KYCVerificationTab = () => {
         }}
       />
 
-      {/* <ComprehensiveKYC /> */}
     </div>
   );
 };

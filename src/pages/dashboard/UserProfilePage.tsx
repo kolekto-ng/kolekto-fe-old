@@ -18,21 +18,21 @@ const ProfilePage: React.FC = () => {
 
       <Tabs defaultValue="personal" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
-          {/* <TabsTrigger value="personal">Personal Info</TabsTrigger>
+          <TabsTrigger value="personal">Personal Info</TabsTrigger>
           {!kycComplete && (
             <TabsTrigger value="kyc">KYC Verification</TabsTrigger>
-          )} */}
+          )}
         </TabsList>
 
         <TabsContent value="personal">
           <PersonalInfoTab kycStatus={kycStatus} />
         </TabsContent>
 
-        {/* {!kycComplete && (
+        {!kycComplete && (
           <TabsContent value="kyc">
             <KYCVerificationTab />
           </TabsContent>
-        )} */}
+        )}
       </Tabs>
     </div>
   );
