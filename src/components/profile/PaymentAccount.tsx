@@ -23,6 +23,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useSettings } from "@/store/useSettings";
+import { axiosInstance } from "@/utils/axios";
 
 // Make sure to set this in your environment variables
 const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_KEY; // For Vite
@@ -32,21 +34,20 @@ export default function PaymentAccounts() {
     const [open, setOpen] = useState(false);
     const [banks, setBanks] = useState<{ name: string; code: string }[]>([]);
     const [bankCode, setBankCode] = useState("");
+    const [bankName, setBankName] = useState("");
     const [accountNumber, setAccountNumber] = useState("");
     const [accountName, setAccountName] = useState("");
-    const [loading, setLoading] = useState(false);
+    // const [loading, setLoading] = useState(false);
     const [verified, setVerified] = useState(false);
+    const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts } = useSettings()
 
     // Fetch bank list from Paystack
     useEffect(() => {
         const fetchBanks = async () => {
+
             try {
-                const res = await fetch("https://api.paystack.co/bank?currency=NGN", {
-                    headers: {
-                        Authorization: `Bearer ${PAYSTACK_KEY}`,
-                    },
-                });
-                const data = await res.json();
+
+                const data = await getBanks()
                 if (data.status) {
                     setBanks(data.data);
                 } else {
@@ -60,22 +61,17 @@ export default function PaymentAccounts() {
         if (open) fetchBanks();
     }, [open]);
 
-    const PAYSTACK_KEY = 'sk_test_bf87f096f3bb69d2a2cca922e44a93890ffaf758'
+    useEffect(() => {
+
+        getPayoutAccounts()
+    }, [payoutAccounts])
 
     // Verify account via Paystack
-    const verifyAccount = async () => {
-        setLoading(true);
+    const handleVerifyAccount = async () => {
         setVerified(false);
         try {
-            const res = await fetch(
-                `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${PAYSTACK_KEY}`,
-                    },
-                }
-            );
-            const data = await res.json();
+
+            const data = await verifyAccount({ accountNumber, bankCode })
             if (data.status) {
                 setAccountName(data.data.account_name);
                 setVerified(true);
@@ -84,16 +80,20 @@ export default function PaymentAccounts() {
             }
         } catch (err) {
             console.error(err);
-        } finally {
-            setLoading(false);
         }
     };
 
     const saveAccount = () => {
-        console.log({
+
+        axiosInstance.post('/settings/profile/save-account', {
             bankCode,
             accountNumber,
             accountName,
+            bankName
+        })
+
+        console.log({
+
         });
         setOpen(false);
         // Send to backend here
@@ -102,20 +102,38 @@ export default function PaymentAccounts() {
     return (
         <>
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row justify-between items-center">
                     <CardTitle>Payment Accounts</CardTitle>
+                    <Button variant="outline" className="" onClick={() => setOpen(true)}>
+                        Add Payment Method
+                    </Button>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between gap-10">
-                        <p className="text-muted-foreground">
-                            No payment accounts linked yet. Please add your bank account or
-                            payment method.
-                        </p>
-                        <Button variant="outline" className="mt-4" onClick={() => setOpen(true)}>
-                            Add Payment Method
-                        </Button>
-                    </div>
-                </CardContent>
+                {payoutAccounts.length >= 1 ? <CardContent>
+                    {payoutAccounts.map((account, i) => {
+                        console.log(account, 'account');
+
+                        return (
+                            <div className="" key={i}>
+                                {account.account_name}
+                                {account?.bank_name}
+                                {account?.account_last4}
+                            </div>
+                        )
+
+
+                    })}
+                </CardContent> :
+                    <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between gap-10">
+                            <p className="text-muted-foreground">
+                                No payment accounts linked yet. Please add your bank account or
+                                payment method.
+                            </p>
+
+                        </div>
+                    </CardContent>
+                }
+
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
@@ -130,7 +148,11 @@ export default function PaymentAccounts() {
                     <div className="space-y-4">
                         <div>
                             <Label>Bank Name</Label>
-                            <Select onValueChange={setBankCode}>
+                            <Select onValueChange={(value) => {
+                                setBankCode(value); // store code
+                                const selected = banks.find((b) => b.code === value);
+                                setBankName(selected?.name || "");
+                            }}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select a bank" />
                                 </SelectTrigger>
@@ -167,7 +189,7 @@ export default function PaymentAccounts() {
                     <DialogFooter>
                         {!verified ? (
                             <Button
-                                onClick={verifyAccount}
+                                onClick={handleVerifyAccount}
                                 disabled={!bankCode || accountNumber.length !== 10 || loading}
                             >
                                 {loading ? "Verifying..." : "Verify Account"}
@@ -177,7 +199,7 @@ export default function PaymentAccounts() {
                         )}
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
         </>
     );
 }

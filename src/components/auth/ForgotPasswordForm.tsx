@@ -18,12 +18,12 @@ const ForgotPasswordForm: React.FC = () => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      
+
       if (error) {
         setError(error.message);
         toast.error('Failed to send reset link');
@@ -50,7 +50,7 @@ const ForgotPasswordForm: React.FC = () => {
         </div>
         <p className="text-sm text-gray-600">
           Didn't receive the email? Check your spam folder or{" "}
-          <button 
+          <button
             onClick={() => setIsSubmitted(false)}
             className="text-kolekto hover:underline"
           >
@@ -73,7 +73,7 @@ const ForgotPasswordForm: React.FC = () => {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      
+
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
@@ -85,9 +85,9 @@ const ForgotPasswordForm: React.FC = () => {
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
-      <Button 
-        type="submit" 
-        className="w-full bg-kolekto hover:bg-kolekto/90" 
+      <Button
+        type="submit"
+        className="w-full bg-kolekto hover:bg-kolekto/90"
         disabled={isLoading}
       >
         {isLoading ? "Sending..." : "Send Reset Link"}
