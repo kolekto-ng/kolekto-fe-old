@@ -8,13 +8,16 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2 } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as RechartsBarChart } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +28,8 @@ const CollectionDetailsPage: React.FC = () => {
   const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const { user } = useAuthStore();
 
   const { fetchCollectionById, currentCollection } = useCollectionStore();
@@ -61,9 +66,41 @@ const CollectionDetailsPage: React.FC = () => {
     setIsShareDrawerOpen(true);
   };
 
+  // Function to apply filters to contributions
+  const applyFilters = (data: any[]) => {
+    if (Object.keys(filters).length === 0 && !searchTerm) return data;
+    
+    return data.filter(contribution => {
+      // Apply search term filter
+      if (searchTerm) {
+        const matchesSearch = 
+          (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        if (!matchesSearch) return false;
+      }
+      
+      // Apply field filters
+      for (const [field, value] of Object.entries(filters)) {
+        if (value) {
+          const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
+          if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
+    });
+  };
+
   const exportToCSV = () => {
+    // Apply filters to get the data to export
     const paidContributions = (contributions || []).filter(c => c.status === "paid");
-    if (paidContributions.length === 0) {
+    const filteredData = applyFilters(paidContributions);
+    
+    if (filteredData.length === 0) {
       toast.info("No paid contributors data to export");
       return;
     }
@@ -71,7 +108,7 @@ const CollectionDetailsPage: React.FC = () => {
     // 1. Collect all unique dynamic fields from contributor_information
     const allDynamicFields = Array.from(
       new Set(
-        paidContributions.flatMap(contributor =>
+        filteredData.flatMap(contributor =>
           (contributor.contributor_information || []).flatMap(info =>
             Object.keys(info)
           )
@@ -80,7 +117,7 @@ const CollectionDetailsPage: React.FC = () => {
     );
 
     // 2. Check if any contributor has a unique code
-    const hasUniqueCode = paidContributions.some(
+    const hasUniqueCode = filteredData.some(
       c => c.contributor_unique_code
     );
 
@@ -92,8 +129,7 @@ const CollectionDetailsPage: React.FC = () => {
 
     let csvContent = headers.join(',') + '\n';
 
-    paidContributions.forEach((contribution) => {
-      const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
+    filteredData.forEach((contribution) => {
       const row = [
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
@@ -137,7 +173,6 @@ const CollectionDetailsPage: React.FC = () => {
       toast.success('Withdrawal request submitted successfully!');
       setTimeout(() => {
         window.location.reload();
-
       }, 2000);
     } catch (error: any) {
       console.error('Withdrawal error:', error);
@@ -192,14 +227,10 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   // Only show paid contributors
-  const filteredContributors = (contributions || []).filter(
-    (contribution) =>
-      (contribution.status === "paid") &&
-      (
-        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-  ) || [];
+  const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
+  
+  // Apply filters to get the final list of contributors to display
+  const filteredContributors = applyFilters(paidContributions);
 
   // Group contributions by date for chart data
   const contributionsByDate = contributions?.reduce((acc, curr) => {
@@ -220,7 +251,7 @@ const CollectionDetailsPage: React.FC = () => {
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
 
-  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
+  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
 
   if (!currentCollection) {
     return (
@@ -237,20 +268,39 @@ const CollectionDetailsPage: React.FC = () => {
   // 1. Collect all unique dynamic fields from contributor_information
   const allDynamicFields = Array.from(
     new Set(
-      filteredContributors.flatMap(contributor => {
-
+      paidContributions.flatMap(contributor => {
         return (contributor.contributor_information || []).flatMap(info =>
           Object.keys(info)
         )
-      }
-      )
+      })
     )
-  );
+  ).filter(field => field !== "TierAmount");
+
+  console.log(allDynamicFields);
+  console.log(paidContributions)
 
   // 2. Check if any contributor has a unique code
-  const hasUniqueCode = filteredContributors.some(
+  const hasUniqueCode = paidContributions.some(
     c => c.contributor_unique_code
   );
+
+  // Function to handle filter changes
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => {
+      if (value === '') {
+        const newFilters = { ...prev };
+        delete newFilters[field];
+        return newFilters;
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  // Function to clear all filters
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchTerm('');
+  };
 
   return (
     <div className="space-y-6">
@@ -484,13 +534,22 @@ const CollectionDetailsPage: React.FC = () => {
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle>Contributors & Input Data</CardTitle>
               <div className="flex gap-2 w-full sm:w-auto">
-                <input
+                <Input
                   type="text"
                   placeholder="Search contributors..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center whitespace-nowrap"
+                >
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
                 <Button
                   onClick={exportToCSV}
                   variant="outline"
@@ -502,68 +561,113 @@ const CollectionDetailsPage: React.FC = () => {
                 </Button>
               </div>
             </CardHeader>
+            
+            {/* Filter section */}
+            {showFilters && (
+              <div className="px-6 py-4 border-t border-b bg-gray-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-medium">Filter Contributors</h3>
+                  <div className="flex items-center gap-2">
+                    {(Object.keys(filters).length > 0 || searchTerm) && (
+                      <Button
+                        onClick={clearAllFilters}
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-8"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Clear All
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => setShowFilters(false)}
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {allDynamicFields.map(field => (
+                    <div key={field} className="space-y-2">
+                      <label className="text-sm font-medium">{field}</label>
+                      <Input
+                        type="text"
+                        placeholder={`Filter by ${field}`}
+                        value={filters[field] || ''}
+                        onChange={(e) => handleFilterChange(field, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Active filters badges */}
+                {(Object.keys(filters).length > 0 || searchTerm) && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {searchTerm && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        Search: {searchTerm}
+                        <X 
+                          className="h-3 w-3 cursor-pointer" 
+                          onClick={() => setSearchTerm('')}
+                        />
+                      </Badge>
+                    )}
+                    {Object.entries(filters).map(([field, value]) => (
+                      value && (
+                        <Badge key={field} variant="secondary" className="flex items-center gap-1">
+                          {field}: {value}
+                          <X 
+                            className="h-3 w-3 cursor-pointer" 
+                            onClick={() => handleFilterChange(field, '')}
+                          />
+                        </Badge>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
                   <Table className="min-w-[700px]">
                     <TableHeader className='overflow-x-auto'>
                       <TableRow>
-                        {/* <TableHead>Name</TableHead>
-                        <TableHead className="hidden sm:table-cell">Email</TableHead>
-                        <TableHead className="hidden md:table-cell">Amount</TableHead>
-                        <TableHead className="hidden md:table-cell">Date</TableHead>
-                        <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
-                        {/* Render dynamic fields */}
                         {allDynamicFields.map(field => (
                           <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
-                        {/* Unique code column if present */}
                         {hasUniqueCode && (
                           <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
-                        {/* <TableHead className="lg:table-cell">Status</TableHead> */}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredContributors.map(contributor => (
                         <TableRow key={contributor.id}>
-                          {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
-                          <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
-                          <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {contributor.formattedDate ||
-                              new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
-                          {/* Render dynamic fields */}
                           {allDynamicFields.map(field => (
                             <TableCell key={field} className="lg:table-cell">
                               {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
-                          {/* Unique code column if present */}
                           {hasUniqueCode && (
                             <TableCell className="lg:table-cell">
                               {contributor.contributor_unique_code || ''}
                             </TableCell>
                           )}
-                          {/* <TableCell className="hidden lg:table-cell">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
-                              ? 'bg-green-100 text-green-800'
-                              : contributor.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                              }`}>
-                              {contributor.status}
-                            </span>
-                          </TableCell> */}
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
-                    {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
+                    {searchTerm || Object.keys(filters).length > 0 
+                      ? 'No contributors match your filters' 
+                      : 'No contributors yet'}
                   </div>
                 )}
               </div>
@@ -585,40 +689,6 @@ const CollectionDetailsPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )} */}
-
               <h3 className="font-medium mb-4">Recent Contributions</h3>
               {filteredContributors.length > 0 ? (
                 <div className="space-y-4">
@@ -665,85 +735,6 @@ const CollectionDetailsPage: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* <TabsContent value="activity" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Contribution Activity</CardTitle>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Available for withdrawal</div>
-                <div className="font-bold text-lg">₦{withdrawableAmount.toLocaleString()}</div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )}
-
-              <h3 className="font-medium mb-4">Recent Contributions</h3>
-              {contributions && contributions.length > 0 ? (
-                <div className="space-y-4">
-                  {contributions.slice(0, 5).map((contributor) => (
-                    <div key={contributor.id} className="flex justify-between items-center border-b pb-2">
-                      <div>
-                        <div className="font-medium">{contributor.contributor_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                        </div>
-                      </div>
-                      <div className="font-bold">₦{contributor.amount?.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-gray-500">
-                  No contributions yet
-                </div>
-              )}
-
-              <div className="mt-6">
-                <Button
-                  onClick={handleWithdraw}
-                  className="w-full bg-kolekto hover:bg-kolekto/90"
-                  disabled={withdrawableAmount <= 0}
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Withdraw Funds
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent> */}
       </Tabs>
 
       <Drawer open={isShareDrawerOpen} onOpenChange={setIsShareDrawerOpen}>
