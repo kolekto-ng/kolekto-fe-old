@@ -336,6 +336,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       toast.error("An unexpected error occurred. Please try again.");
     }
 
+
     setIsLoading(false);
   };
 
