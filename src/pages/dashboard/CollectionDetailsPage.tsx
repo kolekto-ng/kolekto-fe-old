@@ -20,6 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +41,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
   const { user } = useAuthStore();
 
   const { fetchCollectionById, currentCollection } = useCollectionStore();
@@ -84,33 +93,67 @@ const CollectionDetailsPage: React.FC = () => {
     toast.success('Collection updated successfully');
   };
 
+  // Get available tiers from the collection
+  const availableTiers = currentCollection?.price_tiers || [];
+
+  // Function to get tier name from amount
+  const getTierNameFromAmount = (amount: number) => {
+    const tier = availableTiers.find(t => t.price === amount);
+    return tier ? tier.name : `₦${amount}`;
+  };
+
+  // Function to handle tier filter changes
+  const handleTierFilterChange = (tierName: string, checked: boolean) => {
+    setSelectedTiers(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(tierName);
+      } else {
+        newSet.delete(tierName);
+      }
+      return newSet;
+    });
+  };
+
   // Function to apply filters to contributions
   const applyFilters = (data: any[]) => {
-    if (Object.keys(filters).length === 0 && !searchTerm) return data;
+    let filteredData = data;
 
-    return data.filter(contribution => {
-      // Apply search term filter
-      if (searchTerm) {
+    // Apply search term filter
+    if (searchTerm) {
+      filteredData = filteredData.filter(contribution => {
         const matchesSearch =
           (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesSearch;
+      });
+    }
 
-        if (!matchesSearch) return false;
-      }
+    // Apply tier filter
+    if (selectedTiers.size > 0) {
+      filteredData = filteredData.filter(contribution => {
+        const tierName = getTierNameFromAmount(contribution.amount);
+        return selectedTiers.has(tierName);
+      });
+    }
 
-      // Apply field filters
-      for (const [field, value] of Object.entries(filters)) {
-        if (value) {
-          const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
-          if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
-            return false;
+    // Apply field filters
+    if (Object.keys(filters).length > 0) {
+      filteredData = filteredData.filter(contribution => {
+        for (const [field, value] of Object.entries(filters)) {
+          if (value) {
+            const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
+            if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
+              return false;
+            }
           }
         }
-      }
+        return true;
+      });
+    }
 
-      return true;
-    });
+    return filteredData;
   };
 
   const exportToCSV = () => {
@@ -132,16 +175,17 @@ const CollectionDetailsPage: React.FC = () => {
           )
         )
       )
-    );
+    ).filter(field => field !== "TierAmount");
 
     // 2. Check if any contributor has a unique code
     const hasUniqueCode = filteredData.some(
       c => c.contributor_unique_code
     );
 
-    // 3. Define headers for CSV
+    // 3. Define headers for CSV (include Tier if it's a tiered collection)
     const headers = [
       ...allDynamicFields,
+      ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
       ...(hasUniqueCode ? ['Unique Code'] : []),
     ];
 
@@ -152,6 +196,7 @@ const CollectionDetailsPage: React.FC = () => {
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
+        ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
       ];
       csvContent += row.map(val =>
@@ -271,6 +316,16 @@ const CollectionDetailsPage: React.FC = () => {
 
   const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
 
+  // Function to clear all filters
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchTerm('');
+    setSelectedTiers(new Set());
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0;
+
   if (!currentCollection) {
     return (
       <div className="py-10 text-center">
@@ -312,12 +367,6 @@ const CollectionDetailsPage: React.FC = () => {
       }
       return { ...prev, [field]: value };
     });
-  };
-
-  // Function to clear all filters
-  const clearAllFilters = () => {
-    setFilters({});
-    setSearchTerm('');
   };
 
   return (
@@ -565,15 +614,57 @@ const CollectionDetailsPage: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center whitespace-nowrap"
-                >
-                  <Filter className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
+
+                {/* Tier Filter Dropdown - Only show for tiered collections */}
+                {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
+                        <Filter className="mr-2 h-4 w-4" />
+                        Filter by Tier
+                        {selectedTiers.size > 0 && (
+                          <Badge variant="secondary" className="ml-2">
+                            {selectedTiers.size}
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by Tier</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {availableTiers.map((tier) => (
+                        <DropdownMenuCheckboxItem
+                          key={tier.name}
+                          checked={selectedTiers.has(tier.name)}
+                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, checked)}
+                        >
+                          {tier.name} - ₦{tier.price.toLocaleString()}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={false}
+                        onCheckedChange={() => setSelectedTiers(new Set())}
+                        className="text-red-600"
+                      >
+                        Clear All
+                      </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+                {hasActiveFilters && (
+                  <Button
+                    onClick={clearAllFilters}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center whitespace-nowrap text-red-600 hover:text-red-700"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Clear Filters
+                  </Button>
+                )}
+
                 <Button
                   onClick={exportToCSV}
                   variant="outline"
@@ -586,76 +677,6 @@ const CollectionDetailsPage: React.FC = () => {
               </div>
             </CardHeader>
 
-            {/* Filter section */}
-            {showFilters && (
-              <div className="px-6 py-4 border-t border-b bg-gray-50">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium">Filter Contributors</h3>
-                  <div className="flex items-center gap-2">
-                    {(Object.keys(filters).length > 0 || searchTerm) && (
-                      <Button
-                        onClick={clearAllFilters}
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-8"
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Clear All
-                      </Button>
-                    )}
-                    <Button
-                      onClick={() => setShowFilters(false)}
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-8"
-                    >
-                      Close
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {allDynamicFields.map(field => (
-                    <div key={field} className="space-y-2">
-                      <label className="text-sm font-medium">{field}</label>
-                      <Input
-                        type="text"
-                        placeholder={`Filter by ${field}`}
-                        value={filters[field] || ''}
-                        onChange={(e) => handleFilterChange(field, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Active filters badges */}
-                {(Object.keys(filters).length > 0 || searchTerm) && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {searchTerm && (
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        Search: {searchTerm}
-                        <X
-                          className="h-3 w-3 cursor-pointer"
-                          onClick={() => setSearchTerm('')}
-                        />
-                      </Badge>
-                    )}
-                    {Object.entries(filters).map(([field, value]) => (
-                      value && (
-                        <Badge key={field} variant="secondary" className="flex items-center gap-1">
-                          {field}: {value}
-                          <X
-                            className="h-3 w-3 cursor-pointer"
-                            onClick={() => handleFilterChange(field, '')}
-                          />
-                        </Badge>
-                      )
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
@@ -665,6 +686,9 @@ const CollectionDetailsPage: React.FC = () => {
                         {allDynamicFields.map(field => (
                           <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
+                        {currentCollection?.type === 'tiered' && (
+                          <TableHead className="lg:table-cell">Tier</TableHead>
+                        )}
                         {hasUniqueCode && (
                           <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
@@ -678,6 +702,13 @@ const CollectionDetailsPage: React.FC = () => {
                               {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
+                          {currentCollection?.type === 'tiered' && (
+                            <TableCell className="lg:table-cell">
+                              <Badge variant="outline">
+                                {getTierNameFromAmount(contributor.amount)}
+                              </Badge>
+                            </TableCell>
+                          )}
                           {hasUniqueCode && (
                             <TableCell className="lg:table-cell">
                               {contributor.contributor_unique_code || ''}
@@ -689,12 +720,34 @@ const CollectionDetailsPage: React.FC = () => {
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
-                    {searchTerm || Object.keys(filters).length > 0
+                    {searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0
                       ? 'No contributors match your filters'
                       : 'No contributors yet'}
                   </div>
                 )}
               </div>
+
+              {/* Filter Summary */}
+              {hasActiveFilters && (
+                <div className="px-4 py-3 bg-gray-50 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">
+                      Showing {filteredContributors.length} of {paidContributions.length} contributors
+                    </span>
+                    <div className="flex gap-2 items-center">
+                      {selectedTiers.size > 0 && (
+                        <div className="flex gap-1">
+                          {Array.from(selectedTiers).map(tier => (
+                            <Badge key={tier} variant="secondary" className="text-xs">
+                              {tier}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -733,8 +786,15 @@ const CollectionDetailsPage: React.FC = () => {
                             ).toLocaleDateString("en-NG")}
                           </div>
                         </div>
-                        <div className="font-bold">
-                          ₦{contributor.amount?.toLocaleString()}
+                        <div className="text-right">
+                          <div className="font-bold">
+                            ₦{contributor.amount?.toLocaleString()}
+                          </div>
+                          {currentCollection?.type === 'tiered' && (
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {getTierNameFromAmount(contributor.amount)}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     );
@@ -805,16 +865,18 @@ const CollectionDetailsPage: React.FC = () => {
         </DrawerContent>
       </Drawer>
 
-      {currentCollection && (
-        <WithdrawFundsDialog
-          open={isWithdrawDialogOpen}
-          onOpenChange={setIsWithdrawDialogOpen}
-          onComplete={onWithdrawComplete}
-          availableBalance={currentCollection.wallets[0].available_balance || 0}
-          collectionId={id || ''}
-          collectionTitle={currentCollection?.title || ''}
-        />
-      )}
+      {
+        currentCollection && (
+          <WithdrawFundsDialog
+            open={isWithdrawDialogOpen}
+            onOpenChange={setIsWithdrawDialogOpen}
+            onComplete={onWithdrawComplete}
+            availableBalance={currentCollection.wallets[0].available_balance || 0}
+            collectionId={id || ''}
+            collectionTitle={currentCollection?.title || ''}
+          />
+        )
+      }
 
       <EditCollectionDialog
         open={isEditDialogOpen}
@@ -831,7 +893,7 @@ const CollectionDetailsPage: React.FC = () => {
         }}
         onSuccess={handleEditSuccess}
       />
-    </div>
+    </div >
   );
 };
 
