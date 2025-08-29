@@ -52,7 +52,7 @@ interface EditCollectionDialogProps {
     code_prefix?: string;
     contributions_fields?: ContributionField[];
     total_contributions?: number;
-    type?: 'flat' | 'tiered';
+    type?: 'fixed' | 'tiered';
     price_tiers?: PriceTier[];
   };
   onSuccess?: () => void;
@@ -87,7 +87,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 
   // Check if collection has contributions to determine what can be edited
   const hasContributions = (initialData.total_contributions || 0) > 0;
-  const collectionType = initialData.type || 'flat';
+  const collectionType = initialData.type || 'fixed';
 
   useEffect(() => {
     if (open) {
@@ -158,7 +158,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         deadline: deadlineISO,
         collectionType,
         // fee_bearer: feeBearerState,
-        max_contributions: collectionType === 'flat' ? (maxContributions || null) : null,
+        max_contributions: collectionType === 'fixed' ? (maxContributions || null) : null,
         // code_prefix: codePrefix || null,
         contributions_fields: contributionFields.length > 0 ? contributionFields : null,
         price_tiers: collectionType === 'tiered' ? priceTiers : null,
@@ -275,7 +275,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
               </Select>
             </div> */}
 
-            {collectionType === 'flat' && (
+            {collectionType === 'fixed' && (
               <div className="grid gap-2">
                 <Label htmlFor="maxContributions">Maximum Contributions</Label>
                 <Input
