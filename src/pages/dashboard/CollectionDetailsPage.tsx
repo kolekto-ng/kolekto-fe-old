@@ -29,6 +29,66 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+type Status =
+  | "active"
+  | "paused"
+  | "expired"
+  | "completed"
+  | "closed"
+  | "deleted";
+
+interface StatusRule {
+  name: Status;
+  priority: number;
+  check: (ctx: {
+    statusFlag?: Status;
+    totalRaised: number;
+    targetAmount: number;
+    deadlineDate: Date;
+    now: Date;
+  }) => boolean;
+}
+
+const statusRules: StatusRule[] = [
+  { name: "deleted", priority: 100, check: ({ statusFlag }) => statusFlag === "deleted" },
+  { name: "closed", priority: 90, check: ({ statusFlag }) => statusFlag === "closed" },
+  { name: "paused", priority: 80, check: ({ statusFlag }) => statusFlag === "paused" },
+  { name: "completed", priority: 70, check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount },
+  { name: "expired", priority: 60, check: ({ deadlineDate, now }) => deadlineDate <= now },
+  { name: "active", priority: 10, check: () => true },
+];
+
+function computeStatus(ctx: {
+  statusFlag?: Status;
+  totalRaised: number;
+  targetAmount: number;
+  deadlineDate: Date;
+  now?: Date;
+}): Status {
+  const now = ctx.now ?? new Date();
+  return statusRules
+    .sort((a, b) => b.priority - a.priority)
+    .find((rule) => rule.check({ ...ctx, now }))!.name;
+}
+
+const statusColors: Record<Status, string> = {
+  active: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800",
+  expired: "bg-red-100 text-red-800",
+  completed: "bg-blue-100 text-blue-800",
+  closed: "bg-gray-200 text-gray-800",
+  deleted: "bg-gray-400 text-gray-900",
+};
+
+const statusIcons: Record<Status, React.ReactNode> = {
+  active: <CheckCircle className="h-4 w-4 mr-1" />,
+  paused: <AlertCircle className="h-4 w-4 mr-1" />,
+  expired: <TimerOff className="h-4 w-4 mr-1" />,
+  completed: <CheckCircle className="h-4 w-4 mr-1" />,
+  closed: <AlertCircle className="h-4 w-4 mr-1" />,
+  deleted: <AlertCircle className="h-4 w-4 mr-1" />,
+};
+
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -252,7 +312,7 @@ const CollectionDetailsPage: React.FC = () => {
   // Helper to get status string based on deadline
   const getDeadlineStatus = () => {
     if (!currentCollection?.deadline) return currentCollection?.status || "No deadline";
-    return isActiveByDeadline ? "active" : "expired";
+    return currentCollection.status;
   };
 
   // Helper to get status color based on deadline
@@ -261,6 +321,8 @@ const CollectionDetailsPage: React.FC = () => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
+      case 'paused':
+        return 'bg-purple-100 text-purple-800';
       case 'expired':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
@@ -277,6 +339,8 @@ const CollectionDetailsPage: React.FC = () => {
     const status = getDeadlineStatus();
     switch (status) {
       case 'active':
+        return <CheckCircle className="h-4 w-4 mr-1" />;
+      case 'paused':
         return <CheckCircle className="h-4 w-4 mr-1" />;
       case 'expired':
         return <TimerOff className="h-4 w-4 mr-1" />;
@@ -369,15 +433,26 @@ const CollectionDetailsPage: React.FC = () => {
     });
   };
 
+  const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
+  const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
+
+  const computedStatus: Status = computeStatus({
+    statusFlag: currentCollection?.status as Status,
+    totalRaised,
+    targetAmount,
+    deadlineDate,
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
-              {getDeadlineStatusIcon()}
-              {getDeadlineStatus()}
+            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+              {statusIcons[computedStatus]}
+              {computedStatus}
             </span>
             <CollectionManagementMenu
               collectionId={id as string}
@@ -532,9 +607,9 @@ const CollectionDetailsPage: React.FC = () => {
                       </div>
                       <div className="flex justify-between border-b pb-2">
                         <span className="text-gray-600">Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
-                          {getDeadlineStatusIcon()}
-                          {getDeadlineStatus()}
+                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+                          {statusIcons[computedStatus]}
+                          {computedStatus}
                         </span>
                       </div>
                       {currentCollection.max_participants && (
@@ -887,6 +962,7 @@ const CollectionDetailsPage: React.FC = () => {
           description: currentCollection.description || '',
           deadline: currentCollection.deadline,
           type: currentCollection.type,
+          max_contributions: currentCollection.max_contributions,
           price_tiers: currentCollection.price_tiers,
           code_prefix: currentCollection.code_prefix || '',
           contributions_fields: currentCollection.contributions_fields || [],
