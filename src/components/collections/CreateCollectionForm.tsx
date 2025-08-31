@@ -66,37 +66,27 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         paymentGatewayFee: 0,
         totalFees: 0,
         totalPayable: price,
-        kolektoFeePercentage: "3.0%"
+        kolektoFeePercentage: "0.5%"
       };
     }
 
-    let kolektoFeePercentage;
-    if (price < 1000) {
-      kolektoFeePercentage = 0.03;
-    } else if (price < 5000) {
-      kolektoFeePercentage = 0.025;
-    } else if (price < 20000) {
-      kolektoFeePercentage = 0.02;
-    } else {
-      kolektoFeePercentage = 0.015;
-    }
+    // Kolekto fee: 0.5% capped at ₦2,000
+    let kolektoFee = price * 0.005;
+    kolektoFee = Math.min(kolektoFee, 2000);
 
+    // Gateway fee: 1.5% capped at ₦2,000
     let gatewayFee = price * 0.015;
     gatewayFee = Math.min(gatewayFee, 2000);
 
-    const platformFee = price * kolektoFeePercentage;
-    const totalFees = platformFee + gatewayFee;
-
+    const totalFees = kolektoFee + gatewayFee;
     const totalPayable = feeBearer === 'contributor' ? price + totalFees : price;
 
-    const percentageString = `${(kolektoFeePercentage * 100).toFixed(1)}%`;
-
     return {
-      kolektoFee: platformFee,
+      kolektoFee,
       paymentGatewayFee: gatewayFee,
       totalFees,
       totalPayable,
-      kolektoFeePercentage: percentageString
+      kolektoFeePercentage: "0.5%" // always fixed now
     };
   };
 
@@ -106,28 +96,22 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     if (amount && !usePriceTiers) {
       const parsedAmount = parseFloat(amount);
       if (!isNaN(parsedAmount)) {
-        let kolektoFeePercentage;
-        if (parsedAmount < 1000) {
-          kolektoFeePercentage = 0.03;
-        } else if (parsedAmount < 5000) {
-          kolektoFeePercentage = 0.025;
-        } else if (parsedAmount < 20000) {
-          kolektoFeePercentage = 0.02;
-        } else {
-          kolektoFeePercentage = 0.015;
-        }
+        // Kolekto Fee: 0.5% capped at ₦2,000
+        let kolektoFee = parsedAmount * 0.005;
+        kolektoFee = Math.min(kolektoFee, 2000);
 
+        // Gateway Fee: 1.5% capped at ₦2,000
         let gatewayFee = parsedAmount * 0.015;
         gatewayFee = Math.min(gatewayFee, 2000);
 
-        const platformFee = parsedAmount * kolektoFeePercentage;
+        const totalFees = kolektoFee + gatewayFee;
 
-        setKolektoFee(platformFee);
+        setKolektoFee(kolektoFee);
         setPaymentGatewayFee(gatewayFee);
-        setTotalFees(platformFee + gatewayFee);
+        setTotalFees(totalFees);
 
         if (feeBearer === 'contributor') {
-          setTotalPayable(parsedAmount + platformFee + gatewayFee);
+          setTotalPayable(parsedAmount + totalFees);
         } else {
           setTotalPayable(parsedAmount);
         }
@@ -140,15 +124,17 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     }
   }, [amount, feeBearer, usePriceTiers]);
 
+
   const getKolektoFeePercentage = () => {
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount === 0) return "3.0%";
+    if (isNaN(parsedAmount) || parsedAmount <= 0) return 0;
 
-    if (parsedAmount < 1000) return "3.0%";
-    if (parsedAmount < 5000) return "2.5%";
-    if (parsedAmount < 20000) return "2.0%";
-    return "1.5%";
+    let fee = parsedAmount * 0.005; // 0.5%
+    if (fee > 2000) fee = 2000;     // Cap at ₦2,000
+
+    return fee;
   };
+
 
   // Handles validation for each step
 
@@ -416,10 +402,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                 <div className="text-sm">
                   <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
                   <ul className="list-disc pl-5 text-gray-600 space-y-1">
-                    <li>₦0 – ₦999: 3.0% fee</li>
-                    <li>₦1,000 – ₦4,999: 2.5% fee</li>
-                    <li>₦5,000 – ₦19,999: 2.0% fee</li>
-                    <li>₦20,000 and above: 1.5% fee</li>
+
+                    <li>Kolekto fee: 0.5% (capped at ₦2,000)</li>
                     <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
                   </ul>
                 </div>
@@ -621,11 +605,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                                   <span className="font-medium">₦{price.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-700">Kolekto Fee ({fees.kolektoFeePercentage}):</span>
+                                  <span className="text-gray-700">Kolekto Fee 0.5% (capped at ₦2,000):</span>
                                   <span className="font-medium">₦{Math.round(fees.kolektoFee)}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-gray-700">Gateway Fee (1.5%):</span>
+                                  <span className="text-gray-700">Gateway Fee 1.5% (capped at ₦2,000):</span>
                                   <span className="font-medium">₦{Math.round(fees.paymentGatewayFee)}</span>
                                 </div>
                                 <div className="flex justify-between border-t pt-2">
@@ -688,10 +672,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   <div>Base Amount:</div>
                   <div className="text-right font-medium">₦{parseFloat(amount).toLocaleString()}</div>
 
-                  <div>Kolekto Fee ({getKolektoFeePercentage()}):</div>
+                  <div>Kolekto Fee 0.5% (capped at ₦2,000):</div>
                   <div className="text-right">₦{kolektoFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
-                  <div>Payment Gateway (1.5%):</div>
+                  <div>Payment Gateway 1.5% (capped at ₦2,000):</div>
                   <div className="text-right">₦{paymentGatewayFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
 
                   <div className="border-t border-t-slate-300 pt-1 font-medium">Total Fees:</div>
