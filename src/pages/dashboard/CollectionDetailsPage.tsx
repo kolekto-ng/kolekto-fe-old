@@ -680,8 +680,8 @@ const CollectionDetailsPage: React.FC = () => {
         <TabsContent value="contributors" className="mt-6">
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Contributors & Input Data</CardTitle>
-              <div className="flex gap-2 w-full sm:w-auto">
+              <CardTitle>Contributors Details</CardTitle>
+              <div className="flex flex-col md:flex-row gap-2 w-full sm:w-auto">
                 <Input
                   type="text"
                   placeholder="Search contributors..."
@@ -761,9 +761,9 @@ const CollectionDetailsPage: React.FC = () => {
                         {allDynamicFields.map(field => (
                           <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
-                        {currentCollection?.type === 'tiered' && (
+                        {/* {currentCollection?.type === 'tiered' && (
                           <TableHead className="lg:table-cell">Tier</TableHead>
-                        )}
+                        )} */}
                         {hasUniqueCode && (
                           <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
@@ -777,13 +777,13 @@ const CollectionDetailsPage: React.FC = () => {
                               {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
-                          {currentCollection?.type === 'tiered' && (
+                          {/* {currentCollection?.type === 'tiered' && (
                             <TableCell className="lg:table-cell">
                               <Badge variant="outline">
                                 {getTierNameFromAmount(contributor.amount)}
                               </Badge>
                             </TableCell>
-                          )}
+                          )} */}
                           {hasUniqueCode && (
                             <TableCell className="lg:table-cell">
                               {contributor.contributor_unique_code || ''}
