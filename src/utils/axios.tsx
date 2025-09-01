@@ -2,23 +2,28 @@ import { useAuthStore } from "@/store";
 import axios from "axios";
 
 // API configuration following the backend pattern
-const API_BASE_URL = import.meta.env.MODE === 'production'
-  ? import.meta.env.VITE_API_URL || 'https://api.kolekto.com.ng/api'
-  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  import.meta.env.MODE === "production"
+    ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
+    : import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
 // const { session } = useAuthStore()
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
   withCredentials: true, // CRUCIAL: This sends cookies cross-domain
 });
 
 // Add a request interceptor to handle authentication headers
 axiosInstance.interceptors.request.use(
   (config) => {
+
+    // If we're sending FormData (file upload), don't set Content-Type
+    // Let the browser set it automatically with the proper boundary
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
     // Get session from localStorage
     const sessionStr = localStorage.getItem("kolekto-auth-token");
     if (sessionStr) {

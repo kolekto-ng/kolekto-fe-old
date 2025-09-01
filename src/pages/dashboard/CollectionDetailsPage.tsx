@@ -8,13 +8,86 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2 } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as RechartsBarChart } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
+import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type Status =
+  | "active"
+  | "paused"
+  | "expired"
+  | "completed"
+  | "closed"
+  | "deleted";
+
+interface StatusRule {
+  name: Status;
+  priority: number;
+  check: (ctx: {
+    statusFlag?: Status;
+    totalRaised: number;
+    targetAmount: number;
+    deadlineDate: Date;
+    now: Date;
+  }) => boolean;
+}
+
+const statusRules: StatusRule[] = [
+  { name: "deleted", priority: 100, check: ({ statusFlag }) => statusFlag === "deleted" },
+  { name: "closed", priority: 90, check: ({ statusFlag }) => statusFlag === "closed" },
+  { name: "paused", priority: 80, check: ({ statusFlag }) => statusFlag === "paused" },
+  { name: "completed", priority: 70, check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount },
+  { name: "expired", priority: 60, check: ({ deadlineDate, now }) => deadlineDate <= now },
+  { name: "active", priority: 10, check: () => true },
+];
+
+function computeStatus(ctx: {
+  statusFlag?: Status;
+  totalRaised: number;
+  targetAmount: number;
+  deadlineDate: Date;
+  now?: Date;
+}): Status {
+  const now = ctx.now ?? new Date();
+  return statusRules
+    .sort((a, b) => b.priority - a.priority)
+    .find((rule) => rule.check({ ...ctx, now }))!.name;
+}
+
+const statusColors: Record<Status, string> = {
+  active: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800",
+  expired: "bg-red-100 text-red-800",
+  completed: "bg-blue-100 text-blue-800",
+  closed: "bg-gray-200 text-gray-800",
+  deleted: "bg-gray-400 text-gray-900",
+};
+
+const statusIcons: Record<Status, React.ReactNode> = {
+  active: <CheckCircle className="h-4 w-4 mr-1" />,
+  paused: <AlertCircle className="h-4 w-4 mr-1" />,
+  expired: <TimerOff className="h-4 w-4 mr-1" />,
+  completed: <CheckCircle className="h-4 w-4 mr-1" />,
+  closed: <AlertCircle className="h-4 w-4 mr-1" />,
+  deleted: <AlertCircle className="h-4 w-4 mr-1" />,
+};
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,12 +97,18 @@ const CollectionDetailsPage: React.FC = () => {
   const [showQR, setShowQR] = useState(false);
   const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
   const { user } = useAuthStore();
 
   const { fetchCollectionById, currentCollection } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
+
+  console.log(currentCollection, 'current coll');
 
   useEffect(() => {
     if (id) {
@@ -58,9 +137,91 @@ const CollectionDetailsPage: React.FC = () => {
     setIsShareDrawerOpen(true);
   };
 
+  const handleEditCollection = () => {
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCollectionDeleted = () => {
+    navigate('/dashboard/collections');
+  };
+
+  const handleEditSuccess = () => {
+    // Refetch collection data after successful edit
+    if (id) {
+      fetchCollectionById(id);
+    }
+    toast.success('Collection updated successfully');
+  };
+
+  // Get available tiers from the collection
+  const availableTiers = currentCollection?.price_tiers || [];
+
+  // Function to get tier name from amount
+  const getTierNameFromAmount = (amount: number) => {
+    const tier = availableTiers.find(t => t.price === amount);
+    return tier ? tier.name : `₦${amount}`;
+  };
+
+  // Function to handle tier filter changes
+  const handleTierFilterChange = (tierName: string, checked: boolean) => {
+    setSelectedTiers(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(tierName);
+      } else {
+        newSet.delete(tierName);
+      }
+      return newSet;
+    });
+  };
+
+  // Function to apply filters to contributions
+  const applyFilters = (data: any[]) => {
+    let filteredData = data;
+
+    // Apply search term filter
+    if (searchTerm) {
+      filteredData = filteredData.filter(contribution => {
+        const matchesSearch =
+          (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesSearch;
+      });
+    }
+
+    // Apply tier filter
+    if (selectedTiers.size > 0) {
+      filteredData = filteredData.filter(contribution => {
+        const tierName = getTierNameFromAmount(contribution.amount);
+        return selectedTiers.has(tierName);
+      });
+    }
+
+    // Apply field filters
+    if (Object.keys(filters).length > 0) {
+      filteredData = filteredData.filter(contribution => {
+        for (const [field, value] of Object.entries(filters)) {
+          if (value) {
+            const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
+            if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+    }
+
+    return filteredData;
+  };
+
   const exportToCSV = () => {
+    // Apply filters to get the data to export
     const paidContributions = (contributions || []).filter(c => c.status === "paid");
-    if (paidContributions.length === 0) {
+    const filteredData = applyFilters(paidContributions);
+
+    if (filteredData.length === 0) {
       toast.info("No paid contributors data to export");
       return;
     }
@@ -68,46 +229,35 @@ const CollectionDetailsPage: React.FC = () => {
     // 1. Collect all unique dynamic fields from contributor_information
     const allDynamicFields = Array.from(
       new Set(
-        paidContributions.flatMap(contributor =>
+        filteredData.flatMap(contributor =>
           (contributor.contributor_information || []).flatMap(info =>
             Object.keys(info)
           )
         )
       )
-    );
+    ).filter(field => field !== "TierAmount");
 
     // 2. Check if any contributor has a unique code
-    const hasUniqueCode = paidContributions.some(
+    const hasUniqueCode = filteredData.some(
       c => c.contributor_unique_code
     );
 
-    // 3. Define headers for CSV
+    // 3. Define headers for CSV (include Tier if it's a tiered collection)
     const headers = [
-      // 'Name',
-      // 'Email',
-      // 'Phone',
-      // 'Amount',
-      // 'Date Contributed',
       ...allDynamicFields,
+      ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
       ...(hasUniqueCode ? ['Unique Code'] : []),
-      // 'Status'
     ];
 
     let csvContent = headers.join(',') + '\n';
 
-    paidContributions.forEach((contribution) => {
-      const formattedDate = new Date(contribution.created_at).toLocaleDateString('en-NG');
+    filteredData.forEach((contribution) => {
       const row = [
-        // contribution.contributor_name || contribution.name || '',
-        // contribution.contributor_email || contribution.email || '',
-        // contribution.contributor_phone || contribution.phone || '',
-        // contribution.amount || '',
-        // formattedDate,
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
+        ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-        // contribution.status || ''
       ];
       csvContent += row.map(val =>
         typeof val === 'string' && val.includes(',') ? `"${val}"` : val
@@ -146,7 +296,6 @@ const CollectionDetailsPage: React.FC = () => {
       toast.success('Withdrawal request submitted successfully!');
       setTimeout(() => {
         window.location.reload();
-
       }, 2000);
     } catch (error: any) {
       console.error('Withdrawal error:', error);
@@ -163,7 +312,7 @@ const CollectionDetailsPage: React.FC = () => {
   // Helper to get status string based on deadline
   const getDeadlineStatus = () => {
     if (!currentCollection?.deadline) return currentCollection?.status || "No deadline";
-    return isActiveByDeadline ? "active" : "expired";
+    return currentCollection.status;
   };
 
   // Helper to get status color based on deadline
@@ -172,6 +321,8 @@ const CollectionDetailsPage: React.FC = () => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800';
+      case 'paused':
+        return 'bg-purple-100 text-purple-800';
       case 'expired':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
@@ -189,6 +340,8 @@ const CollectionDetailsPage: React.FC = () => {
     switch (status) {
       case 'active':
         return <CheckCircle className="h-4 w-4 mr-1" />;
+      case 'paused':
+        return <CheckCircle className="h-4 w-4 mr-1" />;
       case 'expired':
         return <TimerOff className="h-4 w-4 mr-1" />;
       case 'completed':
@@ -201,14 +354,10 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   // Only show paid contributors
-  const filteredContributors = (contributions || []).filter(
-    (contribution) =>
-      (contribution.status === "paid") &&
-      (
-        contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contribution.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-  ) || [];
+  const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
+
+  // Apply filters to get the final list of contributors to display
+  const filteredContributors = applyFilters(paidContributions);
 
   // Group contributions by date for chart data
   const contributionsByDate = contributions?.reduce((acc, curr) => {
@@ -229,7 +378,17 @@ const CollectionDetailsPage: React.FC = () => {
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
 
-  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0
+  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
+
+  // Function to clear all filters
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchTerm('');
+    setSelectedTiers(new Set());
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0;
 
   if (!currentCollection) {
     return (
@@ -246,20 +405,44 @@ const CollectionDetailsPage: React.FC = () => {
   // 1. Collect all unique dynamic fields from contributor_information
   const allDynamicFields = Array.from(
     new Set(
-      filteredContributors.flatMap(contributor => {
-
+      paidContributions.flatMap(contributor => {
         return (contributor.contributor_information || []).flatMap(info =>
           Object.keys(info)
         )
-      }
-      )
+      })
     )
-  );
+  ).filter(field => field !== "TierAmount");
+
+  console.log(allDynamicFields);
+  console.log(paidContributions)
 
   // 2. Check if any contributor has a unique code
-  const hasUniqueCode = filteredContributors.some(
+  const hasUniqueCode = paidContributions.some(
     c => c.contributor_unique_code
   );
+
+  // Function to handle filter changes
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => {
+      if (value === '') {
+        const newFilters = { ...prev };
+        delete newFilters[field];
+        return newFilters;
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
+  const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
+
+  const computedStatus: Status = computeStatus({
+    statusFlag: currentCollection?.status as Status,
+    totalRaised,
+    targetAmount,
+    deadlineDate,
+  });
 
   return (
     <div className="space-y-6">
@@ -267,10 +450,16 @@ const CollectionDetailsPage: React.FC = () => {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
-              {getDeadlineStatusIcon()}
-              {getDeadlineStatus()}
+            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+              {statusIcons[computedStatus]}
+              {computedStatus}
             </span>
+            <CollectionManagementMenu
+              collectionId={id as string}
+              onEditClick={handleEditCollection}
+              currentStatus={currentCollection.status || 'active'}
+              onDeleteSuccess={handleCollectionDeleted}
+            />
           </div>
           {currentCollection.description && (
             <p className="text-gray-600 mt-1">{currentCollection.description}</p>
@@ -327,15 +516,45 @@ const CollectionDetailsPage: React.FC = () => {
 
         <TabsContent value="overview" className="mt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
-                <p className="text-sm text-gray-500">Per contributor</p>
-              </CardContent>
-            </Card>
+
+            {
+              currentCollection.type === "fixed" && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
+                    <p className="text-sm text-gray-500">Per contributor</p>
+                  </CardContent>
+                </Card>
+              )
+
+            }
+
+            {currentCollection.type === "tiered" && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Collection Tier(s)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {currentCollection.price_tiers.map((tier, i) => {
+
+                    return (<div key={i} >
+                      <div className=' text-2xl font-bold flex justify-between items-center mb-2'>
+                        <div>{tier.name}</div>
+                        <div className="text-2xl font-bold">₦{tier.price}</div>
+                      </div>
+
+                    </div>)
+                  })}
+
+                  <p className="text-sm text-gray-500">Per contributor</p>
+                </CardContent>
+              </Card>
+
+            )}
+
 
             <Card>
               <CardHeader className="pb-2">
@@ -388,9 +607,9 @@ const CollectionDetailsPage: React.FC = () => {
                       </div>
                       <div className="flex justify-between border-b pb-2">
                         <span className="text-gray-600">Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getDeadlineStatusColor()}`}>
-                          {getDeadlineStatusIcon()}
-                          {getDeadlineStatus()}
+                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+                          {statusIcons[computedStatus]}
+                          {computedStatus}
                         </span>
                       </div>
                       {currentCollection.max_participants && (
@@ -461,15 +680,66 @@ const CollectionDetailsPage: React.FC = () => {
         <TabsContent value="contributors" className="mt-6">
           <Card>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Contributors & Input Data</CardTitle>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <input
+              <CardTitle>Contributors Details</CardTitle>
+              <div className="flex flex-col md:flex-row gap-2 w-full sm:w-auto">
+                <Input
                   type="text"
                   placeholder="Search contributors..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-1 border rounded w-full sm:w-auto"
                 />
+
+                {/* Tier Filter Dropdown - Only show for tiered collections */}
+                {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
+                        <Filter className="mr-2 h-4 w-4" />
+                        Filter by Tier
+                        {selectedTiers.size > 0 && (
+                          <Badge variant="secondary" className="ml-2">
+                            {selectedTiers.size}
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Filter by Tier</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {availableTiers.map((tier) => (
+                        <DropdownMenuCheckboxItem
+                          key={tier.name}
+                          checked={selectedTiers.has(tier.name)}
+                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, checked)}
+                        >
+                          {tier.name} - ₦{tier.price.toLocaleString()}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={false}
+                        onCheckedChange={() => setSelectedTiers(new Set())}
+                        className="text-red-600"
+                      >
+                        Clear All
+                      </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+                {hasActiveFilters && (
+                  <Button
+                    onClick={clearAllFilters}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center whitespace-nowrap text-red-600 hover:text-red-700"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Clear Filters
+                  </Button>
+                )}
+
                 <Button
                   onClick={exportToCSV}
                   variant="outline"
@@ -481,71 +751,78 @@ const CollectionDetailsPage: React.FC = () => {
                 </Button>
               </div>
             </CardHeader>
+
             <CardContent className="p-0">
               <div className="w-full overflow-x-auto">
                 {filteredContributors.length > 0 ? (
                   <Table className="min-w-[700px]">
                     <TableHeader className='overflow-x-auto'>
                       <TableRow>
-                        {/* <TableHead>Name</TableHead>
-                        <TableHead className="hidden sm:table-cell">Email</TableHead>
-                        <TableHead className="hidden md:table-cell">Amount</TableHead>
-                        <TableHead className="hidden md:table-cell">Date</TableHead>
-                        <TableHead className="hidden lg:table-cell">Phone</TableHead> */}
-                        {/* Render dynamic fields */}
                         {allDynamicFields.map(field => (
                           <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                         ))}
-                        {/* Unique code column if present */}
+                        {/* {currentCollection?.type === 'tiered' && (
+                          <TableHead className="lg:table-cell">Tier</TableHead>
+                        )} */}
                         {hasUniqueCode && (
                           <TableHead className="lg:table-cell">Unique Code</TableHead>
                         )}
-                        {/* <TableHead className="lg:table-cell">Status</TableHead> */}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredContributors.map(contributor => (
                         <TableRow key={contributor.id}>
-                          {/* <TableCell className="font-medium">{contributor.name || contributor.contributor_name}</TableCell>
-                          <TableCell className="hidden sm:table-cell">{contributor.email || contributor.contributor_email}</TableCell>
-                          <TableCell className="hidden md:table-cell">₦{contributor.amount?.toLocaleString()}</TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {contributor.formattedDate ||
-                              new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">{contributor.phone || contributor.contributor_phone || 'N/A'}</TableCell> */}
-                          {/* Render dynamic fields */}
                           {allDynamicFields.map(field => (
                             <TableCell key={field} className="lg:table-cell">
                               {(contributor.contributor_information || [])[0]?.[field] || ''}
                             </TableCell>
                           ))}
-                          {/* Unique code column if present */}
+                          {/* {currentCollection?.type === 'tiered' && (
+                            <TableCell className="lg:table-cell">
+                              <Badge variant="outline">
+                                {getTierNameFromAmount(contributor.amount)}
+                              </Badge>
+                            </TableCell>
+                          )} */}
                           {hasUniqueCode && (
                             <TableCell className="lg:table-cell">
                               {contributor.contributor_unique_code || ''}
                             </TableCell>
                           )}
-                          {/* <TableCell className="hidden lg:table-cell">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${contributor.status === 'paid'
-                              ? 'bg-green-100 text-green-800'
-                              : contributor.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
-                              }`}>
-                              {contributor.status}
-                            </span>
-                          </TableCell> */}
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 ) : (
                   <div className="py-8 text-center text-gray-500">
-                    {searchTerm ? 'No contributors match your search' : 'No contributors yet'}
+                    {searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0
+                      ? 'No contributors match your filters'
+                      : 'No contributors yet'}
                   </div>
                 )}
               </div>
+
+              {/* Filter Summary */}
+              {hasActiveFilters && (
+                <div className="px-4 py-3 bg-gray-50 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">
+                      Showing {filteredContributors.length} of {paidContributions.length} contributors
+                    </span>
+                    <div className="flex gap-2 items-center">
+                      {selectedTiers.size > 0 && (
+                        <div className="flex gap-1">
+                          {Array.from(selectedTiers).map(tier => (
+                            <Badge key={tier} variant="secondary" className="text-xs">
+                              {tier}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -564,40 +841,6 @@ const CollectionDetailsPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )} */}
-
               <h3 className="font-medium mb-4">Recent Contributions</h3>
               {filteredContributors.length > 0 ? (
                 <div className="space-y-4">
@@ -618,8 +861,15 @@ const CollectionDetailsPage: React.FC = () => {
                             ).toLocaleDateString("en-NG")}
                           </div>
                         </div>
-                        <div className="font-bold">
-                          ₦{contributor.amount?.toLocaleString()}
+                        <div className="text-right">
+                          <div className="font-bold">
+                            ₦{contributor.amount?.toLocaleString()}
+                          </div>
+                          {currentCollection?.type === 'tiered' && (
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {getTierNameFromAmount(contributor.amount)}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     );
@@ -644,85 +894,6 @@ const CollectionDetailsPage: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* <TabsContent value="activity" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Contribution Activity</CardTitle>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Available for withdrawal</div>
-                <div className="font-bold text-lg">₦{withdrawableAmount.toLocaleString()}</div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {chartData.length > 0 ? (
-                <div className="h-64 w-full mb-6">
-                  <ChartContainer
-                    config={{
-                      amount: {
-                        color: "#10B981",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart data={chartData}>
-                        <XAxis dataKey="date" />
-                        <YAxis tickFormatter={(value) => `₦${value}`} />
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <Tooltip
-                          formatter={(value) => `₦${Number(value).toLocaleString()}`}
-                          labelFormatter={(label) => `Date: ${label}`}
-                        />
-                        <Bar
-                          dataKey="amount"
-                          name="Amount"
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="h-64 w-full bg-gray-100 rounded-md flex items-center justify-center mb-6">
-                  <p className="text-gray-500">No payment activity yet</p>
-                </div>
-              )}
-
-              <h3 className="font-medium mb-4">Recent Contributions</h3>
-              {contributions && contributions.length > 0 ? (
-                <div className="space-y-4">
-                  {contributions.slice(0, 5).map((contributor) => (
-                    <div key={contributor.id} className="flex justify-between items-center border-b pb-2">
-                      <div>
-                        <div className="font-medium">{contributor.contributor_name}</div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(contributor.created_at).toLocaleDateString('en-NG')}
-                        </div>
-                      </div>
-                      <div className="font-bold">₦{contributor.amount?.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-gray-500">
-                  No contributions yet
-                </div>
-              )}
-
-              <div className="mt-6">
-                <Button
-                  onClick={handleWithdraw}
-                  className="w-full bg-kolekto hover:bg-kolekto/90"
-                  disabled={withdrawableAmount <= 0}
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Withdraw Funds
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent> */}
       </Tabs>
 
       <Drawer open={isShareDrawerOpen} onOpenChange={setIsShareDrawerOpen}>
@@ -769,17 +940,36 @@ const CollectionDetailsPage: React.FC = () => {
         </DrawerContent>
       </Drawer>
 
-      {currentCollection && (
-        <WithdrawFundsDialog
-          open={isWithdrawDialogOpen}
-          onOpenChange={setIsWithdrawDialogOpen}
-          onComplete={onWithdrawComplete}
-          availableBalance={currentCollection.wallets[0].available_balance || 0}
-          collectionId={id || ''}
-          collectionTitle={currentCollection?.title || ''}
-        />
-      )}
-    </div>
+      {
+        currentCollection && (
+          <WithdrawFundsDialog
+            open={isWithdrawDialogOpen}
+            onOpenChange={setIsWithdrawDialogOpen}
+            onComplete={onWithdrawComplete}
+            availableBalance={currentCollection.wallets[0].available_balance || 0}
+            collectionId={id || ''}
+            collectionTitle={currentCollection?.title || ''}
+          />
+        )
+      }
+
+      <EditCollectionDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        collectionId={id || ''}
+        initialData={{
+          title: currentCollection.title,
+          description: currentCollection.description || '',
+          deadline: currentCollection.deadline,
+          type: currentCollection.type,
+          max_contributions: currentCollection.max_contributions,
+          price_tiers: currentCollection.price_tiers,
+          code_prefix: currentCollection.code_prefix || '',
+          contributions_fields: currentCollection.contributions_fields || [],
+        }}
+        onSuccess={handleEditSuccess}
+      />
+    </div >
   );
 };
 

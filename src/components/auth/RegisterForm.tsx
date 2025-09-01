@@ -1,23 +1,22 @@
-
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from 'sonner';
-import { useAuthStore } from '@/store';
+import { toast } from "sonner";
+import { useAuthStore } from "@/store";
 
 const RegisterForm: React.FC = () => {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isSignupComplete, setIsSignupComplete] = useState(false);
 
   const { signUp } = useAuthStore();
@@ -25,41 +24,51 @@ const RegisterForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       return;
     }
 
     const isValidE164 = (phone: string) => /^\+[1-9]\d{1,14}$/.test(phone);
 
     if (!isValidE164(phoneNumber)) {
-      setError("Phone number must be in international format, e.g. +2348012345678");
+      setError(
+        "Phone number must be in international format, e.g. +2348012345678"
+      );
       return;
     }
 
-    if (phoneNumber && phoneNumber.replace(/\D/g, '').length < 10) {
-      setError('Phone number must be at least 10 digits');
+    if (phoneNumber && phoneNumber.replace(/\D/g, "").length < 10) {
+      setError("Phone number must be at least 10 digits");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const { user, error } = await signUp(email, password, firstName, lastName, phoneNumber);
+      const { user, error } = await signUp(
+        email,
+        password,
+        firstName,
+        lastName,
+        phoneNumber
+      );
 
       if (error) {
         setError(error.message);
-        toast.error('Registration failed');
+        toast.error("Registration failed");
       } else {
         setIsSignupComplete(true);
-        toast.success('Registration successful! Check your email to confirm your account.');
+        toast.success(
+          "Registration successful! Check your email to confirm your account."
+        );
         // If user is returned, they might be auto-signed in, so redirect to dashboard
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-      toast.error('Registration failed');
+      setError(err.message || "An unexpected error occurred");
+      toast.error("Registration failed");
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +80,8 @@ const RegisterForm: React.FC = () => {
         <div className="bg-green-50 text-green-700 p-4 rounded-md">
           <h3 className="font-medium">Registration successful!</h3>
           <p className="text-sm mt-1">
-            Please check your email inbox and spam to confirm your account.
+            Please check your email inbox or <span className="font-semibold">spam</span> folder to confirm your
+            account.
           </p>
         </div>
         <p className="text-sm text-gray-600">
@@ -89,7 +99,10 @@ const RegisterForm: React.FC = () => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
       {error && (
-        <Alert variant="destructive" className="bg-red-50 text-red-800 border-red-200">
+        <Alert
+          variant="destructive"
+          className="bg-red-50 text-red-800 border-red-200"
+        >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}

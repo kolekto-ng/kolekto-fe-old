@@ -79,6 +79,10 @@
   }
 }
 
+body {
+  position: relative;
+}
+
 @layer base {
   * {
     @apply border-border;

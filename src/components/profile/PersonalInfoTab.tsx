@@ -114,24 +114,24 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
         <CardContent className="pt-6">
           <div className="flex items-center space-x-6">
             <div className="relative">
-              {/* <ProfilePictureUpload /> */}
+              <ProfilePictureUpload />
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold">{formData.fullName}</h2>
               <p className="text-muted-foreground">{formData.email}</p>
 
-              {/* {!kycComplete && (
+              {!kycComplete && (
                 <Dialog>
-                  <DialogTrigger asChild>
+                  {/* <DialogTrigger asChild>
                     <Button variant="link" className="p-0 h-auto text-blue-600">
                       {kycNotStarted ? 'Start KYC Verification' : 'Complete KYC Verification'}
                     </Button>
-                  </DialogTrigger>
+                  </DialogTrigger> */}
                   <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <KYCVerificationTab />
                   </DialogContent>
                 </Dialog>
-              )} */}
+              )}
 
               {kycComplete && (
                 <div className="flex items-center space-x-2 mt-2">
@@ -142,13 +142,13 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
                 </div>
               )}
             </div>
-            {/* <Button
+            <Button
               onClick={() => isEditing ? handleSave() : setIsEditing(true)}
               variant={isEditing ? "default" : "outline"}
             >
               {isEditing ? <Check className="h-4 w-4 mr-2" /> : <Edit2 className="h-4 w-4 mr-2" />}
               {isEditing ? 'Save Changes' : 'Edit Profile'}
-            </Button> */}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -188,7 +188,7 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
                 <p className="text-foreground font-medium">{formData.phone}</p>
               )}
             </div>
-            {/* <div className="space-y-2">
+            <div className="space-y-2">
               <Label htmlFor="dateOfBirth">Date of Birth</Label>
               {isEditing ? (
                 <Input
@@ -212,7 +212,7 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
               ) : (
                 <p className="text-foreground font-medium">{formData.address}</p>
               )}
-            </div> */}
+            </div>
           </div>
         </CardContent>
       </Card>

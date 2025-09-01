@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react'
 import { Star } from 'lucide-react'
-import avatar1 from '../../../assets/avatar1.png'
-import avatar2 from '../../../assets/avatar2.png'
-import avatar3 from '../../../assets/avatar3.png'
-import avatar4 from '../../../assets/avatar4.png'
+import avatar1 from '../../../assets/avatar-4.png'
+import avatar2 from '../../../assets/avatar-2.png'
+import avatar3 from '../../../assets/avatar-1.png'
+import avatar4 from '../../../assets/avatar-3.png'
 import paystack from '../../../assets/paystack.png'
 import collectionSvg from '../../../assets/collector-svg.svg'
 import IIH from '../../../assets/iih.png'
-import heroImage from '../../../assets/hero-image.png'
+import heroImage from '../../../assets/hero-image.jpg'
 import styles from './hero.module.css'
 import { Link } from 'react-router-dom'
 const Hero = () => {
@@ -100,7 +100,7 @@ const Hero = () => {
                                 {/* Trust Test */}
                                 <div className='text-left'>
                                     <p className='text-sm font-semibold text-gray-900 mb-1'>
-                                        Trusted By 100+ Users
+                                        Trusted By 700+ Users
                                     </p>
                                     <div className='flex items-center space-x-2'>
                                         <div className='flex'>
@@ -108,7 +108,7 @@ const Hero = () => {
                                                 <Star key={i} className='w-4 h-4 fill-yellow-400 text-yellow-400' />
                                             ))}
                                         </div>
-                                        <span className='text-[11px] font-normal text-gray-600'>4.95 (218 reviews)</span>
+                                        <span className='text-[11px] font-normal text-gray-600'>4.95 (478 reviews)</span>
                                     </div>
                                 </div>
                             </div>

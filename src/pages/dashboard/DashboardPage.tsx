@@ -11,6 +11,7 @@ import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
+import { useSettings } from '@/store/useSettings';
 
 const DashboardPage: React.FC = () => {
   const { user, isLoading: authloading } = useAuthStore();

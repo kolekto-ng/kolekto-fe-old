@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -17,16 +18,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { ArrowRight, Check, Loader2, CreditCard, User, DollarSign } from "lucide-react";
 import { usePaystackStore } from "@/store/usePaystackStore";
+import { useContributionStore } from "@/store/useContributionStore";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
+import { formatCurrency } from "@/utils/formatters";
+
+interface PriceTier {
+  name: string;
+  price: number;
+  description?: string;
+  quantity?: number | null;
+}
 
 interface Field {
+  id?: string;
   name: string;
   type: string;
   required: boolean;
+  options?: string[];
+  value?: string;
 }
 
 interface Participant {
@@ -35,45 +51,73 @@ interface Participant {
 }
 
 interface ContributionFormProps {
-  collectionId: string;
-  collectionTitle: string;
-  amount: number;
-  amountBreakdown: { totalPayable: number; totalFees: number };
-  fields: Field[];
+  // Legacy props from first version
+  collection?: {
+    id: string;
+    title: string;
+    amount: number;
+    description?: string;
+    deadline?: string;
+  };
+  formFields?: Field[];
+  pricingTiers?: PriceTier[];
+  onPaymentSuccess?: (data: any) => void;
+  onPaymentError?: (error: string) => void;
+
+  // New props from second version
+  collectionId?: string;
+  collectionTitle?: string;
+  amount?: number;
+  amountBreakdown?: { totalPayable: number; totalFees: number; platformFee?: number; paymentGatewayFee?: number };
+  fields?: Field[];
   description?: string;
-  onPaymentSuccess: (formData: any) => void;
-  onPaymentError: (errorMsg: string) => void;
+  max_contributions?: number;
+  total_contributions?: number;
+  fee_bearer?: '',
+  wallet?: []
 }
 
-const ContributionForm = ({
-  collectionId,
-  collectionTitle,
-  amount,
-  amountBreakdown,
-  fields,
-  description,
-  max_contributions,
-  total_contributions,
-}) => {
-  const [step, setStep] = useState<"details" | "contact" | "payment">("details"); // 1. Start at "details"
+const ContributionForm: React.FC<ContributionFormProps> = (props) => {
+  // Handle both prop formats
+  const collectionId = props.collectionId || props.collection?.id || '';
+  const collectionTitle = props.collectionTitle || props.collection?.title || '';
+  let baseAmount = props.amount || props.collection?.amount || 0;
+  const description = props.description || props.collection?.description;
+  const fields = props.fields || props.formFields || [];
+  const pricingTiers = props.pricingTiers;
+
+  const amountBreakdown = props.amountBreakdown;
+  const onPaymentSuccess = props.onPaymentSuccess;
+  const onPaymentError = props.onPaymentError;
+
+  // State management
+  const [step, setStep] = useState<"pricing" | "details" | "contact" | "payment">(
+    pricingTiers && pricingTiers.length > 0 ? "pricing" : "details"
+  );
+  const [selectedAmount, setSelectedAmount] = useState(
+    pricingTiers && pricingTiers.length > 0 ? pricingTiers[0].price : baseAmount
+  );
+  const [selectedTier, setSelectedTier] = useState(
+    pricingTiers && pricingTiers.length > 0 ? pricingTiers[0].name : ''
+  );
   const [numberOfParticipants, setNumberOfParticipants] = useState(1);
   const [participants, setParticipants] = useState<Participant[]>([
     { id: "1", data: {} },
   ]);
-  const [paymentMethod, setPaymentMethod] = useState("Paystack");
-  const [isLoading, setIsLoading] = useState(false);
   const [contactInfo, setContactInfo] = useState({
     name: "",
     email: "",
     phone: "",
   });
+  const [paymentMethod, setPaymentMethod] = useState("Paystack");
+  const [isLoading, setIsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [verificationInterval, setVerificationInterval] =
-    useState<NodeJS.Timeout | null>(null);
+  const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
 
-  const { initializePayment, verifyPayment, } =
-    usePaystackStore();
-  let paymentLoading = false
+  // Store hooks
+  const { initializePayment, initiatePayment, verifyPayment } = usePaystackStore();
+  const { createContribution } = useContributionStore();
+
   // Clear interval on unmount
   useEffect(() => {
     return () => {
@@ -83,15 +127,22 @@ const ContributionForm = ({
     };
   }, [verificationInterval]);
 
-  const handleContactInfoChange = (field: string, value: string) => {
-    setContactInfo((prev) => ({ ...prev, [field]: value }));
+  // Handle pricing tier selection
+  const handleTierChange = (tierName: string) => {
+    const tier = pricingTiers?.find(t => t.name === tierName);
+    if (tier) {
+      setSelectedTier(tierName);
+      setSelectedAmount(tier.price);
+      // baseAmount = tier.price
+    }
   };
 
+  // Handle participant changes
   const handleParticipantsChange = (value: string) => {
     const num = parseInt(value);
     if (isNaN(num)) return;
 
-    setNumberOfParticipants(Math.max(1, Math.min(10, num))); // Limit to 1-10 participants
+    setNumberOfParticipants(Math.max(1, Math.min(10, num)));
 
     setParticipants((prev) => {
       if (num > prev.length) {
@@ -105,12 +156,11 @@ const ContributionForm = ({
     });
   };
 
-  const handleFieldChange = (
-    participantId: string,
-    fieldName: string,
-    value: string
-  ) => {
+  const handleContactInfoChange = (field: string, value: string) => {
+    setContactInfo((prev) => ({ ...prev, [field]: value }));
+  };
 
+  const handleFieldChange = (participantId: string, fieldName: string, value: string) => {
     setParticipants((prev) =>
       prev.map((p) =>
         p.id === participantId
@@ -120,6 +170,7 @@ const ContributionForm = ({
     );
   };
 
+  // Validation functions
   const validateContactInfo = () => {
     const errors = [];
     if (!contactInfo.name.trim()) errors.push("Full name is required");
@@ -139,7 +190,7 @@ const ContributionForm = ({
     for (const participant of participants) {
       for (const field of fields) {
         if (field.required && field.name.toLowerCase() === "unique code")
-          return true; // Skip validation for unique code
+          continue; // Skip validation for unique code
         if (field.required && !participant.data[field.name]?.trim()) {
           toast.error(`Please fill in ${field.name} for all participants`);
           return false;
@@ -149,10 +200,14 @@ const ContributionForm = ({
     return true;
   };
 
+  // Navigation functions
   const nextStep = () => {
     setPaymentError(null);
-    if (step === "details" && validateParticipantData()) {
-      setStep("contact"); // 2. Go to contact after details
+
+    if (step === "pricing") {
+      setStep("details");
+    } else if (step === "details" && validateParticipantData()) {
+      setStep("contact");
     } else if (step === "contact" && validateContactInfo()) {
       setStep("payment");
     }
@@ -160,9 +215,17 @@ const ContributionForm = ({
 
   const previousStep = () => {
     setPaymentError(null);
-    setStep(step === "payment" ? "contact" : "details"); // 3. Go back in the new order
+
+    if (step === "payment") {
+      setStep("contact");
+    } else if (step === "contact") {
+      setStep("details");
+    } else if (step === "details" && pricingTiers && pricingTiers.length > 0) {
+      setStep("pricing");
+    }
   };
 
+  // Payment handling
   const createContributor = async () => {
     try {
       const response = await axiosInstance.post(
@@ -171,7 +234,7 @@ const ContributionForm = ({
           name: contactInfo.name,
           email: contactInfo.email,
           phoneNumber: contactInfo.phone,
-          amount: amount * numberOfParticipants,
+          amount: selectedAmount * numberOfParticipants,
           contributionInformation: participants.map((participant) => ({
             ...participant.data,
           })),
@@ -180,65 +243,14 @@ const ContributionForm = ({
       );
 
       if (!response.data.success) {
-        throw new Error(
-          response.data.message || "Failed to create contributor"
-        );
+        throw new Error(response.data.message || "Failed to create contributor");
       }
 
       return response.data.contributor?.id || response.data.contributor?._id;
     } catch (error: any) {
-      console.error(
-        "Create contributor error:",
-        error.response?.data || error.message
-      );
-      throw new Error(
-        error.response?.data?.message || "Failed to create contributor"
-      );
+      console.error("Create contributor error:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || "Failed to create contributor");
     }
-  };
-
-  const startPaymentVerification = async (reference: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const verification = await verifyPayment(reference);
-
-        if (verification?.status === "success") {
-          clearInterval(interval);
-          // handlePaymentSuccess(reference);
-        }
-      } catch (error) {
-        console.error("Verification error:", error);
-      }
-    }, 5000); // Check every 5 seconds
-
-    setVerificationInterval(interval);
-
-    // Timeout after 15 minutes
-    setTimeout(() => {
-      clearInterval(interval);
-      if (isLoading) {
-        setIsLoading(false);
-        toast.info(
-          "Payment verification timed out. Please check your email for confirmation."
-        );
-      }
-    }, 900000);
-  };
-
-  const handlePaymentSuccess = (reference: string) => {
-    const successData = {
-      collectionId,
-      collectionTitle,
-      // participants: prepareParticipantData(),
-      paymentMethod,
-      totalAmount: amount * numberOfParticipants,
-      contactInfo,
-      transactionRef: reference,
-      timestamp: new Date().toISOString(),
-    };
-
-    setIsLoading(false);
-    toast.success("Payment successful!");
   };
 
   const handlePayment = async () => {
@@ -250,66 +262,254 @@ const ContributionForm = ({
     setIsLoading(true);
 
     try {
-      // 1. Create contributor record
-      // const contributorId = await createContributor();
 
-      // 2. Initialize payment
-      const paymentData = {
-        contributor: {
-          name: contactInfo.name,
-          email: contactInfo.email,
-          phoneNumber: contactInfo.phone,
-          amount: amount * numberOfParticipants,
-          contributionInformation: participants.map((participant) => ({
-            ...participant.data,
-          })),
-          collectionId,
-        },
+      // Use new payment flow if amountBreakdown exists (second version)
+      let payableAmount = selectedAmount;
 
-        fullName: contactInfo.name,
-        email: contactInfo.email,
-        phoneNumber: contactInfo.phone,
-        amount:
-          amount != amountBreakdown.totalPayable
-            ? amountBreakdown.totalFees + amount * numberOfParticipants
-            : amount,
-        collectionId,
-        callback_url: `${window.location.origin}/payment/verify`, // <-- Add this
-      };
-      const paymentResponse = await initializePayment(paymentData);
-      if (!paymentResponse?.authorization_url) {
-        throw new Error("Failed to get payment URL");
+      console.log(selectedAmount, payableAmount, 'selectedAmount');
+      if (props?.fee_bearer == "contributor" && amountBreakdown && props.collection?.amount) {
+        payableAmount = amountBreakdown.totalPayable
       }
 
-      // 3. Open payment gateway
+      if (pricingTiers && pricingTiers.length > 0) {
+        baseAmount = selectedAmount
+      }
 
-      window.location.href = paymentResponse.authorization_url;
-      // 4. Start verification process
-      // startPaymentVerification(paymentResponse.reference);
+
+      let fees = 0;
+      if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
+        fees = amountBreakdown.totalFees;
+        payableAmount = selectedAmount + fees;
+      }
+      if (props.fee_bearer == "contributor" && pricingTiers) {
+
+        fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
+
+        payableAmount = selectedAmount + fees;
+      }
+      if (amountBreakdown || selectedAmount) {
+        console.log('paymet initialize');
+
+        const paymentData = {
+          contributor: {
+            name: contactInfo.name,
+            email: contactInfo.email,
+            phoneNumber: contactInfo.phone,
+            amount: payableAmount,
+            contributionInformation: participants.map((participant) => {
+
+              if (pricingTiers && pricingTiers.length > 0) {
+                return ({
+                  ...participant.data,
+                  Tier: selectedTier,
+                  TierAmount: payableAmount
+                });
+              }
+
+              return ({
+                ...participant.data,
+              })
+            }
+
+            ),
+            collectionId,
+          },
+          fullName: contactInfo.name,
+          email: contactInfo.email,
+          phoneNumber: contactInfo.phone,
+          amount: payableAmount,
+          collectionId,
+          callback_url: `${window.location.origin}/payment/verify`,
+        };
+
+        console.log(paymentData, 'paymentData');
+
+
+        const paymentResponse = await initializePayment(paymentData);
+        if (!paymentResponse?.authorization_url) {
+          throw new Error("Failed to get payment URL");
+        }
+
+        window.location.href = paymentResponse.authorization_url;
+      }
+
     } catch (error: any) {
       console.error("Payment error:", error);
       setIsLoading(false);
       const errorMsg = error.message || "Payment failed. Please try again.";
       toast.error(errorMsg);
+      if (onPaymentError) {
+        onPaymentError(errorMsg);
+      }
+    }
+  };
+
+  // Render functions
+  const renderPricingForm = () => (
+    <div className="space-y-4">
+      <h3 className="font-medium text-lg">
+        Select Tier
+      </h3>
+      <RadioGroup value={selectedTier} onValueChange={handleTierChange}>
+        {pricingTiers?.map((tier, index) => (
+          <div key={index} className="flex items-center space-x-2 p-3 border rounded-lg">
+            <RadioGroupItem value={tier.name} id={tier.name} />
+            <Label htmlFor={tier.name} className="flex-1 cursor-pointer">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-medium">{tier.name}</p>
+                  {tier.description && (
+                    <p className="text-sm text-gray-500">{tier.description}</p>
+                  )}
+                </div>
+                <p className="font-bold text-kolekto">{formatCurrency(tier.price)}</p>
+              </div>
+            </Label>
+          </div>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+
+  const renderParticipantForm = () => (
+    <div className="space-y-4">
+      <h3 className="font-medium text-lg flex items-center gap-2">
+        <User className="h-5 w-5" />
+        Participant Details
+      </h3>
+
+      {participants.map((participant, index) => (
+        <div key={participant.id} className="pt-4 pb-2 border-t">
+          <h4 className="font-medium mb-4">
+            {index === 0 ? "Your Details" : `Participant ${index + 1} Details`}
+          </h4>
+          <div className="space-y-4">
+            {fields.map((field) => {
+              const fieldId = field.id || field.name;
+              const isUniqueCode = field.name.toLowerCase() === "unique code";
+
+              if (isUniqueCode) return null;
+
+              return (
+                <div key={`${participant.id}-${fieldId}`} className="space-y-2">
+                  <Label>
+                    {field.name}
+                    {field.required && " *"}
+                  </Label>
+                  {renderFormField(field, participant.id)}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderFormField = (field: Field, participantId: string) => {
+    const fieldId = field.id || field.name;
+    const fieldValue = participants.find(p => p.id === participantId)?.data[field.name] || '';
+
+    switch (field.type) {
+      case 'text':
+      case 'email':
+      case 'tel':
+      case 'url':
+        return (
+          <Input
+            type={field.type}
+            value={fieldValue}
+            onChange={(e) => handleFieldChange(participantId, field.name, e.target.value)}
+            placeholder={`Enter ${field.name.toLowerCase()}`}
+            required={field.required}
+          />
+        );
+
+      case 'textarea':
+        return (
+          <Textarea
+            value={fieldValue}
+            onChange={(e) => handleFieldChange(participantId, field.name, e.target.value)}
+            placeholder={`Enter ${field.name.toLowerCase()}`}
+            required={field.required}
+          />
+        );
+
+      case 'select':
+      case 'selectdropdown':
+        return (
+          <Select
+            value={fieldValue}
+            onValueChange={(value) => handleFieldChange(participantId, field.name, value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map((option, index) => (
+                <SelectItem key={index} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+
+      case 'radio':
+        return (
+          <RadioGroup
+            value={fieldValue}
+            onValueChange={(value) => handleFieldChange(participantId, field.name, value)}
+          >
+            {field.options?.map((option, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <RadioGroupItem value={option} id={`${fieldId}-${index}`} />
+                <Label htmlFor={`${fieldId}-${index}`}>{option}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+
+      case 'checkbox':
+        return (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              checked={fieldValue === 'true' || fieldValue === true}
+              onCheckedChange={(checked) => handleFieldChange(participantId, field.name, checked.toString())}
+              id={fieldId}
+            />
+            <Label htmlFor={fieldId}>{field.name}</Label>
+          </div>
+        );
+
+      default:
+        return (
+          <Input
+            value={fieldValue}
+            onChange={(e) => handleFieldChange(participantId, field.name, e.target.value)}
+            placeholder={`Enter ${field.name.toLowerCase()}`}
+            required={field.required}
+          />
+        );
     }
   };
 
   const renderContactForm = () => (
     <div className="space-y-4">
-      <h3 className="font-medium flex items-center gap-2">
-        <span>Contact Information</span>
+      <h3 className="font-medium text-lg flex items-center gap-2">
+        <User className="h-5 w-5" />
+        Contact Information
         <span className="text-kolekto" title="Required for payment">
           <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
             <path
               fill="currentColor"
               d="M12 1a7 7 0 0 0-7 7v3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V8a7 7 0 0 0-7-7Zm-5 7a5 5 0 1 1 10 0v3H7V8Zm13 5v7H4v-7h16Z"
-            ></path>
+            />
           </svg>
         </span>
       </h3>
       <div className="text-xs text-gray-600 mb-2">
-        Please provide your contact details. This information is required to
-        process your payment and send your receipt.
+        Please provide your contact details. This information is required to process your payment and send your receipt.
       </div>
       <div className="space-y-4">
         <div>
@@ -348,234 +548,129 @@ const ContributionForm = ({
     </div>
   );
 
-  const renderParticipantForm = () => (
-    <div className="space-y-4">
-      {/* <div className="space-y-2">
-        <Label htmlFor="numberOfParticipants">Number of Participants</Label>
-        <Select 
-          value={numberOfParticipants.toString()} 
-          onValueChange={handleParticipantsChange}
-        >
-          <SelectTrigger id="numberOfParticipants" className="w-full">
-            <SelectValue placeholder="Select number of participants" />
-          </SelectTrigger>
-          <SelectContent>
-            {[1, 2, 3, 4, 5].map(num => (
-              <SelectItem key={num} value={num.toString()}>
-                {num} {num === 1 ? 'person' : 'people'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div> */}
+  const renderPaymentForm = () => {
+    const totalAmount = selectedAmount;
+    let payableAmount = selectedAmount;
 
-      {participants.map((participant, index) => (
-        <div key={participant.id} className="pt-4 pb-2 border-t">
-          <h3 className="font-medium mb-4">
-            {index === 0 ? "Your Details" : `Participant ${index + 1} Details`}
-          </h3>
-          <div className="space-y-4">
+    console.log(selectedAmount, payableAmount, 'selectedAmount');
+    if (props?.fee_bearer == "contributor" && amountBreakdown && props.collection?.amount) {
+      payableAmount = amountBreakdown.totalPayable
+    }
 
-            {fields.map((field) => {
-              const isUniqueCode = field.name.toLowerCase() === "unique code";
-              // Render select for select/selectdropdown fields
-              if (field.type === "select" || field.type === "selectdropdown") {
-                return (
-                  <div key={`${participant.id}-${field.name}`} className="space-y-2">
-                    <Label>
-                      {field.name}
-                      {field.required && " *"}
-                    </Label>
-                    <Select
-                      value={participant.data?.[field.name] || ""}
-                      onValueChange={(value) =>
-                        handleFieldChange(participant.id, field.name, value)
-                      }
-                      required={field.required}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(field.options || []).map((opt: string) => (
-                          <SelectItem key={opt} value={opt}>
-                            {opt}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              }
+    if (pricingTiers && pricingTiers.length > 0) {
+      baseAmount = selectedAmount
+    }
 
-              // Default: render input for other types
-              return (
-                <div key={`${participant.id}-${field.name}`} className="space-y-2">
-                  {!isUniqueCode && (
-                    <>
-                      <Label>
-                        {field.name}
-                        {field.required && " *"}
-                      </Label>
-                      <Input
-                        type={field.type}
-                        value={participant.data?.[field.name] || ""}
-                        onChange={(e) =>
-                          handleFieldChange(participant.id, field.name, e.target.value)
-                        }
-                        required={field.required}
-                        readOnly={isUniqueCode}
-                        placeholder={`Enter ${field.name.toLowerCase()}`}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })}
+    // if (selectedTier) {
+    //   baseAmount = selectedAmount
+    //   payableAmount = selectedAmount
+    //   return
+    // }
+    // payableAmount = amountBreakdown && selectedAmount !== amountBreakdown.totalPayable
+    //   ? amountBreakdown.totalFees + totalAmount
+    //   : totalAmount;
 
-            {/* {Object.values(fields || {}).map((field) => {
-              console.log(field);
+    console.log(payableAmount, totalAmount, 'payableAmount');
 
-              const isUniqueCode = field.name.toLowerCase() === "unique code";
-              console.log(isUniqueCode);
+    let fees = 0;
+    if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
+      fees = amountBreakdown.totalFees;
+      payableAmount = selectedAmount + fees;
+    }
+    if (props.fee_bearer == "contributor" && pricingTiers) {
 
-              return (
-                <div
-                  key={`${participant.id}-${field.name}`}
-                  className="space-y-2"
-                >
-                  {!isUniqueCode && (
-                    <>
-                      <Label>
-                        {field.name}
-                        {field.required && " *"}
-                      </Label>
-                      <Input
-                        type={field.type}
-                        value={participant.data?.[field.name] || ""}
-                        onChange={(e) =>
-                          !isUniqueCode &&
-                          handleFieldChange(
-                            participant.id,
-                            field.name,
-                            e.target.value
-                          )
-                        }
-                        required={field.required}
-                        readOnly={isUniqueCode}
-                        placeholder={`Enter ${field.name.toLowerCase()}`}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })} */}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+      fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
 
-  const renderPaymentForm = () => (
-    <div className="space-y-4">
-      {paymentError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>Payment Error</AlertTitle>
-          <AlertDescription>{paymentError}</AlertDescription>
-        </Alert>
-      )}
+      payableAmount = selectedAmount + fees;
+    }
 
-      <h3 className="font-medium mb-2 text-lg">Payment Details</h3>
-      <div className="bg-gray-50 rounded-md p-4 border space-y-4">
-        {/* Contributor Info Section */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold">Contributor Info</span>
-            <span className="text-xs text-gray-500">(provided for payment processing only)</span>
-          </div>
-          <div className="flex flex-col gap-2 text-sm ml-2">
-            {participants.map((participant, idx) => (
-              <div key={participant.id} className="mb-2">
-                <div className="font-medium">
-                  {idx === 0 ? "Your Details" : `Participant ${idx + 1} Details`}
-                </div>
-                {fields.map((field) => (
-                  <div key={field.name} className="flex gap-2">
-                    <span className="text-gray-600">{field.name}:</span>
-                    <span>{participant.data[field.name] || <span className="text-gray-400">N/A</span>}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-          <div className="text-xs text-gray-500 mt-1 italic">
-            These details are required to process your payment and will not be used for any other purpose.
-          </div>
-        </div>
-        {/* Payment Summary Section */}
-        <div className="border-t pt-3 space-y-2">
-          <div className="flex justify-between">
-            <span>Collection:</span>
-            <span className="font-semibold">{collectionTitle}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Participants:</span>
-            <span>{numberOfParticipants}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Amount per Participant:</span>
-            <span>₦{amount.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Fees:</span>
-            <span>₦{amountBreakdown.totalFees.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between font-bold border-t pt-2">
-            <span>Total Payable:</span>
-            <span>
-              ₦
-              {amount !== amountBreakdown.totalPayable
-                ? (amountBreakdown.totalFees + amount * numberOfParticipants).toLocaleString()
-                : amount.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      </div>
 
-      <div className="mt-4">
-        <h4 className="font-medium mb-2">Choose Payment Method</h4>
-        <div
-          className={`border rounded-md p-4 cursor-pointer transition-colors ${paymentMethod === "Paystack"
-            ? "border-kolekto bg-kolekto/5"
-            : "hover:border-gray-300"
-            }`}
-          onClick={() => setPaymentMethod("Paystack")}
-        >
-          <div className="flex items-center">
-            <div
-              className={`w-4 h-4 rounded-full border ${paymentMethod === "Paystack"
-                ? "border-kolekto bg-kolekto"
-                : "border-gray-300"
-                }`}
-            >
-              {paymentMethod === "Paystack" && (
-                <Check className="h-3 w-3 text-white" />
-              )}
+    return (
+      <div className="space-y-4">
+        {paymentError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Payment Error</AlertTitle>
+            <AlertDescription>{paymentError}</AlertDescription>
+          </Alert>
+        )}
+
+        <h3 className="font-medium text-lg flex items-center gap-2">
+          <CreditCard className="h-5 w-5" />
+          Payment Details
+        </h3>
+
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-2">Payment Summary</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Collection:</span>
+              <span className="font-medium">{collectionTitle}</span>
             </div>
-            <span className="ml-2 font-medium">
-              Paystack (Cards, Bank Transfer, USSD)
-            </span>
+            {/* <div className="flex justify-between">
+              <span>Participants:</span>
+              <span>{numberOfParticipants}</span>
+            </div> */}
+            <div className="flex justify-between">
+              <span>Amount</span>
+              <span>{formatCurrency(selectedAmount)}</span>
+            </div>
+            {selectedTier && (
+              <div className="flex justify-between">
+                <span>Tier:</span>
+                <span className="font-medium">{selectedTier}</span>
+              </div>
+            )}
+            {amountBreakdown && props.fee_bearer == "contributor" && (
+              <div className="flex justify-between">
+                <span>Fees:</span>
+                <span>{formatCurrency(fees)}</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex justify-between font-semibold text-blue-900">
+              <span>Total:</span>
+              <span>{formatCurrency(payableAmount)}</span>
+            </div>
           </div>
         </div>
-        <div className="mt-2 text-xs text-gray-600">
-          Secure payment processing powered by Paystack.
+
+        <div className="mt-4">
+          <h4 className="font-medium mb-2">Choose Payment Method</h4>
+          <div
+            className={`border rounded-md p-4 cursor-pointer transition-colors ${paymentMethod === "Paystack"
+              ? "border-kolekto bg-kolekto/5"
+              : "hover:border-gray-300"
+              }`}
+            onClick={() => setPaymentMethod("Paystack")}
+          >
+            <div className="flex items-center">
+              <div
+                className={`w-4 h-4 rounded-full border ${paymentMethod === "Paystack"
+                  ? "border-kolekto bg-kolekto"
+                  : "border-gray-300"
+                  }`}
+              >
+                {paymentMethod === "Paystack" && (
+                  <Check className="h-3 w-3 text-white" />
+                )}
+              </div>
+              <span className="ml-2 font-medium">
+                Paystack (Cards, Bank Transfer, USSD)
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-600">
+            Secure payment processing powered by Paystack.
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const getStepContent = () => {
     switch (step) {
+      case "pricing":
+        return renderPricingForm();
       case "details":
         return renderParticipantForm();
       case "contact":
@@ -587,17 +682,27 @@ const ContributionForm = ({
     }
   };
 
-
-
-  const pay =
-    amount != amountBreakdown.totalPayable
-      ? amountBreakdown.totalFees + amount * numberOfParticipants
-      : amount;
-
-
   const getStepActions = () => {
+    const totalAmount = selectedAmount * numberOfParticipants;
+    // const payableAmount = amountBreakdown && selectedAmount !== amountBreakdown.totalPayable
+    //   ? amountBreakdown.totalFees + totalAmount
+    //   : totalAmount;
+
+    let payableAmount = selectedAmount
+
+    let fees = 0;
+    if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
+      fees = amountBreakdown.totalFees;
+      payableAmount = selectedAmount + fees;
+    }
+    if (props.fee_bearer == "contributor" && pricingTiers) {
+
+      fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
+
+      payableAmount = selectedAmount + fees;
+    }
     switch (step) {
-      case "details":
+      case "pricing":
         return (
           <Button
             type="button"
@@ -607,6 +712,29 @@ const ContributionForm = ({
             Continue
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
+        );
+      case "details":
+        return (
+          <div className="flex gap-2 w-full">
+            {pricingTiers && pricingTiers.length > 0 && (
+              <Button
+                type="button"
+                onClick={previousStep}
+                variant="outline"
+                className="flex-1"
+              >
+                Back
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={nextStep}
+              className="flex-1 bg-kolekto hover:bg-kolekto/90"
+            >
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         );
       case "contact":
         return (
@@ -636,18 +764,15 @@ const ContributionForm = ({
               type="button"
               onClick={handlePayment}
               className="w-full bg-kolekto hover:bg-kolekto/90"
-              disabled={isLoading || paymentLoading}
+              disabled={isLoading}
             >
-              {isLoading || paymentLoading ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Processing...
                 </>
               ) : (
-                `Pay ₦${amount != amountBreakdown.totalPayable
-                  ? amountBreakdown.totalFees + amount * numberOfParticipants
-                  : amount
-                }`
+                `Pay ${formatCurrency(payableAmount)}`
               )}
             </Button>
             <Button
@@ -665,62 +790,107 @@ const ContributionForm = ({
     }
   };
 
-  const steps = [
-    { key: "details", label: "Contributor Details" },
-    { key: "contact", label: "Contact Info (for Payment)" },
-    { key: "payment", label: "Payment" },
-  ];
+  // Define steps based on available features
+  const getSteps = () => {
+    const steps = [];
+    if (pricingTiers && pricingTiers.length > 0) {
+      steps.push({ key: "pricing", label: "Select Amount" });
+    }
+    steps.push(
+      { key: "details", label: "Contributor Details" },
+      { key: "contact", label: "Contact Info" },
+      { key: "payment", label: "Payment" }
+    );
+    return steps;
+  };
+
+  const steps = getSteps();
   const currentStepIndex = steps.findIndex((s) => s.key === step);
+  const totalAmount = selectedAmount;
+  // let payableAmount = amountBreakdown && selectedAmount !== amountBreakdown.totalPayable
+  //   ? amountBreakdown.totalFees + totalAmount
+  //   : totalAmount;
+
+  // if (selectedAmount) {
+  let payableAmount = selectedAmount
+  // }
+
+  let fees = 0;
+  if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
+    fees = amountBreakdown.totalFees;
+    payableAmount = selectedAmount + fees;
+  }
+  if (props.fee_bearer == "contributor" && pricingTiers) {
+
+    fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
+
+    payableAmount = selectedAmount + fees;
+  }
+
+
+
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>{collectionTitle}</CardTitle>
-          {max_contributions && <span> Maximum contributions we are accepting: {max_contributions}</span>}
-          {total_contributions ? (<span> Total cntributions so far: {total_contributions}</span>) : null}
-
           <CardDescription>
             {description && <div className="mt-2">{description}</div>}
             <div className="mt-2">
-              Total Amount: ₦{amount.toLocaleString()}
-              {amount != amountBreakdown.totalPayable
-                ? ` + ₦${amountBreakdown.platformFee} (kolekto fee) + ₦${amountBreakdown.paymentGatewayFee} (gateway fee)`
-                : null}{" "}
+              {pricingTiers && pricingTiers.length > 0 ? (
+                `Selected Amount: ${formatCurrency(selectedAmount)}`
+              ) : (
+                `Total Amount: ${formatCurrency(baseAmount)}`
+              )}
+              {amountBreakdown && selectedAmount !== amountBreakdown.totalPayable && (
+                <span className="text-sm text-gray-600">
+                  {fees > 0 && " + fees: "}
+                  {amountBreakdown.platformFee && `₦${amountBreakdown.platformFee} (platform) `}
+                  {amountBreakdown.paymentGatewayFee && `₦${amountBreakdown.paymentGatewayFee} (gateway)`}
+                  {fees > 0 && ` ₦${fees} (contributor fees)`}
+                </span>
+              )}
             </div>
+            {props.max_contributions && (
+              <div className="text-sm text-gray-600">
+                Maximum contributions: {props.max_contributions}
+                {props.total_contributions && ` | Current: ${props.total_contributions}`}
+              </div>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            {steps.map((s, idx) => (
-              <div key={s.key} className="flex-1 flex flex-col items-center">
-                <div
-                  className={`w-8 h-8 flex items-center justify-center rounded-full border-2
-          ${idx === currentStepIndex
-                      ? "border-kolekto bg-kolekto text-white"
-                      : idx < currentStepIndex
-                        ? "border-green-500 bg-green-500 text-white"
-                        : "border-gray-300 bg-white text-gray-400"
-                    }`}
-                >
-                  {idx < currentStepIndex ? <Check className="w-5 h-5" /> : idx + 1}
+          {steps.length > 1 && (
+            <div className="flex items-center justify-between mb-6">
+              {steps.map((s, idx) => (
+                <div key={s.key} className="flex-1 flex flex-col items-center">
+                  <div
+                    className={`w-8 h-8 flex items-center justify-center rounded-full border-2
+                      ${idx === currentStepIndex
+                        ? "border-kolekto bg-kolekto text-white"
+                        : idx < currentStepIndex
+                          ? "border-green-500 bg-green-500 text-white"
+                          : "border-gray-300 bg-white text-gray-400"
+                      }`}
+                  >
+                    {idx < currentStepIndex ? <Check className="w-5 h-5" /> : idx + 1}
+                  </div>
+                  <span className={`mt-2 text-xs text-center ${idx === currentStepIndex ? "font-bold text-kolekto" : "text-gray-500"
+                    }`}>
+                    {s.label}
+                  </span>
                 </div>
-                <span className={`mt-2 text-xs text-center ${idx === currentStepIndex ? "font-bold text-kolekto" : "text-gray-500"}`}>
-                  {s.label}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           {getStepContent()}
         </CardContent>
         <CardFooter className="border-t pt-4 flex flex-col space-y-3">
           <div className="w-full flex justify-between items-center">
             <span className="font-medium">Total Amount:</span>
             <span className="font-bold text-lg">
-              ₦
-              {amount != amountBreakdown.totalPayable
-                ? amountBreakdown.totalFees + amount * numberOfParticipants
-                : amount}
+              {formatCurrency(payableAmount)}
             </span>
           </div>
           {getStepActions()}

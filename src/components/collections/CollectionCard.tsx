@@ -1,9 +1,19 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Eye, Share, Wallet } from 'lucide-react';
+import { CalendarDays, Eye, Share, Wallet } from "lucide-react";
+
+// ---------------------------
+// Types
+// ---------------------------
+type Status =
+  | "active"
+  | "paused"
+  | "expired"
+  | "completed"
+  | "closed"
+  | "deleted";
 
 interface CollectionCardProps {
   id: string;
@@ -11,7 +21,8 @@ interface CollectionCardProps {
   description?: string;
   amount: number;
   deadline: string;
-  status: 'active' | 'expired' | 'completed';
+  status: Status;
+  type: "fixed" | "tier";
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
@@ -19,69 +30,182 @@ interface CollectionCardProps {
   onViewDetails: () => void;
 }
 
+// ---------------------------
+// Rule-based Status Engine
+// ---------------------------
+interface StatusRule {
+  name: Status;
+  priority: number;
+  check: (ctx: {
+    statusFlag?: Status;
+    totalRaised: number;
+    targetAmount: number;
+    deadlineDate: Date;
+    now: Date;
+  }) => boolean;
+}
+
+const statusRules: StatusRule[] = [
+  {
+    name: "deleted",
+    priority: 100,
+    check: ({ statusFlag }) => statusFlag === "deleted",
+  },
+  {
+    name: "closed",
+    priority: 90,
+    check: ({ statusFlag }) => statusFlag === "closed",
+  },
+  {
+    name: "paused",
+    priority: 80,
+    check: ({ statusFlag }) => statusFlag === "paused",
+  },
+  {
+    name: "completed",
+    priority: 70,
+    check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount,
+  },
+  {
+    name: "expired",
+    priority: 60,
+    check: ({ deadlineDate, now }) => deadlineDate <= now,
+  },
+  {
+    name: "active",
+    priority: 10,
+    check: () => true, // fallback
+  },
+];
+
+function computeStatus(ctx: {
+  statusFlag?: Status;
+  totalRaised: number;
+  targetAmount: number;
+  deadlineDate: Date;
+  now?: Date;
+}): Status {
+  const now = ctx.now ?? new Date();
+
+  return statusRules
+    .sort((a, b) => b.priority - a.priority)
+    .find((rule) => rule.check({ ...ctx, now }))!.name;
+}
+
+// ---------------------------
+// Hooks & Helpers
+// ---------------------------
+function useCollectionStatus(
+  initialStatus: Status,
+  deadline: string,
+  totalRaised: number,
+  targetAmount: number
+) {
+  const deadlineDate = React.useMemo(() => new Date(deadline), [deadline]);
+  const computedStatus = React.useMemo(
+    () =>
+      computeStatus({
+        statusFlag: initialStatus,
+        totalRaised,
+        targetAmount,
+        deadlineDate,
+      }),
+    [initialStatus, totalRaised, targetAmount, deadlineDate]
+  );
+
+  return { computedStatus, deadlineDate };
+}
+
+function useFormattedDate(dateString?: string) {
+  return React.useMemo(() => {
+    if (!dateString) return "N/A";
+    const d = new Date(dateString);
+    return d.toLocaleDateString("en-NG", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }, [dateString]);
+}
+
+function formatCurrency(amount: number) {
+  return `₦${amount.toLocaleString()}`;
+}
+
+function calcTotalRaised(amount: number, participants: number) {
+  return amount * participants;
+}
+
+// ---------------------------
+// Components
+// ---------------------------
+const statusColors: Record<Status, string> = {
+  active: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800",
+  expired: "bg-red-100 text-red-800",
+  completed: "bg-blue-100 text-blue-800",
+  closed: "bg-gray-200 text-gray-800",
+  deleted: "bg-gray-400 text-gray-900",
+};
+
+const StatusBadge: React.FC<{ status: Status }> = ({ status }) => {
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  return <Badge className={statusColors[status]}>{label}</Badge>;
+};
+
+// ---------------------------
+// Main Component
+// ---------------------------
 const CollectionCard: React.FC<CollectionCardProps> = ({
-  id,
   title,
   description,
   amount,
   deadline,
   status,
+  type,
   participantsCount,
   maxParticipants,
   dateCreated,
   onShare,
-  onViewDetails
+  onViewDetails,
 }) => {
-  const statusColors = {
-    active: 'bg-green-100 text-green-800',
-    expired: 'bg-red-100 text-red-800',
-    completed: 'bg-blue-100 text-blue-800'
-  };
+  const totalRaised = calcTotalRaised(amount, participantsCount);
+  const targetAmount = calcTotalRaised(amount, maxParticipants);
 
-  const deadlineDate = new Date(deadline);
-  const now = new Date();
-  // Determine status based on deadline
-  let computedStatus: 'active' | 'expired' | 'completed' = status;
-  if (status !== 'completed') {
-    computedStatus = deadlineDate > now ? 'active' : 'expired';
-  }
+  const { computedStatus } = useCollectionStatus(
+    status,
+    deadline,
+    totalRaised,
+    targetAmount // using amount as target (if you support tier goals, swap logic here)
+  );
 
-  const formattedDeadline = deadlineDate.toLocaleDateString('en-NG', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
-
-  const createdDate = dateCreated ? new Date(dateCreated) : null;
-  const formattedCreatedDate = createdDate
-    ? createdDate.toLocaleDateString('en-NG', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    })
-    : 'N/A';
-
-  // Calculate total amount raised (mocked for now)
-  const totalRaised = participantsCount * amount;
+  const formattedDeadline = useFormattedDate(deadline);
+  const formattedCreatedDate = useFormattedDate(dateCreated);
 
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <h3 className="font-semibold text-lg">{title}</h3>
-          <Badge className={statusColors[computedStatus]}>
-            {computedStatus === 'active' ? 'Active' : computedStatus === 'expired' ? 'Expired' : 'Completed'}
-          </Badge>
+          <div className="flex gap-1">
+            <Badge className="bg-purple-100 text-purple-800">
+              {type === "fixed" ? "Fixed" : "Tier"}
+            </Badge>
+            <StatusBadge status={computedStatus} />
+          </div>
         </div>
         {description && (
           <p className="text-sm text-gray-600 mt-1">{description}</p>
         )}
       </CardHeader>
+
       <CardContent className="py-2 flex-grow">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
             <p className="text-sm text-gray-600">Amount</p>
-            <p className="font-medium">₦{amount?.toFixed(2)}</p>
+            <p className="font-medium">
+              {amount > 0 ? formatCurrency(amount) : "__"}
+            </p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Deadline</p>
@@ -96,7 +220,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
           </div>
           <div>
             <p className="text-sm text-gray-600">Total Raised</p>
-            <p className="font-medium">₦{totalRaised.toLocaleString()}</p>
+            <p className="font-medium">{formatCurrency(totalRaised)}</p>
           </div>
           {dateCreated && (
             <div className="col-span-2 flex items-center gap-1 text-sm text-gray-500 mt-1">
@@ -106,9 +230,15 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
           )}
         </div>
       </CardContent>
+
       <CardFooter className="pt-2">
         <div className="w-full grid grid-cols-3 gap-2">
-          <Button variant="outline" size="sm" onClick={onShare} className="flex items-center justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onShare}
+            className="flex items-center justify-center"
+          >
             <Share className="mr-1 h-4 w-4" />
             <span className="hidden sm:inline">Share</span>
           </Button>
