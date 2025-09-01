@@ -122,11 +122,11 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
 
               {!kycComplete && (
                 <Dialog>
-                  <DialogTrigger asChild>
+                  {/* <DialogTrigger asChild>
                     <Button variant="link" className="p-0 h-auto text-blue-600">
                       {kycNotStarted ? 'Start KYC Verification' : 'Complete KYC Verification'}
                     </Button>
-                  </DialogTrigger>
+                  </DialogTrigger> */}
                   <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <KYCVerificationTab />
                   </DialogContent>
@@ -287,7 +287,7 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
       </Card> */}
 
       {/* Government IDs */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle>Government Identification</CardTitle>
         </CardHeader>
@@ -303,9 +303,9 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
-      <PaymentAccounts />
+      {/* <PaymentAccounts /> */}
     </div>
   );
 };
