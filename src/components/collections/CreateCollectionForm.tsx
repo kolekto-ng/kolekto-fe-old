@@ -19,7 +19,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   // Step state
 
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 3;
+  const totalSteps = 4;
 
   // Form state
 
@@ -74,7 +74,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     }
 
     // Kolekto fee: 0.5% capped at ₦2,000
-    let kolektoFee = price * 0.005;
+    let kolektoFee = price * (isFundraising ? 0.01 : 0.005);
     kolektoFee = Math.min(kolektoFee, 2000);
 
     // Gateway fee: 1.5% capped at ₦2,000
@@ -94,13 +94,17 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   };
 
   // This effect recalculates fees whenever amount, feeBearer, or usePriceTiers changes
-
+   useEffect(() => {
+  if (useFundraising) {
+    setFeeBearer('contributor');
+  }
+}, [useFundraising]);
   useEffect(() => {
     if (amount && !usePriceTiers) {
       const parsedAmount = parseFloat(amount);
       if (!isNaN(parsedAmount)) {
         // Kolekto Fee: 0.5% capped at ₦2,000
-        let kolektoFee = parsedAmount * 0.005;
+        let kolektoFee = parsedAmount * (useFundraising ? 0.01 : 0.005);
         kolektoFee = Math.min(kolektoFee, 2000);
 
         // Gateway Fee: 1.5% capped at ₦2,000
@@ -142,16 +146,20 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   // Handles validation for each step
 
   const validateStep1 = () => {
+    return true;
+  };
 
-    if (!title.trim() && deadline.trim() === '') {
-      toast.error("Please enter a collection title and deadline");
-      return false;
-    }
+  const validateStep2 = () => {
+
+    if (!useFundraising && deadline.trim() !== '' && Date.now() > new Date(deadline).getTime()) {
+  toast.error("Please enter a valid collection deadline");
+  return false;
+}
     if (!title.trim()) {
       toast.error("Please enter a collection title");
       return false;
     }
-    if (Date.now() > new Date(deadline).getTime() || deadline.trim() === '') {
+    if (!useFundraising && (Date.now() > new Date(deadline).getTime() || deadline.trim() === '')) {
       toast.error("Please enter a valid collection deadline");
       return false;
     }
@@ -159,7 +167,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     return true;
   };
 
-  const validateStep2 = () => {
+  const validateStep3 = () => {
     if (useFundraising) {
       if (!fundraisingTarget || parseFloat(fundraisingTarget) <= 0) {
         toast.error('Please Enter a Valid target');
@@ -181,14 +189,14 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         toast.error("Each price tier must have a name and a valid price greater than zero");
         return false;
       }
-    } else if (!amount || parseFloat(amount) <= 100) {
+    } else if (!useFundraising && (!amount || parseFloat(amount) <= 100)) {
       toast.error("Please enter a valid amount greater than 100");
       return false;
     }
     return true;
   };
 
-  const validateStep3 = () => {
+  const validateStep4 = () => {
     return true;
   };
 
@@ -207,7 +215,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       case 3:
         isValid = validateStep3();
         break;
-      default:
+      case 4:
+        isValid = validateStep4 ();
+        break;
+        default:
         isValid = true;
     }
 
@@ -226,7 +237,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const StepIndicator = () => (
     <div className="flex justify-center items-center mb-8 px-4">
-      {[1, 2, 3].map((step) => (
+      {[1, 2, 3, 4].map((step) => (
         <div key={step} className="flex items-center">
           <div
             className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 ${step === currentStep
@@ -238,7 +249,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
           >
             {step}
           </div>
-          {step < 3 && (
+          {step < 4 && (
             <div
               className={`w-16 h-0.5 mx-2 ${step < currentStep ? 'bg-green-600' : 'bg-gray-300'
                 }`}
@@ -251,6 +262,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const StepTitles = () => {
     const titles = [
+      'Collection Types',
       'Basic Information',
       'Amount & Payment',
       'Contributor Details'
@@ -350,90 +362,17 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return (
+        return(
           <div className="space-y-6">
             <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Basic Information</h2>
-              <p className="text-gray-600">Let's start with the basics of your collection</p>
-            </div>
-            <BasicInfoSection
-              title={title}
-              setTitle={setTitle}
-              description={description}
-              setDescription={setDescription}
-              deadline={deadline}
-              setDeadline={setDeadline}
-            />
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Amount & Payment</h2>
-              <p className="text-gray-600">Configure fees, choose collection type, and set pricing</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Collection Types</h2>
+              <p className='text-gray-700'>Select the type of collection you want to create</p>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Fee Configuration</h3>
+            <div className='space-y-4'>
+              <h3 className="text-lg font-medium text-gray-900">Collection Types</h3>
+              <div  className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Who pays the platform fees?
-                </label>
-                <div className="space-y-3">
-                  <div className={`flex items-center ${useFundraising ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <input
-                      id="organizer-pays"
-                      type="radio"
-                      name="fee-bearer"
-                      value="organizer"
-                      checked={feeBearer === 'organizer'}
-                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 border-gray-300"
-                       disabled={useFundraising}
-                    />
-                    <label htmlFor="organizer-pays" className="ml-3 block text-sm text-gray-700">
-                      <span className="font-medium">Organizer pays</span>
-                      <span className="text-gray-500 block">Fees are deducted from the collection amount</span>
-                    </label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="contributor-pays"
-                      type="radio"
-                      name="fee-bearer"
-                      value="contributor"
-                      checked={feeBearer === 'contributor'}
-                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 border-gray-300"
-                    />
-                    <label htmlFor="contributor-pays" className="ml-3 block text-sm text-gray-700">
-                      <span className="font-medium">Contributors pay</span>
-                      <span className="text-gray-500 block">Fees are added to the collection amount</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fee Structure Information */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <div className="text-sm">
-                  <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
-                  <ul className="list-disc pl-5 text-gray-600 space-y-1">
-
-                    <li>Kolekto fee: 0.5% (capped at ₦2,000)</li>
-                    <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            {/* Handles Colection Types */}
-
-            <div className="space-y-4 border-t pt-6">
-              <h3 className="text-lg font-medium text-gray-900">Collection Type</h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div
                   className={`p-4 border rounded-lg cursor-pointer transition-all ${!usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
                     }`}
@@ -505,6 +444,93 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               </div>
               </div>
             </div>
+              </div>
+        )
+      case 2:
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Basic Information</h2>
+              <p className="text-gray-600">Let's start with the basics of your collection</p>
+            </div>
+            <BasicInfoSection
+              title={title}
+              setTitle={setTitle}
+              description={description}
+              setDescription={setDescription}
+              deadline={deadline}
+              setDeadline={setDeadline}
+            />
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Amount & Payment</h2>
+              <p className="text-gray-600">Configure fees, choose collection type, and set pricing</p>
+            </div>
+
+           {!useFundraising && (
+             <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900">Fee Configuration</h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Who pays the platform fees?
+                </label>
+                <div className="space-y-3">
+                  <div className={`flex items-center ${useFundraising ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <input
+                      id="organizer-pays"
+                      type="radio"
+                      name="fee-bearer"
+                      value="organizer"
+                      checked={feeBearer === 'organizer'}
+                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
+                      className="h-4 w-4 border-gray-300"
+                       disabled={useFundraising}
+                    />
+                    <label htmlFor="organizer-pays" className="ml-3 block text-sm text-gray-700">
+                      <span className="font-medium">Organizer pays</span>
+                      <span className="text-gray-500 block">Fees are deducted from the collection amount</span>
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="contributor-pays"
+                      type="radio"
+                      name="fee-bearer"
+                      value="contributor"
+                      checked={feeBearer === 'contributor'}
+                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
+                      className="h-4 w-4 border-gray-300"
+                    />
+                    <label htmlFor="contributor-pays" className="ml-3 block text-sm text-gray-700">
+                      <span className="font-medium">Contributors pay</span>
+                      <span className="text-gray-500 block">Fees are added to the collection amount</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fee Structure Information */}
+              
+            </div>
+           )}
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="text-sm">
+                  <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
+                  <ul className="list-disc pl-5 text-gray-600 space-y-1">
+
+                    <li>Kolekto fee: {useFundraising ? '1%' : '0.5%'} (capped at ₦2,000)</li>
+                    <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
+                  </ul>
+                </div>
+              </div>
+
+            
 
             {/* Handles Pricing Section */}
 
@@ -580,18 +606,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                     </div>
                     </div>
                   </div>
-                  <div className='w-full'>
-                   <label className='block text-sm font-medium text-gray-700 mb-2'>
-                    Deadline
-                   </label>
-                    <input 
-                    type="date"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="Leave empty for no limit"
-                     />
-                  </div>
+                  
                   {(fundraisingTarget || minAmount) && (
                     <div className="bg-green-100 p-4 rounded-lg">
                       <h4 className="font-medium text-gray-900 mb-3">Fee Breakdown</h4>
@@ -602,7 +617,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                          {fundraisingTarget ? `₦${parseFloat(fundraisingTarget).toLocaleString()}` : 'No limit'}
                       </div>
 
-                      <div>Kolekto Fee 0.5% (capped at ₦2,000):</div>
+                      <div>Kolekto Fee 1% (capped at ₦2,000):</div>
                       <div className="text-right">Per Contribution</div>
 
                       <div>Payment Gateway 1.5% (capped at ₦2,000):</div>
@@ -841,7 +856,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
           </div>
         );
 
-      case 3:
+      case 4:
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
