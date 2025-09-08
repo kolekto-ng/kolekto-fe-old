@@ -94,11 +94,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   };
 
   // This effect recalculates fees whenever amount, feeBearer, or usePriceTiers changes
-   useEffect(() => {
-  if (useFundraising) {
-    setFeeBearer('contributor');
-  }
-}, [useFundraising]);
+  useEffect(() => {
+    if (useFundraising) {
+      setFeeBearer('contributor');
+    }
+  }, [useFundraising]);
   useEffect(() => {
     if (amount && !usePriceTiers) {
       const parsedAmount = parseFloat(amount);
@@ -152,9 +152,9 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const validateStep2 = () => {
 
     if (!useFundraising && deadline.trim() !== '' && Date.now() > new Date(deadline).getTime()) {
-  toast.error("Please enter a valid collection deadline");
-  return false;
-}
+      toast.error("Please enter a valid collection deadline");
+      return false;
+    }
     if (!title.trim()) {
       toast.error("Please enter a collection title");
       return false;
@@ -177,7 +177,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         toast.error('Amount must be greater than 0');
         return false;
       }
-      if (feeBearer != 'contributor'){
+      if (feeBearer != 'contributor') {
         setFeeBearer('contributor')
       }
     }
@@ -216,9 +216,9 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         isValid = validateStep3();
         break;
       case 4:
-        isValid = validateStep4 ();
+        isValid = validateStep4();
         break;
-        default:
+      default:
         isValid = true;
     }
 
@@ -325,16 +325,17 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         organizer_id: user.id,
         title,
         description: description || null,
-        amount: useFundraising ? null : (usePriceTiers ? null : parseFloat(amount)),
+        amount: useFundraising && minAmount ? parseFloat(minAmount) : (usePriceTiers ? null : parseFloat(amount)),
         // max_contributions: maxContributorsValue,
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
         contributions_fields: formFields,
         price_tiers: usePriceTiers ? formattedPriceTiers : null,
         max_contributions: !usePriceTiers && fixedPriceQuantity ? parseInt(fixedPriceQuantity) : null,
         fee_bearer: feeBearer,
-        fundraisingTarget: useFundraising && fundraisingTarget ? parseFloat(fundraisingTarget) : null,
+        fundraising_target_amount: useFundraising && fundraisingTarget ? parseFloat(fundraisingTarget) : null,
         min_contribution: useFundraising && minAmount ? parseFloat(minAmount) : null,
         is_fundraising: useFundraising,
+        collection_type: useFundraising ? 'fundraising' : (usePriceTiers ? 'tiered' : 'fixed'),
         status: "active" as const
       };
 
@@ -362,7 +363,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return(
+        return (
           <div className="space-y-6">
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Collection Types</h2>
@@ -371,7 +372,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
             <div className='space-y-4'>
               <h3 className="text-lg font-medium text-gray-900">Collection Types</h3>
-              <div  className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
                 <div
                   className={`p-4 border rounded-lg cursor-pointer transition-all ${!usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
@@ -404,7 +405,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                     setUsePriceTiers(true);
                     setUseFundraising(false);
                   }}
-                  
+
                 >
                   <div className="flex items-center">
                     <input
@@ -420,31 +421,31 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       <h4 className="font-medium">Tiered Contribution</h4>
                       <p className="text-sm text-gray-600">Multiple pricing options</p>
                     </div>
-                   </div>
+                  </div>
                 </div>
-                <div className={`p-4 border rounded-lg cursor-pointer transition-all ${ useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'  }`}  
-                onClick={() => {
-                setUseFundraising(true);
-                setUsePriceTiers(false);
-                }}>  
-                <div className="flex items-center">  
-                  <input 
-                  type="radio" 
-                  checked={useFundraising} 
-                  onChange={() => {
+                <div className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
+                  onClick={() => {
                     setUseFundraising(true);
                     setUsePriceTiers(false);
-                  }} 
-                  className="mr-3"/> 
-                     <div>
-                       <h4 className="font-medium">Fundraising</h4>
-                        <p className="text-sm text-gray-600">Open-ended contribution amounts</p>
-                        </div>
+                  }}>
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={useFundraising}
+                      onChange={() => {
+                        setUseFundraising(true);
+                        setUsePriceTiers(false);
+                      }}
+                      className="mr-3" />
+                    <div>
+                      <h4 className="font-medium">Fundraising</h4>
+                      <p className="text-sm text-gray-600">Open-ended contribution amounts</p>
+                    </div>
                   </div>
-              </div>
+                </div>
               </div>
             </div>
-              </div>
+          </div>
         )
       case 2:
         return (
@@ -472,65 +473,65 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               <p className="text-gray-600">Configure fees, choose collection type, and set pricing</p>
             </div>
 
-           {!useFundraising && (
-             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Fee Configuration</h3>
+            {!useFundraising && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900">Fee Configuration</h3>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Who pays the platform fees?
-                </label>
-                <div className="space-y-3">
-                  <div className={`flex items-center ${useFundraising ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <input
-                      id="organizer-pays"
-                      type="radio"
-                      name="fee-bearer"
-                      value="organizer"
-                      checked={feeBearer === 'organizer'}
-                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 border-gray-300"
-                       disabled={useFundraising}
-                    />
-                    <label htmlFor="organizer-pays" className="ml-3 block text-sm text-gray-700">
-                      <span className="font-medium">Organizer pays</span>
-                      <span className="text-gray-500 block">Fees are deducted from the collection amount</span>
-                    </label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="contributor-pays"
-                      type="radio"
-                      name="fee-bearer"
-                      value="contributor"
-                      checked={feeBearer === 'contributor'}
-                      onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
-                      className="h-4 w-4 border-gray-300"
-                    />
-                    <label htmlFor="contributor-pays" className="ml-3 block text-sm text-gray-700">
-                      <span className="font-medium">Contributors pay</span>
-                      <span className="text-gray-500 block">Fees are added to the collection amount</span>
-                    </label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Who pays the platform fees?
+                  </label>
+                  <div className="space-y-3">
+                    <div className={`flex items-center ${useFundraising ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <input
+                        id="organizer-pays"
+                        type="radio"
+                        name="fee-bearer"
+                        value="organizer"
+                        checked={feeBearer === 'organizer'}
+                        onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
+                        className="h-4 w-4 border-gray-300"
+                        disabled={useFundraising}
+                      />
+                      <label htmlFor="organizer-pays" className="ml-3 block text-sm text-gray-700">
+                        <span className="font-medium">Organizer pays</span>
+                        <span className="text-gray-500 block">Fees are deducted from the collection amount</span>
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        id="contributor-pays"
+                        type="radio"
+                        name="fee-bearer"
+                        value="contributor"
+                        checked={feeBearer === 'contributor'}
+                        onChange={(e) => setFeeBearer(e.target.value as 'organizer' | 'contributor')}
+                        className="h-4 w-4 border-gray-300"
+                      />
+                      <label htmlFor="contributor-pays" className="ml-3 block text-sm text-gray-700">
+                        <span className="font-medium">Contributors pay</span>
+                        <span className="text-gray-500 block">Fees are added to the collection amount</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Fee Structure Information */}
-              
+                {/* Fee Structure Information */}
+
+              </div>
+            )}
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm">
+                <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
+                <ul className="list-disc pl-5 text-gray-600 space-y-1">
+
+                  <li>Kolekto fee: {useFundraising ? '1%' : '0.5%'} (capped at ₦2,000)</li>
+                  <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
+                </ul>
+              </div>
             </div>
-           )}
-           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <div className="text-sm">
-                  <p className="font-medium text-gray-900 mb-3">Fee Structure:</p>
-                  <ul className="list-disc pl-5 text-gray-600 space-y-1">
 
-                    <li>Kolekto fee: {useFundraising ? '1%' : '0.5%'} (capped at ₦2,000)</li>
-                    <li>Gateway fee: 1.5% (capped at ₦2,000)</li>
-                  </ul>
-                </div>
-              </div>
 
-            
 
             {/* Handles Pricing Section */}
 
@@ -570,23 +571,23 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                     </div>
                   </div>
                 </div>
-              ) : useFundraising ?  (
+              ) : useFundraising ? (
                 <div className='space-y-4'>
                   <h3 className="text-lg font-medium text-gray-900">Fundraising Details</h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Minimum Contribution 
+                        Minimum Contribution
                       </label>
                       <div className='relative'>
                         <span className="absolute left-3 top-2 text-gray-500">₦</span>
-                        <input 
-                        type="text" 
-                        value={minAmount}
-                        onChange={(e) => setMinAmount(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Leave empty for no limit"
+                        <input
+                          type="text"
+                          value={minAmount}
+                          onChange={(e) => setMinAmount(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="Leave empty for no limit"
                         />
                       </div>
                     </div>
@@ -596,48 +597,48 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       </label>
                       <div className='relative'>
                         <span className="absolute left-3 top-2 text-gray-500">₦</span>
-                        <input 
-                        type='number'
-                        value={fundraisingTarget}
-                        onChange={(e) => setFundraisingTarget(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                        placeholder="Leave empty for no limit"
+                        <input
+                          type='number'
+                          value={fundraisingTarget}
+                          onChange={(e) => setFundraisingTarget(e.target.value)}
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="Leave empty for no limit"
                         />
-                    </div>
+                      </div>
                     </div>
                   </div>
-                  
+
                   {(fundraisingTarget || minAmount) && (
                     <div className="bg-green-100 p-4 rounded-lg">
                       <h4 className="font-medium text-gray-900 mb-3">Fee Breakdown</h4>
 
                       <div className="grid grid-cols-2 gap-2 text-sm border-t border-t-slate-400 pt-3">
                         <div>Target Amount :</div>
-                      <div className="text-right font-medium">
-                         {fundraisingTarget ? `₦${parseFloat(fundraisingTarget).toLocaleString()}` : 'No limit'}
-                      </div>
+                        <div className="text-right font-medium">
+                          {fundraisingTarget ? `₦${parseFloat(fundraisingTarget).toLocaleString()}` : 'No limit'}
+                        </div>
 
-                      <div>Kolekto Fee 1% (capped at ₦2,000):</div>
-                      <div className="text-right">Per Contribution</div>
+                        <div>Kolekto Fee 1% (capped at ₦2,000):</div>
+                        <div className="text-right">Per Contribution</div>
 
-                      <div>Payment Gateway 1.5% (capped at ₦2,000):</div>
-                       <div className="text-right">Per Contribution</div>
+                        <div>Payment Gateway 1.5% (capped at ₦2,000):</div>
+                        <div className="text-right">Per Contribution</div>
 
-                       <div className="border-t border-t-slate-300 pt-1 font-medium">Fee Bearer:</div>
-                       <div className="border-t border-t-slate-300 pt-1 text-right font-medium">Contributors</div>
+                        <div className="border-t border-t-slate-300 pt-1 font-medium">Fee Bearer:</div>
+                        <div className="border-t border-t-slate-300 pt-1 text-right font-medium">Contributors</div>
 
-                       <div className="pt-3 font-bold">Amount Payable (by contributor):</div>
-                       <div className="pt-3 text-right font-bold">Base amount + fees</div>
+                        <div className="pt-3 font-bold">Amount Payable (by contributor):</div>
+                        <div className="pt-3 text-right font-bold">Base amount + fees</div>
 
-                       <div className="pt-3 font-bold">Amount collection would receive:</div>
-                       <div className="pt-3 text-right font-bold">Full contribution amount</div>
+                        <div className="pt-3 font-bold">Amount collection would receive:</div>
+                        <div className="pt-3 text-right font-bold">Full contribution amount</div>
 
-                       {minAmount && (
-                        <>
-                          <div className="border-t border-t-slate-400 pt-2 text-blue-700 font-medium">Minimum Contribution:</div>
-                          <div className="border-t border-t-slate-400 pt-2 text-right text-blue-700 font-medium">₦{parseFloat(minAmount).toLocaleString()}</div>
-                        </>
-                       )}
+                        {minAmount && (
+                          <>
+                            <div className="border-t border-t-slate-400 pt-2 text-blue-700 font-medium">Minimum Contribution:</div>
+                            <div className="border-t border-t-slate-400 pt-2 text-right text-blue-700 font-medium">₦{parseFloat(minAmount).toLocaleString()}</div>
+                          </>
+                        )}
 
                       </div>
                     </div>
