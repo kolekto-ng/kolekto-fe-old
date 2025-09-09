@@ -192,6 +192,7 @@ const ContributePage: React.FC = () => {
         <div className="max-w-3xl mx-auto">
           <ContributionWrapper
             collectionId={collection.id}
+            collection={collection}
             collectionTitle={collection.title}
             amount={collection.amount}
             fee_bearer={collection.fee_bearer}

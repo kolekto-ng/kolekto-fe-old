@@ -74,7 +74,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     }
 
     // Kolekto fee: 0.5% capped at ₦2,000
-    let kolektoFee = price * (isFundraising ? 0.01 : 0.005);
+    let kolektoFee = price * (useFundraising ? 0.01 : 0.005);
     kolektoFee = Math.min(kolektoFee, 2000);
 
     // Gateway fee: 1.5% capped at ₦2,000
