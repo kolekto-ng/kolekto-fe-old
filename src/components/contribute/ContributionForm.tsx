@@ -301,8 +301,8 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
 
         if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
           selectedAmount = fundraisingAmount
-          fees = 0.025 * parseFloat(fundraisingAmount)
-          payableAmount = parseFloat(fundraisingAmount) + fees
+          // fees = 0.025 * parseFloat(fundraisingAmount)
+          payableAmount = selectedAmount
         }
 
         const paymentData = {
