@@ -300,9 +300,8 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
         console.log('paymet initialize');
 
         if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
-          selectedAmount = fundraisingAmount
           // fees = 0.025 * parseFloat(fundraisingAmount)
-          payableAmount = selectedAmount
+          payableAmount = fundraisingAmount
         }
 
         const paymentData = {
