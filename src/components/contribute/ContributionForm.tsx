@@ -74,7 +74,8 @@ interface ContributionFormProps {
   max_contributions?: number;
   total_contributions?: number;
   fee_bearer?: '',
-  wallet?: []
+  wallet?: [],
+  collection?: any; // Accept entire collection object
 }
 
 const ContributionForm: React.FC<ContributionFormProps> = (props) => {
@@ -85,6 +86,8 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const description = props.description || props.collection?.description;
   const fields = props.fields || props.formFields || [];
   const pricingTiers = props.pricingTiers;
+  const collectionType = props?.collection?.type
+  console.log(collectionType, 'collectionType');
 
   const amountBreakdown = props.amountBreakdown;
   const onPaymentSuccess = props.onPaymentSuccess;
@@ -94,7 +97,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const [step, setStep] = useState<"pricing" | "details" | "contact" | "payment">(
     pricingTiers && pricingTiers.length > 0 ? "pricing" : "details"
   );
-  const [selectedAmount, setSelectedAmount] = useState(
+  let [selectedAmount, setSelectedAmount] = useState(
     pricingTiers && pricingTiers.length > 0 ? pricingTiers[0].price : baseAmount
   );
   const [selectedTier, setSelectedTier] = useState(
@@ -113,7 +116,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
-
+  const [fundraisingAmount, setFundraisingAmount] = useState('');
   // Store hooks
   const { initializePayment, initiatePayment, verifyPayment } = usePaystackStore();
   const { createContribution } = useContributionStore();
@@ -187,6 +190,12 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   };
 
   const validateParticipantData = () => {
+
+    if (collectionType === 'fundraising' && (!fundraisingAmount || parseFloat(fundraisingAmount) < baseAmount)) {
+      toast.error(`Please enter an amount greater than ${formatCurrency(baseAmount)}`);
+      return false;
+    }
+
     for (const participant of participants) {
       for (const field of fields) {
         if (field.required && field.name.toLowerCase() === "unique code")
@@ -290,6 +299,11 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
       if (amountBreakdown || selectedAmount) {
         console.log('paymet initialize');
 
+        if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
+          // fees = 0.025 * parseFloat(fundraisingAmount)
+          payableAmount = fundraisingAmount
+        }
+
         const paymentData = {
           contributor: {
             name: contactInfo.name,
@@ -319,6 +333,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
           phoneNumber: contactInfo.phone,
           amount: payableAmount,
           collectionId,
+          collectionType,
           callback_url: `${window.location.origin}/payment/verify`,
         };
 
@@ -371,6 +386,13 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
     </div>
   );
 
+  const handlefundraisingAmountChange = (value: string) => {
+    const num = parseFloat(value);
+
+  }
+  const gatewayFee = fundraisingAmount * 0.015
+  const platformFee = fundraisingAmount * 0.01
+  const totalFees = gatewayFee + platformFee
   const renderParticipantForm = () => (
     <div className="space-y-4">
       <h3 className="font-medium text-lg flex items-center gap-2">
@@ -378,12 +400,47 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
         Participant Details
       </h3>
 
+
       {participants.map((participant, index) => (
         <div key={participant.id} className="pt-4 pb-2 border-t">
           <h4 className="font-medium mb-4">
             {index === 0 ? "Your Details" : `Participant ${index + 1} Details`}
           </h4>
           <div className="space-y-4">
+
+            {collectionType === 'fundraising' && (
+              <div className="space-y-2">
+                <Label>Donate Amount</Label>
+                <Input
+                  type="number"
+                  value={fundraisingAmount || ""}
+                  onChange={(e) =>
+                    setFundraisingAmount(parseFloat(e.target.value) || 0)
+                  }
+                  placeholder={
+                    baseAmount
+                      ? `Minimum amount to contribute is ${formatCurrency(baseAmount)}`
+                      : "Enter amount to contribute"
+                  }
+                  required
+                />
+
+                {fundraisingAmount > 0 && (
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p>
+                      Payment gateway fee: <strong>{formatCurrency(gatewayFee)}</strong> (1.5%) capped at 2000 NGN
+                    </p>
+                    <p>
+                      Kolekto platform fee: <strong>{formatCurrency(platformFee)}</strong> (1%) capped at 2000 NGN
+                    </p>
+                    <p>
+                      Total fees: <strong>{formatCurrency(totalFees)}</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {fields.map((field) => {
               const fieldId = field.id || field.name;
               const isUniqueCode = field.name.toLowerCase() === "unique code";
@@ -584,6 +641,12 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
       payableAmount = selectedAmount + fees;
     }
 
+    if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
+      selectedAmount = fundraisingAmount
+      fees = 0.025 * parseFloat(fundraisingAmount)
+      payableAmount = parseFloat(fundraisingAmount) + fees
+    }
+
 
     return (
       <div className="space-y-4">
@@ -701,6 +764,13 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
 
       payableAmount = selectedAmount + fees;
     }
+
+    if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
+      selectedAmount = fundraisingAmount
+      fees = 0.025 * parseFloat(fundraisingAmount)
+      payableAmount = parseFloat(fundraisingAmount) + fees
+    }
+
     switch (step) {
       case "pricing":
         return (
@@ -827,7 +897,11 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
     payableAmount = selectedAmount + fees;
   }
 
-
+  if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
+    selectedAmount = fundraisingAmount
+    fees = 0.025 * parseFloat(fundraisingAmount)
+    payableAmount = parseFloat(fundraisingAmount) + fees
+  }
 
 
   return (
@@ -837,7 +911,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
           <CardTitle>{collectionTitle}</CardTitle>
           <CardDescription>
             {description && <div className="mt-2">{description}</div>}
-            <div className="mt-2">
+            {collectionType !== 'fundraising' && (<div className="mt-2">
               {pricingTiers && pricingTiers.length > 0 ? (
                 `Selected Amount: ${formatCurrency(selectedAmount)}`
               ) : (
@@ -851,7 +925,8 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
                   {fees > 0 && ` ₦${fees} (contributor fees)`}
                 </span>
               )}
-            </div>
+            </div>)}
+
             {props.max_contributions && (
               <div className="text-sm text-gray-600">
                 Maximum contributions: {props.max_contributions}

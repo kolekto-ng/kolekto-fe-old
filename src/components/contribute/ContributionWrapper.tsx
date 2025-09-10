@@ -32,7 +32,8 @@ interface ContributionWrapperProps {
   total_contributions?: number;
   priceTiers?: PriceTier[];
   fee_bearer?: '',
-  wallet?: []
+  wallet?: [],
+  collection?: any; // Add this line to accept the entire collection object
 }
 
 const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
@@ -47,7 +48,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   total_contributions,
   priceTiers,
   fee_bearer,
-  wallet
+  wallet,
+  collection
 }) => {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'error'>('pending');
   const [paymentData, setPaymentData] = useState<any>(null);
@@ -122,13 +124,13 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   };
 
   // Create collection object from props for backward compatibility
-  const collection = {
-    id: collectionId,
-    title: collectionTitle,
-    amount: amount,
-    description: description,
-    deadline: deadline
-  };
+  // const collection = {
+  //   id: collectionId,
+  //   title: collectionTitle,
+  //   amount: amount,
+  //   description: description,
+  //   deadline: deadline
+  // };
 
   // Uncomment to enable maintenance mode
   // return (
