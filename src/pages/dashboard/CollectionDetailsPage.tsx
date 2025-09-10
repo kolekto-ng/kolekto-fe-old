@@ -561,7 +561,8 @@ const CollectionDetailsPage: React.FC = () => {
                 <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">₦{totalCollected.toLocaleString()}</div>
+
+                <div className="text-2xl font-bold">₦{currentCollection.type === 'fundraising' ? Number(totalCollected / 1.025).toFixed(2) : totalCollected.toLocaleString()}</div>
                 <p className="text-sm text-gray-500">From {contributorsCount} contributors</p>
               </CardContent>
             </Card>

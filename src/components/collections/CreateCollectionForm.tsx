@@ -236,11 +236,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   // This handles the step indicators
 
   const StepIndicator = () => (
-    <div className="flex justify-center items-center mb-8 px-4">
+    <div className="flex justify-center items-center mb-8 px-2">
       {[1, 2, 3, 4].map((step) => (
         <div key={step} className="flex items-center">
           <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 ${step === currentStep
+            className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium border-2 ${step === currentStep
               ? 'bg-green-600 text-white border-green-600'
               : step < currentStep
                 ? 'bg-green-600 text-white border-green-600'
@@ -251,7 +251,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
           </div>
           {step < 4 && (
             <div
-              className={`w-16 h-0.5 mx-2 ${step < currentStep ? 'bg-green-600' : 'bg-gray-300'
+              className={`w-8 sm:w-16 h-0.5 mx-1 sm:mx-2 ${step < currentStep ? 'bg-green-600' : 'bg-gray-300'
                 }`}
             />
           )}
@@ -265,18 +265,18 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       'Collection Types',
       'Basic Information',
       'Amount & Payment',
-      'Contributor Details'
+      'Contributors Details'
     ];
 
     return (
-      <div className="flex justify-center items-center mb-6">
+      <div className=" flex justify-center items-center mb-6 px-1 overflow-y-auto">
         {titles.map((title, index) => (
           <div key={index} className="flex items-center">
-            <div className={`text-sm ${index + 1 === currentStep ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
+            <div className={`text-xs sm:text-sm text-center leading-tight ${index + 1 === currentStep ? 'text-green-600 font-medium' : 'text-gray-500'}`}>
               {title}
             </div>
             {index < titles.length - 1 && (
-              <div className="w-8 h-0.5 mx-4 bg-gray-300" />
+              <div className="w-2 sm:w-4 h-0.5 mx-1 sm:mx-2 bg-gray-300" />
             )}
           </div>
         ))}
