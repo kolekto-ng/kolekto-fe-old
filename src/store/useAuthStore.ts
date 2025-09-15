@@ -66,8 +66,14 @@ export const useAuthStore = create((set, get) => ({
       }
     } catch (error) {
       console.error("Auth check error:", error);
-      set({ user: null, session: null, isLoading: false });
-      localStorage.removeItem("kolekto-auth-token");
+      if (error?.response?.status === 401) {
+        set({ user: null, session: null, isLoading: false });
+        localStorage.removeItem("kolekto-auth-token");
+      } else {
+        toast.error("Network error. Please try again.");
+        set({ isLoading: false });
+        // Don't clear user/session for non-auth errors
+      }
     }
   },
 
@@ -93,7 +99,7 @@ export const useAuthStore = create((set, get) => ({
 
       return { user, error: null };
     } catch (error: any) {
-      console.log(error)
+      console.log(error);
       const errorMessage = error.message || "Sign in failed";
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };

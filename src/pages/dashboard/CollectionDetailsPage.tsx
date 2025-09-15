@@ -104,7 +104,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
   const { user } = useAuthStore();
 
-  const { fetchCollectionById, currentCollection } = useCollectionStore();
+  const { fetchCollectionById, currentCollection, fetchCollections } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
 
@@ -112,9 +112,16 @@ const CollectionDetailsPage: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-      fetchCollectionById(id).catch((err) => {
-        console.error('Error fetching collection:', err);
-        toast.error('Failed to load collection details');
+      // First fetch all collections
+      fetchCollections().then(() => {
+        // Then fetch the current collection by id
+        fetchCollectionById(id).catch((err) => {
+          console.error('Error fetching collection:', err);
+          toast.error('Failed to load collection details');
+        });
+      }).catch((err) => {
+        console.error('Error fetching collections:', err);
+        toast.error('Failed to load collections');
       });
 
       fetchContributions(id).catch((err) => {
@@ -122,7 +129,7 @@ const CollectionDetailsPage: React.FC = () => {
         toast.error('Failed to load contributions');
       });
     }
-  }, [id, fetchCollectionById, fetchContributions]);
+  }, [id, fetchCollections, fetchCollectionById, fetchContributions]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
