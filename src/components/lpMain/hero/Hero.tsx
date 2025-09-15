@@ -26,16 +26,16 @@ const Hero = () => {
     ];
 
     return (
-        <section className='bg-gray-50 min-h-screen flex flex-col items-center'>
+        <section className="bg-gray-50 min-h-screen flex flex-col justify-center items-center w-full">
 
             {/* Main Hero Content */}
 
-            <div data-aos="fade-up" className='flex-1 px-4 lg:px-8 py-8 lg:py-12 max-w-[1280px] w-full mx-auto my-0'>
-                <div className='grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center'>
+            <div data-aos="fade-up" className="flex-1 px-4 lg:px-8 py-8 lg:py-12 max-w-[1280px] w-full mx-auto flex flex-col justify-center items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center justify-center m-auto w-full">
 
                     {/* Left Content */}
 
-                    <div className='order-1 lg:order-1 space-y-[23.2px] lg:space-y-8'>
+                    <div className='order-1 lg:order-1 space-y-[23.2px] lg:space-y-8 '>
 
                         {/* Badge */}
 

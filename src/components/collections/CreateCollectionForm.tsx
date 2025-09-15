@@ -424,18 +424,20 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   </div>
                 </div>
                 <div className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
-                  onClick={() => {
-                    setUseFundraising(true);
-                    setUsePriceTiers(false);
-                  }}>
-                  <div className="flex items-center">
+                // onClick={() => {
+                //   setUseFundraising(true);
+                //   setUsePriceTiers(false);
+                // }}
+                >
+                  <div className="flex items-center disabled:opacity-50 pointer-events-none">
                     <input
                       type="radio"
-                      checked={useFundraising}
-                      onChange={() => {
-                        setUseFundraising(true);
-                        setUsePriceTiers(false);
-                      }}
+                      // checked={useFundraising}
+                      disabled
+                      // onChange={() => {
+                      //   setUseFundraising(true);
+                      //   setUsePriceTiers(false);
+                      // }}
                       className="mr-3" />
                     <div>
                       <h4 className="font-medium">Fundraising</h4>
