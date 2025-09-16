@@ -415,7 +415,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                         setUsePriceTiers(true);
                         setUseFundraising(false);
                       }}
-                      className="mr-3"
+                      className="mr-3 accent-current"
                     />
                     <div>
                       <h4 className="font-medium">Tiered Contribution</h4>
@@ -424,20 +424,19 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   </div>
                 </div>
                 <div className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
-                // onClick={() => {
-                //   setUseFundraising(true);
-                //   setUsePriceTiers(false);
-                // }}
+                  onClick={() => {
+                    setUseFundraising(true);
+                    setUsePriceTiers(false);
+                  }}
                 >
-                  <div className="flex items-center disabled:opacity-50 pointer-events-none">
+                  <div className="flex items-center pointer-events-none">
                     <input
                       type="radio"
-                      // checked={useFundraising}
-                      disabled
-                      // onChange={() => {
-                      //   setUseFundraising(true);
-                      //   setUsePriceTiers(false);
-                      // }}
+                      checked={useFundraising}
+                      onChange={() => {
+                        setUseFundraising(true);
+                        setUsePriceTiers(false);
+                      }}
                       className="mr-3" />
                     <div>
                       <h4 className="font-medium">Fundraising</h4>
