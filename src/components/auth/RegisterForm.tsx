@@ -7,6 +7,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
+import { useRecaptcher } from "@/hooks/useRecaptcher";
+import ReCAPTCHA from "react-google-recaptcha";
 
 const RegisterForm: React.FC = () => {
   const [firstName, setFirstName] = useState("");
@@ -18,13 +20,62 @@ const RegisterForm: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isSignupComplete, setIsSignupComplete] = useState(false);
-
+  const { execute, ready } = useRecaptcher();
+  const [showV2, setShowV2] = useState(false);
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
+
+
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+
+  //   if (showV2) {
+  //     alert("Please complete the reCAPTCHA checkbox first.");
+  //     return;
+  //   }
+
+  //   if (!ready) return alert("reCAPTCHA not ready");
+
+  //   // Run v3
+  //   const token = await execute("signup");
+
+  //   const res = await fetch("/api/signup", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ email, token, type: "v3" }),
+  //   });
+
+  //   const data = await res.json();
+
+  //   if (data.requireV2) {
+  //     // backend says v3 score too low → fallback
+  //     setShowV2(true);
+  //   } else {
+  //     console.log("✅ Signup success:", data);
+  //   }
+  // };
+
+  const handleV2Change = async (token) => {
+    if (!token) return;
+
+    const res = await fetch("/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, token, type: "v2" }),
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      console.log("✅ Signup success via v2:", data);
+    } else {
+      alert("Failed reCAPTCHA v2 validation");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
 
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -47,14 +98,33 @@ const RegisterForm: React.FC = () => {
 
     setIsLoading(true);
 
+    if (showV2) {
+      alert("Please complete the reCAPTCHA checkbox first.");
+      return;
+    }
+
+    if (!ready) return alert("reCAPTCHA not ready");
+
+    // Run v3
+    const recaptcherToken = await execute("signup");
+
     try {
       const { user, error } = await signUp(
         email,
         password,
         firstName,
         lastName,
-        phoneNumber
+        phoneNumber,
+        recaptcherToken
       );
+      console.log(user, 'user');
+
+      if (user.requireV2) {
+        // backend says v3 score too low → fallback
+        setShowV2(true);
+      } else {
+        console.log("✅ Signup success:", user);
+      }
 
       if (error) {
         setError(error.message);
@@ -195,6 +265,14 @@ const RegisterForm: React.FC = () => {
           Sign in
         </Link>
       </div>
+      {showV2 && (
+        <div className="mt-4">
+          <ReCAPTCHA
+            sitekey="6LczVswrAAAAADOOPzS1ty0KKLkXGfvha3oa6VBK"
+            onChange={handleV2Change}
+          />
+        </div>
+      )}
     </form>
   );
 };
