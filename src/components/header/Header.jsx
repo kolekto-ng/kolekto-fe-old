@@ -18,6 +18,7 @@ const Header = () => {
         { name: 'Use Cases', href: '/use-cases' },
         { name: 'FAQs', href: '/faqs' },
         { name: 'Why Kolekto?', href: '/why-kolekto' },
+        { name: 'Kolekto Campus', href: '/kolekto-campus' },
     ];
 
 
@@ -58,6 +59,8 @@ const Header = () => {
                     {/* Desktop Auth Buttons */}
 
                     <div className='hidden lg:flex items-center space-x-3 pr-2'>
+
+                        
                         <Link
                             href='/sign-in'
                             className='border-2 text-[#1C5C23] border-[#1C5C23] px-3 py-1 rounded-md hover:text-[#1c5c23b2] text-[20px] font-semibold transition-colors duration-200'
@@ -115,6 +118,16 @@ const Header = () => {
                                     {/* Mobile Auth Buttons */}
 
                                     <div className='px-6 space-y-3 flex flex-col items-center'>
+
+                                        
+                                        
+                                        <Link
+                                            href='/kolekto-campus'
+                                            className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'
+                                            onClick={() => setIsMenuOpen(false)}
+                                        >
+                                            Kolekto Campus
+                                        </Link>
                                         <Link
                                             href='/sign up'
                                             className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'

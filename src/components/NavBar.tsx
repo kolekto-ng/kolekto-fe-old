@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Logo from "./Logo";
 import { Button } from "@/components/ui/button";
 
-import { LogIn, LogOut, LayoutDashboard, User } from "lucide-react";
+import { LogIn, LogOut, LayoutDashboard, User, BookOpen } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -54,6 +54,8 @@ const NavBar: React.FC = () => {
               </>
             ) : (
               <>
+
+              
                 <Link to="/login">
                   <Button variant="ghost" className="w-full justify-start">
                     <LogIn className="mr-2 h-4 w-4" />
@@ -104,6 +106,13 @@ const NavBar: React.FC = () => {
             </>
           ) : (
             <>
+              <Link to="/kolekto-campus">
+                <Button className="bg-amber-600 text-white hover:from-emerald-700 hover:to-amber-400">
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Kolekto In Campus
+                </Button>
+              </Link>
+
               <Link to="/login">
                 <Button variant="ghost">
                   <LogIn className="mr-2 h-4 w-4" />
@@ -111,7 +120,12 @@ const NavBar: React.FC = () => {
                 </Button>
               </Link>
               <Link to="/register">
-                <Button variant="default" className="bg-kolekto hover:bg-kolekto/90">Sign Up</Button>
+                <Button
+                  variant="default"
+                  className="bg-kolekto hover:bg-kolekto/90"
+                >
+                  Sign Up
+                </Button>
               </Link>
             </>
           )}
