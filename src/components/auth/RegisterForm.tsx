@@ -130,7 +130,7 @@ const RegisterForm: React.FC = () => {
     let recaptchaType = 'v3'
 
     try {
-      const { user, error } = await signUp(
+      let { user, error } = await signUp(
         email,
         password,
         firstName,
@@ -144,12 +144,14 @@ const RegisterForm: React.FC = () => {
       if (user.requireV2) {
         // backend says v3 score too low → fallback
         setShowV2(true);
+        error = { message: 'solve recaptcha' }
+        return
       } else {
         console.log("✅ Signup success:", user);
       }
 
       if (error) {
-        setError(error.message);
+        setError(error?.message);
         toast.error("Registration failed");
       } else {
         setIsSignupComplete(true);
