@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Logo from "./Logo";
 import { Button } from "@/components/ui/button";
 
-import { LogIn, LogOut, LayoutDashboard, User } from "lucide-react";
+import { LogIn, LogOut, LayoutDashboard, User, BookOpen } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -54,6 +54,14 @@ const NavBar: React.FC = () => {
               </>
             ) : (
               <>
+
+                <Link
+                  to='/kolekto-campus'
+                  className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'
+
+                >
+                  Kolekto Campus
+                </Link>
                 <Link to="/login">
                   <Button variant="ghost" className="w-full justify-start">
                     <LogIn className="mr-2 h-4 w-4" />
@@ -77,8 +85,17 @@ const NavBar: React.FC = () => {
         <Link to="/" className="flex items-center">
           <Logo size="md" />
         </Link>
+        <div>
+          <Link
+            to='/kolekto-campus'
+            className='bg-green-900 inline md:hidden text-white w-full max-w-fit text-center px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition-colors duration-200'
+          >
+            <BookOpen className="mr-2 h-4 w-4 inline" />
 
-        <MobileNav />
+            Kolekto in campus
+          </Link>
+          <MobileNav />
+        </div>
 
         <div className="hidden md:flex items-center gap-4">
           {isLoading ? (
@@ -104,6 +121,13 @@ const NavBar: React.FC = () => {
             </>
           ) : (
             <>
+              <Link to="/kolekto-campus">
+                <Button className="bg-green-900 text-white hover:bg-green-700 transition-colors duration-200 ">
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Kolekto In Campus
+                </Button>
+              </Link>
+
               <Link to="/login">
                 <Button variant="ghost">
                   <LogIn className="mr-2 h-4 w-4" />
@@ -111,7 +135,12 @@ const NavBar: React.FC = () => {
                 </Button>
               </Link>
               <Link to="/register">
-                <Button variant="default" className="bg-kolekto hover:bg-kolekto/90">Sign Up</Button>
+                <Button
+                  variant="default"
+                  className="bg-kolekto hover:bg-kolekto/90"
+                >
+                  Sign Up
+                </Button>
               </Link>
             </>
           )}

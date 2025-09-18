@@ -22,7 +22,7 @@ import { useEffect } from "react";
 import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-
+import KolektoCampusSignup from "./pages/KolektoCampus";
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import WhatsAppButton from "./components/WhatsappFloatButton";
@@ -53,6 +53,7 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
+      <Route path="/kolekto-campus" element={<KolektoCampusSignup />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />

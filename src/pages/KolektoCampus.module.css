@@ -1,0 +1,30 @@
+.marqueeWrapper {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.marqueeContent {
+  display: flex;
+  white-space: nowrap;
+  animation: scroll-left 4s linear infinite;
+}
+
+.marqueeItem {
+  flex: 0 0 auto;
+  margin-right: 2rem;
+}
+
+@keyframes scroll-left {
+  0% {
+    transform: translateX(0%);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.poppins {
+  font-family: "Poppins", sans-serif;
+}
