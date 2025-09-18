@@ -112,7 +112,8 @@ export const useAuthStore = create((set, get) => ({
     firstName: string,
     lastName: string,
     phoneNumber?: string,
-    recaptcherToken?: string
+    recaptcherToken?: string,
+    recatcherType?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -124,6 +125,7 @@ export const useAuthStore = create((set, get) => ({
         lastName,
         phoneNumber,
         recaptcherToken,
+        recatcherType,
       });
       const { data } = res;
       console.log(data, "Sign up data");
@@ -135,7 +137,7 @@ export const useAuthStore = create((set, get) => ({
         isLoading: false,
       });
 
-      return { user: data.user, error: null };
+      return { user: data?.user ?? data, error: null };
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || error.message || "Sign up failed";

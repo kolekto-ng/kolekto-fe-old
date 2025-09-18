@@ -57,15 +57,34 @@ const RegisterForm: React.FC = () => {
 
   const handleV2Change = async (token) => {
     if (!token) return;
+    let recaptchaType = "v2"
+    let recaptcherToken = token
 
-    const res = await fetch("/api/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, token, type: "v2" }),
-    });
+    const { user, error } = await signUp(
+      email,
+      password,
+      firstName,
+      lastName,
+      phoneNumber,
+      recaptcherToken,
+      recaptchaType
+    );
 
     const data = await res.json();
-    if (data.success) {
+
+
+    if (error) {
+      setError(error.message);
+      toast.error("Registration failed");
+    } else {
+      setIsSignupComplete(true);
+      toast.success(
+        "Registration successful! Check your email to confirm your account."
+      );
+      // If user is returned, they might be auto-signed in, so redirect to dashboard
+    }
+
+    if (user) {
       console.log("✅ Signup success via v2:", data);
     } else {
       alert("Failed reCAPTCHA v2 validation");
@@ -107,6 +126,8 @@ const RegisterForm: React.FC = () => {
 
     // Run v3
     const recaptcherToken = await execute("signup");
+    console.log(recaptcherToken, 'capther');
+    let recaptchaType = 'v3'
 
     try {
       const { user, error } = await signUp(
@@ -115,7 +136,8 @@ const RegisterForm: React.FC = () => {
         firstName,
         lastName,
         phoneNumber,
-        recaptcherToken
+        recaptcherToken,
+        recaptchaType
       );
       console.log(user, 'user');
 
