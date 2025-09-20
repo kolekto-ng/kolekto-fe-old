@@ -289,14 +289,14 @@ const RegisterForm: React.FC = () => {
           Sign in
         </Link>
       </div>
-      {showV2 && (
+      {/* {showV2 && (
         <div className="mt-4">
           <ReCAPTCHA
             sitekey="6LczVswrAAAAADOOPzS1ty0KKLkXGfvha3oa6VBK"
             onChange={handleV2Change}
           />
         </div>
-      )}
+      )} */}
     </form>
   );
 };
