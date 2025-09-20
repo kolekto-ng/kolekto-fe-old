@@ -23,12 +23,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Banknote, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useSettings } from "@/store/useSettings";
 import { axiosInstance } from "@/utils/axios";
-
-// Make sure to set this in your environment variables
-const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_KEY; // For Vite
-// const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_KEY; // For Next.js
 
 export default function PaymentAccounts() {
     const [open, setOpen] = useState(false);
@@ -37,103 +34,96 @@ export default function PaymentAccounts() {
     const [bankName, setBankName] = useState("");
     const [accountNumber, setAccountNumber] = useState("");
     const [accountName, setAccountName] = useState("");
-    // const [loading, setLoading] = useState(false);
     const [verified, setVerified] = useState(false);
-    const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts } = useSettings()
+    const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts } =
+        useSettings();
 
-    // Fetch bank list from Paystack
     useEffect(() => {
-        const fetchBanks = async () => {
-
-            try {
-
-                const data = await getBanks()
-                if (data.status) {
-                    setBanks(data.data);
-                } else {
-                    console.error("Failed to fetch banks:", data);
-                }
-            } catch (err) {
-                console.error("Error fetching banks:", err);
-            }
-        };
-
-        if (open) fetchBanks();
+        if (open) {
+            getBanks().then((data) => {
+                if (data?.status) setBanks(data.data);
+            });
+        }
     }, [open]);
 
     useEffect(() => {
+        getPayoutAccounts();
+    }, []);
 
-        getPayoutAccounts()
-    }, [payoutAccounts])
-
-    // Verify account via Paystack
     const handleVerifyAccount = async () => {
         setVerified(false);
-        try {
-
-            const data = await verifyAccount({ accountNumber, bankCode })
-            if (data.status) {
-                setAccountName(data.data.account_name);
-                setVerified(true);
-            } else {
-                alert("Account not found");
-            }
-        } catch (err) {
-            console.error(err);
+        const data = await verifyAccount({ accountNumber, bankCode });
+        if (data.status) {
+            setAccountName(data.data.account_name);
+            setVerified(true);
+        } else {
+            alert("Account not found");
         }
     };
 
     const saveAccount = () => {
-
-        axiosInstance.post('/settings/profile/save-account', {
+        axiosInstance.post("/settings/profile/save-account", {
             bankCode,
             accountNumber,
             accountName,
-            bankName
-        })
-
-        console.log({
-
+            bankName,
         });
         setOpen(false);
-        // Send to backend here
     };
 
     return (
         <>
             <Card>
                 <CardHeader className="flex flex-row justify-between items-center">
-                    <CardTitle>Payment Accounts</CardTitle>
-                    <Button variant="outline" className="" onClick={() => setOpen(true)}>
-                        Add Payment Method
+                    <CardTitle className="text-lg font-semibold">
+                        Connected Bank Accounts
+                    </CardTitle>
+                    <Button onClick={() => setOpen(true)}>
+                        <Plus className="w-4 h-4 mr-1" /> Add Account
                     </Button>
                 </CardHeader>
-                {payoutAccounts.length >= 1 ? <CardContent>
-                    {payoutAccounts.map((account, i) => {
-                        console.log(account, 'account');
-
-                        return (
-                            <div className="" key={i}>
-                                {account.account_name}
-                                {account?.bank_name}
-                                {account?.account_last4}
-                            </div>
-                        )
-
-
-                    })}
-                </CardContent> :
-                    <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between gap-10">
-                            <p className="text-muted-foreground">
-                                No payment accounts linked yet. Please add your bank account or
-                                payment method.
-                            </p>
-
+                <CardContent>
+                    {payoutAccounts.length > 0 ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            {payoutAccounts.map((account, i) => (
+                                <div
+                                    key={i}
+                                    className="flex items-center justify-between p-4 rounded-xl border shadow-sm bg-white hover:shadow-md transition"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Banknote className="w-6 h-6 text-blue-600" />
+                                        <div>
+                                            <p className="font-medium">{account.account_name}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {account.bank_name} ••••{account.account_last4}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-red-500 hover:text-red-700"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </CardContent>
-                }
-
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <Banknote className="w-10 h-10 text-muted-foreground mb-2" />
+                            <p className="text-muted-foreground mb-2">
+                                No bank accounts linked yet.
+                            </p>
+                            <Button onClick={() => setOpen(true)}>
+                                <Plus className="w-4 h-4 mr-1" /> Add your first account
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
@@ -141,18 +131,20 @@ export default function PaymentAccounts() {
                     <DialogHeader>
                         <DialogTitle>Add Bank Account</DialogTitle>
                         <DialogDescription>
-                            Only add personal bank accounts linked to your BVN.
+                            Ensure the account matches your BVN details.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4">
                         <div>
                             <Label>Bank Name</Label>
-                            <Select onValueChange={(value) => {
-                                setBankCode(value); // store code
-                                const selected = banks.find((b) => b.code === value);
-                                setBankName(selected?.name || "");
-                            }}>
+                            <Select
+                                onValueChange={(value) => {
+                                    setBankCode(value);
+                                    const selected = banks.find((b) => b.code === value);
+                                    setBankName(selected?.name || "");
+                                }}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select a bank" />
                                 </SelectTrigger>
@@ -178,9 +170,9 @@ export default function PaymentAccounts() {
                         </div>
 
                         {verified && (
-                            <div className="bg-green-100 p-2 rounded-md">
+                            <div className="bg-green-50 border border-green-200 p-3 rounded-md">
                                 <p className="text-green-700 text-sm font-medium">
-                                    Account Name: {accountName}
+                                    ✅ Verified Account: {accountName}
                                 </p>
                             </div>
                         )}
@@ -199,7 +191,7 @@ export default function PaymentAccounts() {
                         )}
                     </DialogFooter>
                 </DialogContent>
-            </Dialog >
+            </Dialog>
         </>
     );
 }

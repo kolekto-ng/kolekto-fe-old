@@ -287,7 +287,7 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
       </Card> */}
 
       {/* Government IDs */}
-      {/* <Card>
+      <Card>
         <CardHeader>
           <CardTitle>Government Identification</CardTitle>
         </CardHeader>
@@ -303,9 +303,9 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
             </div>
           </div>
         </CardContent>
-      </Card> */}
+      </Card>
 
-      {/* <PaymentAccounts /> */}
+      <PaymentAccounts />
     </div>
   );
 };
