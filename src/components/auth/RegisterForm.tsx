@@ -62,38 +62,58 @@ const RegisterForm: React.FC = () => {
     let recaptchaType = "v2"
     let recaptcherToken = token
 
-    const { user, error } = await signUp(
-      email,
-      password,
-      firstName,
-      lastName,
-      phoneNumber,
-      recaptcherToken,
-      recaptchaType
-    );
+    try {
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
 
-    const data = await res.json();
+      const isValidE164 = (phone: string) => /^\+[1-9]\d{1,14}$/.test(phone);
 
+      if (!isValidE164(phoneNumber)) {
+        setError(
+          "Phone number must be in international format, e.g. +2348012345678"
+        );
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-      toast.error("Registration failed");
-    } else {
-      setIsSignupComplete(true);
-      toast.success(
-        "Registration successful! Check your email to confirm your account."
+      if (phoneNumber && phoneNumber.replace(/\D/g, "").length < 10) {
+        setError("Phone number must be at least 10 digits");
+        return;
+      }
+
+      setIsLoading(true);
+      let { user, error } = await signUp(
+        email,
+        password,
+        firstName,
+        lastName,
+        phoneNumber,
+        recaptcherToken,
+        recaptchaType
       );
-      // If user is returned, they might be auto-signed in, so redirect to dashboard
+
+      if (error) {
+        setError(error?.message);
+        toast.error("Registration failed");
+      } else {
+        setIsSignupComplete(true);
+        toast.success(
+          "Registration successful! Check your email to confirm your account."
+        );
+        // If user is returned, they might be auto-signed in, so redirect to dashboard
+      }
+    } catch (error: any) {
+      console.log(error, 'error');
+      setError(error.message || "An unexpected error occurred");
+      toast.error("Registration failed");
+    } finally {
+      setIsLoading(false);
     }
 
-    if (user) {
-      console.log("✅ Signup success via v2:", data);
-    } else {
-      alert("Failed reCAPTCHA v2 validation");
-    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, recaptchaType = 'v3') => {
     e.preventDefault();
     setError("");
 
@@ -128,7 +148,6 @@ const RegisterForm: React.FC = () => {
 
     // Run v3
     // const recaptcherToken = await execute("signup");
-    let recaptchaType = 'v3'
 
     if (!executeRecaptcha) return;
 
