@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const siteKey = import.meta.env.VITE_RECAPTCHER_KEY;
+const siteKey = import.meta.env.VITE_RECAPTCHER_KEY_V2;
 
 export function useRecaptcher() {
   const [ready, setReady] = useState(false);
