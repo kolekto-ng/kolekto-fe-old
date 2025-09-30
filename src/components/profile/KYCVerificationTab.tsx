@@ -53,6 +53,7 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
           'Content-Type': 'application/json',
         },
       });
+      console.log(response, 'bvn res');
 
       if (!response.ok) {
         throw new Error('BVN verification failed');

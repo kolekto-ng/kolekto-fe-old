@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/store";
 import { useRecaptcher } from "@/hooks/useRecaptcher";
 import ReCAPTCHA from "react-google-recaptcha";
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
+
 
 const RegisterForm: React.FC = () => {
   const [firstName, setFirstName] = useState("");
@@ -25,7 +27,7 @@ const RegisterForm: React.FC = () => {
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
 
-
+  const { executeRecaptcha } = useGoogleReCaptcha();
   // const handleSubmit = async (e) => {
   //   e.preventDefault();
 
@@ -125,9 +127,14 @@ const RegisterForm: React.FC = () => {
     if (!ready) return alert("reCAPTCHA not ready");
 
     // Run v3
-    const recaptcherToken = await execute("signup");
-    console.log(recaptcherToken, 'capther');
+    // const recaptcherToken = await execute("signup");
     let recaptchaType = 'v3'
+
+    if (!executeRecaptcha) return;
+
+    // request token with an "action"
+    const recaptcherToken = await executeRecaptcha("signup");
+    console.log(recaptcherToken, 'capther');
 
     try {
       let { user, error } = await signUp(
@@ -289,14 +296,14 @@ const RegisterForm: React.FC = () => {
           Sign in
         </Link>
       </div>
-      {/* {showV2 && (
+      {showV2 && (
         <div className="mt-4">
           <ReCAPTCHA
-            sitekey="6LczVswrAAAAADOOPzS1ty0KKLkXGfvha3oa6VBK"
+            sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}
           />
         </div>
-      )} */}
+      )}
     </form>
   );
 };
