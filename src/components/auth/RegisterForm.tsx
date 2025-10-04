@@ -267,8 +267,8 @@ const RegisterForm: React.FC = () => {
         <div className="bg-green-50 text-green-700 p-4 rounded-md">
           <h3 className="font-medium">Registration successful!</h3>
           <p className="text-sm mt-1">
-            Please check your email inbox or <span className="font-semibold">spam</span> folder to confirm your
-            account.
+            Please check your email inbox or <span className="font-semibold">spam folder to confirm your
+              account.
           </p>
         </div>
         <p className="text-sm text-gray-600">
@@ -287,7 +287,7 @@ const RegisterForm: React.FC = () => {
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
       {/* Add required fields note */}
       <p className="text-xs text-neutral-500 mb-2">
-        Fields marked <span className="text-red-600">*</span> are required.
+        Fields marked * are required.
       </p>
 
       {error && (
@@ -301,7 +301,7 @@ const RegisterForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="firstName">
-          First Name <span className="text-red-600">*</span>
+          First Name *
         </Label>
         <Input
           id="firstName"
@@ -315,7 +315,7 @@ const RegisterForm: React.FC = () => {
       </div>
       <div className="space-y-2">
         <Label htmlFor="lastName">
-          Last Name <span className="text-red-600">*</span>
+          Last Name *
         </Label>
         <Input
           id="lastName"
@@ -330,7 +330,7 @@ const RegisterForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="email">
-          Email <span className="text-red-600">*</span>
+          Email *
         </Label>
         <Input
           id="email"
@@ -345,7 +345,7 @@ const RegisterForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="phoneNumber">
-          Phone Number (WhatsApp preferred) <span className="text-red-600">*</span>
+          Phone Number (WhatsApp preferred) *
         </Label>
         <Input
           id="phoneNumber"
@@ -360,7 +360,7 @@ const RegisterForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="password">
-          Password <span className="text-red-600">*</span>
+          Password *
         </Label>
         <div className="relative">
           <Input
@@ -400,7 +400,7 @@ const RegisterForm: React.FC = () => {
 
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">
-          Confirm Password <span className="text-red-600">*</span>
+          Confirm Password *
         </Label>
         <div className="relative">
           <Input
@@ -442,7 +442,7 @@ const RegisterForm: React.FC = () => {
           <a href="/privacy" target="_blank" className="text-kolekto underline">
             Privacy Policy
           </a>
-          <span className="text-red-600">*</span>
+          *
         </label>
       </div>
 
