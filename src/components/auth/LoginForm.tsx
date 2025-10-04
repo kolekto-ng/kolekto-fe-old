@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail } from 'lucide-react';
+import { Mail, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/store';
 
 const LoginForm: React.FC = () => {
@@ -16,6 +15,7 @@ const LoginForm: React.FC = () => {
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
   const [isMagicLinkSent, setIsMagicLinkSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { signIn, sendMagicLink } = useAuthStore();
   const navigate = useNavigate();
@@ -29,14 +29,14 @@ const LoginForm: React.FC = () => {
       const { user, error } = await signIn(email, password);
       if (error) {
         setError(error.message);
-        toast.error('Login failed');
+        toast.error(error.message);
       } else {
         toast.success('Login successful!');
         navigate('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
-      toast.error('Login failed');
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -121,13 +121,25 @@ const LoginForm: React.FC = () => {
             Forgot password?
           </Link>
         </div>
-        <Input
-          id="password"
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full pr-10"
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            className="absolute right-2 top-2 text-neutral-500 hover:text-neutral-700"
+            onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       <Button

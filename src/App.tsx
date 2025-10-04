@@ -27,6 +27,7 @@ import AOS from 'aos';
 import 'aos/dist/aos.css';
 import WhatsAppButton from "./components/WhatsappFloatButton";
 // Create query client outside of the component to avoid React hooks issues
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -55,7 +56,11 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<HomePage />} />
       <Route path="/kolekto-campus" element={<KolektoCampusSignup />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/register" element={
+        <GoogleReCaptchaProvider reCaptchaKey="6LeWENorAAAAALS4O9P-c-x1e65yu-U5bt8XGp-t">
+          <RegisterPage />
+        </GoogleReCaptchaProvider>
+      } />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
