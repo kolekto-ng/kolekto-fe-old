@@ -139,6 +139,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   //   </div>
   // );
 
+  console.log(total_contributions)
+
   if (max_contributions === total_contributions) {
     return (
       <div className="text-center py-8">
