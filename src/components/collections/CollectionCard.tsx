@@ -22,10 +22,11 @@ interface CollectionCardProps {
   amount: number;
   deadline: string;
   status: Status;
-  type: "fixed" | "tier";
+  type: "fixed" | "tiered";
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
+  tiers?: { amount: number; name: string }[];
   onShare: () => void;
   onViewDetails: () => void;
 }
@@ -136,6 +137,9 @@ function calcTotalRaised(amount: number, participants: number) {
   return amount * participants;
 }
 
+
+
+
 // ---------------------------
 // Components
 // ---------------------------
@@ -166,6 +170,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   participantsCount,
   maxParticipants,
   dateCreated,
+  tiers,
   onShare,
   onViewDetails,
 }) => {
@@ -204,7 +209,15 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
           <div>
             <p className="text-sm text-gray-600">Amount</p>
             <p className="font-medium">
-              {amount > 0 ? formatCurrency(amount) : "__"}
+              {(() => {
+                const displayAmount = type === "tier" ? getLowestTierAmount(tiers) : amount;
+                  console.log("Type:", type);
+                  console.log("Amount prop:", amount);
+                  console.log("Tiers:", tiers);
+                  console.log("Display amount:", displayAmount);
+
+                return displayAmount > 0 ? formatCurrency(displayAmount) : "__";
+              }) ()}
             </p>
           </div>
           <div>

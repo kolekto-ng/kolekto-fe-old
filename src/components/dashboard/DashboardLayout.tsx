@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import WalletOverview from '../WalletOverview';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import DashboardSidebar from './DashboardSidebar';
