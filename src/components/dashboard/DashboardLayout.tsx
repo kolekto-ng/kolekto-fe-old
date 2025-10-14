@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import WalletOverview from '../WalletOverview';
+import CollectionsOverview from './CollectionOverview';
+import ActivityFeed from './ActivityOverview';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import DashboardSidebar from './DashboardSidebar';
@@ -7,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store';
 
 import { Loader2 } from "lucide-react";
+import DashboardNavbar from './DashboardNavbar';
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -42,16 +45,36 @@ const DashboardContent = () => {
   };
 
   return (
-    <div className="flex-1 w-full">
-      <div className="p-3 sm:p-6 lg:p-8">
-        <div className="flex items-center mb-4">
-          <SidebarTrigger className="md:hidden" />
-          <div className="ml-2 md:ml-0 text-xl font-bold">{getPageTitle()}</div>
-        </div>
-        <Outlet />
+  <div className="flex-1 w-full">
+    <DashboardNavbar />
+    <div className="p-3 sm:p-6 lg:p-8">
+      <div className="flex items-center mb-4">
+        <SidebarTrigger className="md:hidden" />
+        <div className="ml-2 md:ml-0 text-xl font-bold">{getPageTitle()}</div>
       </div>
+
+      
+      
+      {/* NEW TWO-COLUMN LAYOUT */}
+      {location.pathname === '/dashboard' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* LEFT COLUMN - Account Overview + Collections */}
+          <div className="lg:col-span-2 space-y-6">
+            <WalletOverview />
+            <CollectionsOverview />
+          </div>
+          
+          {/* RIGHT COLUMN - Activity */}
+          <div className="lg:col-span-1">
+            <ActivityFeed />
+          </div>
+        </div>
+      ) : (
+        <Outlet />
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 const DashboardLayout: React.FC = () => {

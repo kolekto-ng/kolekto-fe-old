@@ -94,9 +94,23 @@ const DashboardSidebar = () => {
             size="sm"
             onClick={() => handleNavigation('/dashboard/create-collection')}
           >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Create Collection
+          </Button>
+
+
+          {/* <Button
+            variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
+            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              }`}
+            size="sm"
+            onClick={() => handleNavigation('/dashboard/create-collection')}
+          >
             <Flag className="mr-2 h-4 w-4" />
             Referall
-          </Button>
+          </Button> */}
 
           <Button
             variant={isActive('/dashboard/settings') ? 'default' : 'ghost'}
