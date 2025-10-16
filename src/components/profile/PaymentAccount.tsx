@@ -23,7 +23,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Banknote, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Banknote, CheckCircle2, Plus, Trash2, AlertCircle } from "lucide-react";
 import { useSettings } from "@/store/useSettings";
 import { axiosInstance } from "@/utils/axios";
 
@@ -35,6 +36,7 @@ export default function PaymentAccounts() {
     const [accountNumber, setAccountNumber] = useState("");
     const [accountName, setAccountName] = useState("");
     const [verified, setVerified] = useState(false);
+    const [kycVerified, setKycVerified] = useState(false); // Set to false to show error
     const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts } =
         useSettings();
 
@@ -48,7 +50,16 @@ export default function PaymentAccounts() {
 
     useEffect(() => {
         getPayoutAccounts();
+        // TODO: Check KYC status from your API/store
+        // Example: setKycVerified(user.kycVerified);
     }, []);
+
+    const handleAddAccount = () => {
+        if (!kycVerified) {
+            return; // Dialog won't open if KYC not verified
+        }
+        setOpen(true);
+    };
 
     const handleVerifyAccount = async () => {
         setVerified(false);
@@ -78,11 +89,20 @@ export default function PaymentAccounts() {
                     <CardTitle className="text-lg font-semibold">
                         Connected Bank Accounts
                     </CardTitle>
-                    <Button onClick={() => setOpen(true)}>
+                    <Button onClick={handleAddAccount}>
                         <Plus className="w-4 h-4 mr-1" /> Add Account
                     </Button>
                 </CardHeader>
                 <CardContent>
+                    {!kycVerified && (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                                Please complete your KYC verification before adding a bank account.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     {payoutAccounts.length > 0 ? (
                         <div className="grid gap-4 sm:grid-cols-2">
                             {payoutAccounts.map((account, i) => (
@@ -118,7 +138,7 @@ export default function PaymentAccounts() {
                             <p className="text-muted-foreground mb-2">
                                 No bank accounts linked yet.
                             </p>
-                            <Button onClick={() => setOpen(true)}>
+                            <Button onClick={handleAddAccount}>
                                 <Plus className="w-4 h-4 mr-1" /> Add your first account
                             </Button>
                         </div>
