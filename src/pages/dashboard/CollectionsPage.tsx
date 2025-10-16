@@ -68,8 +68,11 @@ const CollectionsPage: React.FC = () => {
             </CardContent>
           </Card>
         ) : sortedCollections && sortedCollections.length > 0 ? (
-          sortedCollections.map(collection => (
-            <CollectionCard
+
+          sortedCollections.map(collection => {
+            console.log("Collection object:", collection);
+            return (
+              <CollectionCard
               key={collection.id}
               id={collection.id}
               title={collection.title}
@@ -81,10 +84,28 @@ const CollectionsPage: React.FC = () => {
               participantsCount={collection.total_contributions || 0}
               maxParticipants={collection.max_contributions || undefined}
               dateCreated={collection.created_at}
+              tiers={(() => {
+  console.log("collection.price_tiers:", collection.price_tiers);
+  console.log("typeof price_tiers:", typeof collection.price_tiers);
+  console.log("Array.isArray(price_tiers):", Array.isArray(collection.price_tiers));
+  
+  if (collection.price_tiers) {
+    const transformedTiers = collection.price_tiers.map((tier: any) => ({
+      amount: tier.price,
+      name: tier.name
+    }));
+    console.log("Transformed tiers:", transformedTiers);
+    return transformedTiers;
+  } else {
+    console.log("price_tiers is falsy:", collection.price_tiers);
+    return undefined;
+  }
+})()}
               onShare={() => handleShare(collection.id)}
               onViewDetails={() => handleViewDetails(collection.id)}
             />
-          ))
+            );
+      })
         ) : (
           <Card className="col-span-full">
             <CardContent className="py-10 text-center">
