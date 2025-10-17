@@ -50,12 +50,12 @@ const CollectionsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Collections</h1>
         <Button asChild className="bg-kolekto hover:bg-kolekto/90">
           <Link to="/dashboard/create-collection">New Collection</Link>
         </Button>
-      </div>
+      </div> */}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
@@ -68,23 +68,44 @@ const CollectionsPage: React.FC = () => {
             </CardContent>
           </Card>
         ) : sortedCollections && sortedCollections.length > 0 ? (
-          sortedCollections.map(collection => (
-            <CollectionCard
-              key={collection.id}
-              id={collection.id}
-              title={collection.title}
-              description={collection.description || undefined}
-              amount={collection.amount}
-              deadline={collection.deadline || new Date().toISOString()}
-              status={collection.status as 'active' | "paused" | 'expired' | 'completed'}
-              type={collection.type as 'flat' | 'tier'}
-              participantsCount={collection.total_contributions || 0}
-              maxParticipants={collection.max_contributions || undefined}
-              dateCreated={collection.created_at}
-              onShare={() => handleShare(collection.id)}
-              onViewDetails={() => handleViewDetails(collection.id)}
-            />
-          ))
+
+          sortedCollections.map(collection => {
+            console.log("Collection object:", collection);
+            return (
+              <CollectionCard
+                key={collection.id}
+                id={collection.id}
+                title={collection.title}
+                description={collection.description || undefined}
+                amount={collection.amount}
+                deadline={collection.deadline || new Date().toISOString()}
+                status={collection.status as 'active' | "paused" | 'expired' | 'completed'}
+                type={collection.type as 'flat' | 'tier'}
+                participantsCount={collection.total_contributions || 0}
+                maxParticipants={collection.max_contributions || undefined}
+                dateCreated={collection.created_at}
+                tiers={(() => {
+                  console.log("collection.price_tiers:", collection.price_tiers);
+                  console.log("typeof price_tiers:", typeof collection.price_tiers);
+                  console.log("Array.isArray(price_tiers):", Array.isArray(collection.price_tiers));
+
+                  if (collection.price_tiers) {
+                    const transformedTiers = collection.price_tiers.map((tier: any) => ({
+                      amount: tier.price,
+                      name: tier.name
+                    }));
+                    console.log("Transformed tiers:", transformedTiers);
+                    return transformedTiers;
+                  } else {
+                    console.log("price_tiers is falsy:", collection.price_tiers);
+                    return undefined;
+                  }
+                })()}
+                onShare={() => handleShare(collection.id)}
+                onViewDetails={() => handleViewDetails(collection.id)}
+              />
+            );
+          })
         ) : (
           <Card className="col-span-full">
             <CardContent className="py-10 text-center">

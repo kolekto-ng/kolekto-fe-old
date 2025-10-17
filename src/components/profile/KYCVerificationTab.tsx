@@ -1,368 +1,9 @@
-// import React, { useState } from 'react';
-// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-// import { Button } from '@/components/ui/button';
-// import { Badge } from '@/components/ui/badge';
-// import { Progress } from '@/components/ui/progress';
-// import { Separator } from '@/components/ui/separator';
-// import {
-//   Check,
-//   Upload,
-//   AlertCircle,
-//   Shield,
-//   FileText,
-//   Camera,
-//   Clock,
-//   X
-// } from 'lucide-react';
-// import { BVNVerificationForm } from './forms/BVNVerificationForm';
-// import { DocumentUploadForm } from './forms/DocumentUploadForm';
-// import ComprehensiveKYC from '../settings/comprehensive-kyc-system';
-
-
-// const VERIFIED = 'verified';
-// const PENDING = 'pending';
-// const REJECTED = 'rejected';
-
-
-
-// const KYCVerificationTab: React.FC = () => {
-//   const [showBVNForm, setShowBVNForm] = useState(false);
-//   const [showIdentityForm, setShowIdentityForm] = useState(false);
-//   const [showAddressForm, setShowAddressForm] = useState(false);
-//   const [kycData, setKycData] = useState({
-//     overallStatus: 'pending', // 'pending', 'pending', 'rejected'
-//     completionPercentage: 100,
-//     identityVerification: {
-//       status: REJECTED,
-//       documents: [
-//         { type: 'National ID', status: REJECTED, uploadedAt: '2024-01-15' },
-//         { type: 'Passport Photo', status: REJECTED, uploadedAt: '2024-01-15' }
-//       ]
-//     },
-//     addressVerification: {
-//       status: REJECTED,
-//       documents: [
-//         { type: 'Utility Bill', status: REJECTED, uploadedAt: '2024-01-16' }
-//       ]
-//     },
-//     phoneVerification: {
-//       phoneNumber: '+2341234567890',
-//       status: REJECTED,
-//       verifiedAt: '2024-01-10'
-//     },
-//     emailVerification: {
-//       email: '',
-//       status: REJECTED,
-//       verifiedAt: '2024-01-10'
-//     },
-//     bankVerification: {
-//       bankName: 'First Bank',
-//       accountNumber: '1234567890',
-//       bvn: '12345678901',
-//       accountName: 'John Doe',
-//       status: REJECTED,
-//       verifiedAt: '2024-01-17'
-//     }
-//   });
-
-//   const getStatusBadge = (status: string) => {
-//     switch (status) {
-//       case 'verified':
-//         return (
-//           <Badge variant="outline" className="text-green-600 border-green-600">
-//             <Check className="h-3 w-3 mr-1" />
-//             Verified
-//           </Badge>
-//         );
-//       case 'pending':
-//         return (
-//           <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-//             <Clock className="h-3 w-3 mr-1" />
-//             Pending
-//           </Badge>
-//         );
-//       case 'rejected':
-//         return (
-//           <Badge variant="outline" className="text-red-600 border-red-600">
-//             <X className="h-3 w-3 mr-1" />
-//             Rejected
-//           </Badge>
-//         );
-//       default:
-//         return (
-//           <Badge variant="outline" className="text-gray-600 border-gray-600">
-//             <AlertCircle className="h-3 w-3 mr-1" />
-//             Not Started
-//           </Badge>
-//         );
-//     }
-//   };
-
-//   const getStatusColor = (status: string) => {
-//     switch (status) {
-//       case 'verified': return 'text-green-600';
-//       case 'pending': return 'text-yellow-600';
-//       case 'rejected': return 'text-red-600';
-//       default: return 'text-gray-600';
-//     }
-//   };
-
-//   return (
-//     <div className="space-y-6">
-//       {/* KYC Overview */}
-//       <Card>
-//         <CardHeader>
-//           <div className="flex items-center justify-between">
-//             <CardTitle className="flex items-center">
-//               <Shield className="h-5 w-5 mr-2" />
-//               KYC Verification Status
-//             </CardTitle>
-//             {getStatusBadge(kycData.overallStatus)}
-//           </div>
-//         </CardHeader>
-//         <CardContent className="space-y-4">
-//           <div className="space-y-2">
-//             <div className="flex justify-between text-sm">
-//               <span>Verification Progress</span>
-//               <span className="font-medium">{kycData.completionPercentage}%</span>
-//             </div>
-//             <Progress value={kycData.completionPercentage} className="h-2" />
-//           </div>
-
-//           {kycData.overallStatus === 'verified' && (
-//             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-//               <div className="flex items-center space-x-2">
-//                 <Check className="h-5 w-5 text-green-600" />
-//                 <div>
-//                   <h4 className="font-medium text-green-800">Verification Complete</h4>
-//                   <p className="text-sm text-green-600">
-//                     Your account has been fully verified. You have access to all platform features.
-//                   </p>
-//                 </div>
-//               </div>
-//             </div>
-//           )}
-//         </CardContent>
-//       </Card>
-
-//       {/* Identity Verification */}
-//       <Card>
-//         <CardHeader>
-//           <CardTitle className="flex items-center justify-between">
-//             <span className="flex items-center">
-//               <FileText className="h-5 w-5 mr-2" />
-//               Identity Verification
-//             </span>
-//             {getStatusBadge(kycData.identityVerification.status)}
-//           </CardTitle>
-//         </CardHeader>
-//         <CardContent className="space-y-4">
-//           {kycData.identityVerification.documents.map((doc, index) => (
-//             <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-//               <div className="flex items-center space-x-3">
-//                 <FileText className={`h-5 w-5 ${getStatusColor(doc.status)}`} />
-//                 <div>
-//                   <p className="font-medium">{doc.type}</p>
-//                   <p className="text-sm text-muted-foreground">
-//                     Uploaded on {new Date(doc.uploadedAt).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               </div>
-//               {getStatusBadge(doc.status)}
-//             </div>
-//           ))}
-
-//           <Button
-//             variant="outline"
-//             className="w-full"
-//             onClick={() => setShowIdentityForm(true)}
-//           >
-//             <Upload className="h-4 w-4 mr-2" />
-//             Upload Identity Document
-//           </Button>
-//         </CardContent>
-//       </Card>
-
-//       {/* Address Verification */}
-//       <Card>
-//         <CardHeader>
-//           <CardTitle className="flex items-center justify-between">
-//             <span className="flex items-center">
-//               <FileText className="h-5 w-5 mr-2" />
-//               Address Verification
-//             </span>
-//             {getStatusBadge(kycData.addressVerification.status)}
-//           </CardTitle>
-//         </CardHeader>
-//         <CardContent className="space-y-4">
-//           {kycData.addressVerification.documents.map((doc, index) => (
-//             <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-//               <div className="flex items-center space-x-3">
-//                 <FileText className={`h-5 w-5 ${getStatusColor(doc.status)}`} />
-//                 <div>
-//                   <p className="font-medium">{doc.type}</p>
-//                   <p className="text-sm text-muted-foreground">
-//                     Uploaded on {new Date(doc.uploadedAt).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               </div>
-//               {getStatusBadge(doc.status)}
-//             </div>
-//           ))}
-
-//           <Button
-//             variant="outline"
-//             className="w-full"
-//             onClick={() => setShowAddressForm(true)}
-//           >
-//             <Upload className="h-4 w-4 mr-2" />
-//             Upload Proof of Address
-//           </Button>
-//         </CardContent>
-//       </Card>
-
-//       {/* Verification Methods */}
-//       <Card>
-//         <CardHeader>
-//           <CardTitle>Verification Methods</CardTitle>
-//         </CardHeader>
-//         <CardContent className="space-y-4">
-//           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//             <div className="flex items-center justify-between p-3 border rounded-lg">
-//               <div className="flex items-center space-x-3">
-//                 <Check className={`h-5 w-5 ${getStatusColor(kycData.phoneVerification.status)}`} />
-//                 <div>
-//                   <p className="font-medium">Phone Verification</p>
-//                   <p className="text-sm text-muted-foreground">
-//                     Verified on {new Date(kycData.phoneVerification.verifiedAt).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               </div>
-//               {getStatusBadge(kycData.phoneVerification.status)}
-//             </div>
-
-//             <div className="flex items-center justify-between p-3 border rounded-lg">
-//               <div className="flex items-center space-x-3">
-//                 <Check className={`h-5 w-5 ${getStatusColor(kycData.emailVerification.status)}`} />
-//                 <div>
-//                   <p className="font-medium">Email Verification</p>
-//                   <p className="text-sm text-muted-foreground">
-//                     Verified on {new Date(kycData.emailVerification.verifiedAt).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               </div>
-//               {getStatusBadge(kycData.emailVerification.status)}
-//             </div>
-
-//             <div className="flex items-center justify-between p-3 border rounded-lg md:col-span-2">
-//               <div className="flex items-center space-x-3">
-//                 <Check className={`h-5 w-5 ${getStatusColor(kycData.bankVerification.status)}`} />
-//                 <div>
-//                   <p className="font-medium">Bank Account Verification</p>
-//                   <p className="text-sm text-muted-foreground">
-//                     Verified on {new Date(kycData.bankVerification.verifiedAt).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               </div>
-//               {getStatusBadge(kycData.bankVerification.status)}
-//             </div>
-//           </div>
-//         </CardContent>
-//       </Card>
-
-//       {/* Compliance Information */}
-//       <Card>
-//         <CardHeader>
-//           <CardTitle>Compliance & Risk Assessment</CardTitle>
-//         </CardHeader>
-//         <CardContent className="space-y-4">
-//           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-//             <div className="flex items-start space-x-3">
-//               <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
-//               <div className="space-y-2">
-//                 <h4 className="font-medium text-blue-800">Risk Level: Low</h4>
-//                 <p className="text-sm text-blue-600">
-//                   Your account has been assessed as low risk based on the provided documentation and verification status.
-//                 </p>
-//                 <div className="flex items-center space-x-4 text-sm text-blue-600">
-//                   <span>• Transaction Limit: ₦5,000,000</span>
-//                   <span>• Daily Limit: ₦1,000,000</span>
-//                 </div>
-//               </div>
-//             </div>
-//           </div>
-
-//           <Separator />
-
-//           <div className="space-y-2">
-//             <h4 className="font-medium">Data Protection & Privacy</h4>
-//             <p className="text-sm text-muted-foreground">
-//               All your personal information and documents are encrypted and stored securely in compliance with
-//               Nigerian Data Protection Regulation (NDPR) and international standards.
-//             </p>
-//           </div>
-//         </CardContent>
-//       </Card>
-
-//       {/* Modals */}
-//       <BVNVerificationForm
-//         open={showBVNForm}
-//         onOpenChange={setShowBVNForm}
-//         onSuccess={() => {
-//           setKycData(prev => ({
-//             ...prev,
-//             bankVerification: { ...prev.bankVerification, status: 'verified' }
-//           }));
-//         }}
-//       />
-
-//       <DocumentUploadForm
-//         open={showIdentityForm}
-//         onOpenChange={setShowIdentityForm}
-//         type="identity"
-//         onSuccess={() => {
-//           setKycData(prev => ({
-//             ...prev,
-//             identityVerification: { ...prev.identityVerification, status: 'pending' }
-//           }));
-//         }}
-//       />
-
-//       <DocumentUploadForm
-//         open={showAddressForm}
-//         onOpenChange={setShowAddressForm}
-//         type="address"
-//         onSuccess={() => {
-//           setKycData(prev => ({
-//             ...prev,
-//             addressVerification: { ...prev.addressVerification, status: 'pending' }
-//           }));
-//         }}
-//       />
-
-//       <ComprehensiveKYC />
-//     </div>
-//   );
-// };
-
-// export default KYCVerificationTab;
-
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-// import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label';
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogDescription,
-//   DialogFooter,
-//   DialogHeader,
-//   DialogTitle,
-// } from '@/components/ui/dialog';
 import {
   Check,
   Upload,
@@ -392,6 +33,8 @@ import {
 } from '@/components/ui/dialog';
 import { DocumentUploadForm } from './forms/DocumentUploadForm';
 import ComprehensiveKYC from '../settings/comprehensive-kyc-system.js';
+import { axiosInstance } from '@/utils/axios.js';
+import { useAuthStore } from '@/store/useAuthStore.js';
 
 // BVN Verification Form Component
 const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
@@ -410,6 +53,7 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
           'Content-Type': 'application/json',
         },
       });
+      console.log(response, 'bvn res');
 
       if (!response.ok) {
         throw new Error('BVN verification failed');
@@ -709,46 +353,96 @@ const KYCVerificationTab = () => {
   const [showIdentityForm, setShowIdentityForm] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [kycData, setKycData] = useState({
-    overallStatus: 'rejected', // 'pending', 'verified', 'rejected'
-    completionPercentage: 75,
+    overallStatus: 'notStarted',
+    completionPercentage: 0,
     bvnVerification: {
-      status: PENDING,
-      bvn: '123********01',
+      status: 'notStarted',
+      bvn: '',
       verifiedAt: null,
-      lastUpdated: '2024-01-18'
+      lastUpdated: null
     },
-    identityVerification: {
-      status: PENDING,
-      documents: [
-        { type: 'National ID', status: PENDING, uploadedAt: '2024-01-15' },
-        // { type: 'Passport Photo', status: PENDING, uploadedAt: '2024-01-15' }
-      ]
-    },
-    addressVerification: {
-      status: REJECTED,
-      documents: [
-        { type: 'Utility Bill', status: REJECTED, uploadedAt: '2024-01-16' }
-      ]
-    },
+    identityVerification: { status: 'notStarted', documents: [] },
+    addressVerification: { status: 'notStarted', documents: [] },
     phoneVerification: {
       phoneNumber: '',
-      status: PENDING,
-      verifiedAt: '2024-01-10'
+      status: 'notStarted',
+      verifiedAt: null
     },
     emailVerification: {
       email: '',
-      status: PENDING,
-      verifiedAt: '2024-01-10'
+      status: 'notStarted',
+      verifiedAt: null
     },
     bankVerification: {
-      bankName: 'First Bank',
-      accountNumber: '1234567890',
-      bvn: '12345678901',
-      accountName: 'John Doe',
-      status: PENDING,
-      verifiedAt: '2024-01-17'
+      bankName: '',
+      accountNumber: '',
+      bvn: '',
+      accountName: '',
+      status: 'notStarted',
+      verifiedAt: null
     }
   });
+  const [loading, setLoading] = useState(true);
+
+  const { user } = useAuthStore(); // Replace with actual user ID from auth context/store
+  console.log(user);
+
+  // Fetch KYC data from API on mount
+  useEffect(() => {
+    const fetchKYCData = async () => {
+      setLoading(true);
+      try {
+        const res = await axiosInstance.get(`/settings/kyc/${user.id}`);
+        console.log(res, 'res');
+
+        if (res.data) {
+          // Map documents to identity and address sections
+          const documents = res.data.documents || [];
+          console.log(res, documents, 'res and documents');
+
+          const identityDocs = documents
+            .filter(doc => doc.document_type === 'identity')
+            .map(doc => ({
+              id: doc.id,
+              type: doc.verification_type,
+              status: doc.status,
+              uploadedAt: doc.uploaded_at,
+              files: doc.files || [],
+            }));
+          const addressDocs = documents
+            .filter(doc => doc.document_type === 'address')
+            .map(doc => ({
+              id: doc.id,
+              type: doc.verification_type,
+              status: doc.status,
+              uploadedAt: doc.uploaded_at,
+              files: doc.files || [],
+            }));
+
+          setKycData(prev => ({
+            ...prev,
+            ...res.data.kycData,
+            identityVerification: {
+              status: identityDocs.length > 0 ? identityDocs[0].status : 'notStarted',
+              documents: identityDocs,
+            },
+            addressVerification: {
+              status: addressDocs.length > 0 ? addressDocs[0].status : 'notStarted',
+              documents: addressDocs,
+            },
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch KYC data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchKYCData();
+  }, [user.id]);
+
+  console.log(kycData, 'KYC Data');
+
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -854,7 +548,8 @@ const KYCVerificationTab = () => {
             </div>
           </div>
 
-          {kycData.bvnVerification.status !== 'not_started' && (
+          {/* Only show BVN data if status is not 'notStarted' */}
+          {kycData.bvnVerification.status !== 'notStarted' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center space-x-3">
@@ -930,7 +625,7 @@ const KYCVerificationTab = () => {
             onClick={() => setShowBVNForm(true)}
           >
             <CreditCard className="h-4 w-4 mr-2" />
-            {kycData.bvnVerification.status === 'not_started' ? 'Verify BVN' : 'Update BVN'}
+            {kycData.bvnVerification.status === 'notStarted' ? 'Verify BVN' : 'Update BVN'}
           </Button>
 
           <div className="text-xs text-muted-foreground space-y-1">
@@ -953,15 +648,26 @@ const KYCVerificationTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {kycData.identityVerification.documents.map((doc, index) => (
-            <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+          {/* Only show document data if there are documents */}
+          {kycData.identityVerification.documents.length > 0 && kycData.identityVerification.documents.map((doc, index) => (
+            <div key={doc.id || index} className="flex items-center justify-between p-3 border rounded-lg">
               <div className="flex items-center space-x-3">
                 <FileText className={`h-5 w-5 ${getStatusColor(doc.status)}`} />
                 <div>
                   <p className="font-medium">{doc.type}</p>
                   <p className="text-sm text-muted-foreground">
-                    Uploaded on {new Date(doc.uploadedAt).toLocaleDateString()}
+                    Uploaded on {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : ''}
                   </p>
+                  {/* Show file info if available */}
+                  {doc.files && doc.files.length > 0 && (
+                    <ul className="text-xs text-muted-foreground mt-1">
+                      {doc.files.map((file, idx) => (
+                        <li key={file.id || idx}>
+                          {file.file_name} ({Math.round(file.file_size / 1024)} KB)
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
               {getStatusBadge(doc.status)}
@@ -991,15 +697,26 @@ const KYCVerificationTab = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {kycData.addressVerification.documents.map((doc, index) => (
-            <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+          {/* Only show document data if status is not 'notStarted' */}
+          {kycData.addressVerification.documents.length > 0 && kycData.addressVerification.documents.map((doc, index) => (
+            <div key={doc.id || index} className="flex items-center justify-between p-3 border rounded-lg">
               <div className="flex items-center space-x-3">
                 <FileText className={`h-5 w-5 ${getStatusColor(doc.status)}`} />
                 <div>
                   <p className="font-medium">{doc.type}</p>
                   <p className="text-sm text-muted-foreground">
-                    Uploaded on {new Date(doc.uploadedAt).toLocaleDateString()}
+                    Uploaded on {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : ''}
                   </p>
+                  {/* Show file info if available */}
+                  {doc.files && doc.files.length > 0 && (
+                    <ul className="text-xs text-muted-foreground mt-1">
+                      {doc.files.map((file, idx) => (
+                        <li key={file.id || idx}>
+                          {file.file_name} ({Math.round(file.file_size / 1024)} KB)
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
               {getStatusBadge(doc.status)}

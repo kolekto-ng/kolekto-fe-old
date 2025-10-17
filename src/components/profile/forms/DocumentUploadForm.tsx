@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Upload, FileText, CheckCircle, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@supabase/supabase-js';
+import { axiosInstance } from '@/utils/axios';
 
 // ✅ Supabase client (make sure env variables are set)
 const supabase = createClient(
@@ -75,24 +76,53 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
     setIsUploading(true);
     setUploadProgress(0);
 
-    const formData = new FormData();
-    formData.append("userId", user.id);
-    formData.append("documentType", "identity");
-    formData.append("verificationType", "NIN");
-    formData.append("files", fileFront); // first file
-    formData.append("files", fileBack);  // second file
+    try {
+      // Prepare form data for upload
+      const formData = new FormData();
+      formData.append("userId", userId);
+      formData.append("documentType", type); // e.g. "identity"
+      formData.append("verificationType", documentType); // e.g. "NIN"
+      uploadedFiles.forEach(file => {
+        formData.append("files", file); // 'files' matches multer config
+      });
 
-    await fetch("/api/kyc/upload-document", {
-      method: "POST",
-      body: formData,
-    });
+      // API implementation only
+      const res = await axiosInstance.post("/settings/kyc/upload-document", formData, {
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+          }
+        }
+      });
 
+      const result = await res.data;
+      if (result.success) {
+        setUploadProgress(100);
+
+        setTimeout(() => {
+          setIsUploading(false);
+          setStep(3);
+        }, 500);
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
+      });
+      setIsUploading(false);
+    }
+
+    // Supabase implementation commented out
+    /*
     try {
       for (let i = 0; i < uploadedFiles.length; i++) {
         const file = uploadedFiles[i];
         const filePath = `${userId}/${Date.now()}-${file.name}`;
 
-        // ✅ Upload to Supabase Storage
+        // Upload to Supabase Storage
         const { error: storageError } = await supabase.storage
           .from('kyc-documents')
           .upload(filePath, file, {
@@ -102,14 +132,14 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
 
         if (storageError) throw storageError;
 
-        // ✅ Insert only the file path into database
+        // Save metadata to Supabase Database
         const { error: dbError } = await supabase
           .from('kyc_documents')
           .insert({
             user_id: userId,
             document_type: type,        // "identity" or "address"
             file_type: documentType,    // e.g. "national_id"
-            file_path: filePath,        // 🔒 store path, not public URL
+            file_path: filePath,        // store path, not public URL
             status: 'pending'
           });
 
@@ -131,6 +161,7 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       });
       setIsUploading(false);
     }
+    */
   };
 
   // Final success handler

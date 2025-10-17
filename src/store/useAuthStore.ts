@@ -81,12 +81,15 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const { data } = await axiosInstance.post("/auth/signin", {
+      const res = await axiosInstance.post("/auth/signin", {
         email,
         password,
       });
-      const { user, session, profile } = data.data;
-      console.log(data, "Session");
+
+      console.log(res, "Sign in data");
+
+      const { user, session, profile } = res.data.data;
+      console.log(res.data, "Session");
       // Save to localStorage
       localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
 
@@ -99,8 +102,10 @@ export const useAuthStore = create((set, get) => ({
 
       return { user, error: null };
     } catch (error: any) {
-      console.log(error);
-      const errorMessage = error.message || "Sign in failed";
+      console.log(error, "sign in error");
+      const errorMessage = error.response.data.message || "Sign in failed";
+      console.log(errorMessage);
+
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }
@@ -111,7 +116,9 @@ export const useAuthStore = create((set, get) => ({
     password: string,
     firstName: string,
     lastName: string,
-    phoneNumber?: string
+    phoneNumber?: string,
+    recaptcherToken?: string,
+    recatcherType?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -122,6 +129,8 @@ export const useAuthStore = create((set, get) => ({
         firstName,
         lastName,
         phoneNumber,
+        recaptcherToken,
+        recatcherType,
       });
       const { data } = res;
       console.log(data, "Sign up data");
@@ -133,7 +142,7 @@ export const useAuthStore = create((set, get) => ({
         isLoading: false,
       });
 
-      return { user: data.user, error: null };
+      return { user: data?.user ?? data, error: null };
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || error.message || "Sign up failed";
