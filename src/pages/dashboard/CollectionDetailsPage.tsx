@@ -104,7 +104,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
   const { user } = useAuthStore();
 
-  const { fetchCollectionById, currentCollection, fetchCollections } = useCollectionStore();
+  const { fetchCollectionById, currentCollection, fetchCollections, isLoading } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
 
@@ -396,6 +396,15 @@ const CollectionDetailsPage: React.FC = () => {
 
   // Check if any filters are active
   const hasActiveFilters = searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin h-6 w-6 text-gray-600" />
+      </div>
+    );
+  }
+
 
   if (!currentCollection) {
     return (

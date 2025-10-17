@@ -525,7 +525,7 @@ const KYCVerificationTab = () => {
       </Card>
 
       {/* BVN Verification Card */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center">
@@ -548,7 +548,7 @@ const KYCVerificationTab = () => {
             </div>
           </div>
 
-          {/* Only show BVN data if status is not 'notStarted' */}
+          Only show BVN data if status is not 'notStarted'
           {kycData.bvnVerification.status !== 'notStarted' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -567,7 +567,7 @@ const KYCVerificationTab = () => {
                 {getStatusBadge(kycData.bvnVerification.status)}
               </div>
 
-              {/* Show verification details if available */}
+              Show verification details if available
               {kycData.bvnVerification.status === 'verified' && kycData.bvnVerification.bvnData && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <div className="flex items-start space-x-2">
@@ -634,7 +634,7 @@ const KYCVerificationTab = () => {
             <p>• Your BVN information is encrypted and securely stored</p>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Identity Verification */}
       <Card>

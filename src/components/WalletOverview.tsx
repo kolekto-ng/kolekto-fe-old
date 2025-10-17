@@ -69,7 +69,7 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
 
   return (
     <div>
-      <p className="text-xl text-gray-600 font-bold mb-3">
+      <p className="text-xl font-bold mb-3">
         Hi {user?.full_name.split(' ')[1] || user?.firstName || 'User'}, Welcome back.
       </p>
       <div className='bg-green-900 text-white rounded-[24px]'>
