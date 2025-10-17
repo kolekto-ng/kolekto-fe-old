@@ -51,6 +51,9 @@ const DashboardSidebar = () => {
     }
   };
 
+  console.log(user);
+
+
   return (
     <Sidebar>
       <SidebarHeader className="py-4 px-3">
@@ -63,7 +66,7 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard')}
@@ -76,7 +79,7 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard/collections') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/collections')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/collections')}
@@ -89,7 +92,7 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/create-collection')}
@@ -103,7 +106,7 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/create-collection')}
@@ -116,7 +119,7 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard/settings') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/profile')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/settings')}
@@ -129,64 +132,63 @@ const DashboardSidebar = () => {
             variant={isActive('/dashboard/transactions') ? 'default' : 'ghost'}
             className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/transactions')
               ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/10 hover:text-kolekto'
+              : 'hover:bg-kolekto/80 hover:text-white'
               }`}
             size="sm"
             onClick={() => handleNavigation('/dashboard/transactions')}
           >
             <Layers3 className="mr-2 h-4 w-4" />
-            Wallet 
+            Wallet
           </Button>
         </div>
       </SidebarContent>
 
       <SidebarFooter className="px-3 py-6">
         <div className='space-y-2'>
-          <Button
-          variant="ghost"
-          className="w-full justify-start hover:bg-kolekto/10 hover:text-kolekto"
-          size="sm"
-          onClick={() => handleNavigation('/dashboard/support')}
+          <a
+            className="w-full flex gap-3 p-2 items-center font-semibold text-[14px] justify-start hover:bg-kolekto/80 hover:text-white"
+            size="sm"
+            href='mailto:team@kolekto.com.ng'
           >
-            <BarChart2 className="mr-2 h-4 w-4"/>
-              Support
-          </Button>
+            <BarChart2 className="mr-2 h-4 w-4" />
+            Support
+          </a>
 
           <Button
-          variant="ghost"
-           className="w-full justify-start hover:bg-kolekto/10 hover:text-kolekto"
-          size="sm"
-           onClick={() => handleNavigation('/dashboard/settings')}
+            variant="ghost"
+            className="w-full justify-start hover:bg-kolekto/80 hover:text-white"
+            size="sm"
+            onClick={() => handleNavigation('/dashboard/settings')}
           >
-            <Settings className="mr-2 h-4 w-4"/>
-              Setting
+            <Settings className="mr-2 h-4 w-4" />
+            Kyc Verification
           </Button>
 
           <div className="border-t pt-4 mt-4">
-      <div className="flex items-center justify-between p-2 rounded-lg hover:bg-kolekto/5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-kolekto/20 flex items-center justify-center">
-            <Users className="w-4 h-4 text-kolekto" />
+            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-kolekto/5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-kolekto/20 flex items-center justify-center">
+                  <Users className="w-4 h-4 text-kolekto" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-foreground text-white">
+                    {user?.user_metadata.full_name || 'Reel Mein'}
+                  </span>
+                  <span className="text-xs text-muted-foreground text-white">
+                    {user?.email || 'example.com'}
+                  </span>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleSignOut}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-col">
-           <span className="text-sm font-medium text-foreground text-white">
-            {user?.name || 'Reel Mein'}
-              </span>
-            <span className="text-xs text-muted-foreground text-white">
-              {user?.email || 'olivia@untitledui.com'}
-            </span>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleSignOut}
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
         </div>
       </SidebarFooter>
     </Sidebar>

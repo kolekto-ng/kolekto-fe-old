@@ -68,15 +68,20 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       </div>
 
       <div className="space-y-4 max-h-screen h-full overflow-y-auto">
+        {activities.length === 0 && (
+          <p className="text-sm text-muted-foreground">No recent activity.</p>
+        )}
         {activities.map((activity) => (
           <div key={activity.id} className="flex items-center bg-white py-4 px-4 rounded-xl justify-between ">
             <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={activity.avatar} />
-                <AvatarFallback className="bg-gray-200 text-gray-700 text-sm">
-                  {/* {getInitials(activity.userName)} */}
-                </AvatarFallback>
-              </Avatar>
+
+              <div className='bg-gray-200 p-1 rounded-[50px]  text-gray-700 text-sm'>
+                <svg class="w-6 h-6 text-green-600 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 14-4-4m4 4 4-4" />
+                </svg>
+
+              </div>
+
               <div>
                 <p className="font-medium text-sm">{activity.name}</p>
                 <p className="text-xs text-muted-foreground">

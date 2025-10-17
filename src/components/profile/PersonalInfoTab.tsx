@@ -293,10 +293,10 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label htmlFor="bvn">Bank Verification Number (BVN)</Label>
               <p className="text-foreground font-medium">{profile.bvn || 'Not Provided'}</p>
-            </div>
+            </div> */}
             <div className="space-y-2">
               <Label htmlFor="nin">National Identification Number (NIN)</Label>
               <p className="text-foreground font-medium">{profile.nin || 'Not Provided'}</p>
