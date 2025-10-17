@@ -626,6 +626,8 @@ export default function KolektoCampusSignup() {
                     {formSuccess}
                   </div>
                 )}
+
+                <p>Dont' have an account? Please <a className="text-green-600 text-[18px] font-semibold" href="/register">sign up</a> </p>
               </form>
             </motion.div>
           </div>
