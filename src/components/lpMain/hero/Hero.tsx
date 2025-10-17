@@ -54,26 +54,24 @@ const Hero = () => {
             {/* Main Heading */}
 
             <div className="">
-              <h1 className="text-[30.7px] sm:text-5xl lg:text-4xl font-medium">
-                Effortless Group Payment, All in One Place.
+              <h1 className="text-[30.7px] sm:text-5xl lg:text-[64px] font-medium">
+                Receive Group Payments with Ease
               </h1>
             </div>
 
             {/* Description */}
 
-            <p className="text-[12.8px] lg:text-lg poppins text-[#333333] max-w-lg">
-              Kolekto makes it easy to create, manage, and track group
-              contributions from class dues and church donations to event
-              payments and team collection.
+            <p className="text-[12.8px] lg:text-[18px] poppins text-[#333333] max-w-lg">
+              From class dues to fundraising drives, Kolekto lets you collect, track, and manage contributions all in one place.
             </p>
 
             <div className="flex gap-3 flex-col sm:flex-row lg:items-center">
               {/* <Link to="/register">Get Started</Link> */}
               <Link
                 to="/register"
-                className="poppins bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg"
+                className=" bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg"
               >
-                Start a Contribution
+                Start collecting
               </Link>
 
               <div className="flex items-center gap-2 text-[12.8px] lg:text-lg font-normal text-gray-600">

@@ -21,7 +21,7 @@ const CreateCollectionPage: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Create a New Collection</h1>
+      {/* <h1 className="text-2xl font-bold mb-6">Create a New Collection</h1> */}
 
       <div ref={tabsRef}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
