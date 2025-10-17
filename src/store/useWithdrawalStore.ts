@@ -17,36 +17,6 @@ export const useWithdrawalStore = create((set, get) => ({
         params: { userId, collectionId },
       });
 
-      // let query = supabase
-      //   .from("withdrawals")
-      //   .select(
-      //     `
-      //     *,
-      //     collections (title)
-      //   `
-      //   )
-      //   .order("created_at", { ascending: false });
-
-      // if (userId) {
-      //   query = query.eq("organizer_id", userId);
-      // }
-
-      // if (collectionId) {
-      //   query = query.eq("collection_id", collectionId);
-      // }
-
-      // const { data, error } = await query;
-
-      // if (error) throw error;
-
-      // Format data
-      // const formattedData =
-      //   data?.map((withdrawal) => ({
-      //     ...withdrawal,
-      //     formattedAmount: formatCurrency(withdrawal.amount),
-      //     formattedDate: formatDate(withdrawal.created_at),
-      //   })) || [];
-
       set({
         withdrawals: res.data.withdrawals,
         isLoading: false,
@@ -66,28 +36,6 @@ export const useWithdrawalStore = create((set, get) => ({
         "/withdrawals/request",
         withdrawalData
       );
-
-      // const { data, error } = await supabase
-      //   .from("withdrawals")
-      //   .insert(withdrawalData)
-      //   .select("*, collections (title)")
-      //   .single();
-
-      // if (error) throw error;
-
-      // Format the new withdrawal
-      // const formattedWithdrawal = {
-      //   ...data,
-      //   formattedAmount: formatCurrency(data.amount),
-      //   formattedDate: formatDate(data.created_at),
-      // };
-
-      // Add the new withdrawal to the state
-      // set((state) => ({
-      //   withdrawals: [formattedWithdrawal, ...state.withdrawals],
-      //   isLoading: false,
-      // }));
-
       toast.success("Withdrawal request submitted successfully");
       // return formattedWithdrawal as Withdrawal;
     } catch (error: any) {

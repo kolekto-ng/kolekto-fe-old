@@ -34,7 +34,7 @@ const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           className="w-full"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="description">Description (Optional)</Label>
         <Textarea
@@ -46,7 +46,7 @@ const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           className="w-full"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="deadline">Deadline</Label>
         <Input
@@ -56,6 +56,18 @@ const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
           className="w-full"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="Support">Support</Label>
+        <Input
+          id="Support"
+          type="text"
+          required
+          value={deadline}
+          onChange={(e) => setDeadline(e.target.value)}
+          className="w-full"
+          placeholder='Your support'
         />
       </div>
     </div>

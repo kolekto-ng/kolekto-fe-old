@@ -7,8 +7,10 @@ import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sid
 import DashboardSidebar from './DashboardSidebar';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
 
-import { Loader2 } from "lucide-react";
 import DashboardNavbar from './DashboardNavbar';
 
 const DashboardContent = () => {
@@ -45,36 +47,52 @@ const DashboardContent = () => {
   };
 
   return (
-  <div className="flex-1 w-full">
-    <DashboardNavbar />
-    <div className="p-3 sm:p-6 lg:p-8">
-      <div className="flex items-center mb-4">
-        <SidebarTrigger className="md:hidden" />
-        <div className="ml-2 md:ml-0 text-xl font-bold">{getPageTitle()}</div>
-      </div>
+    <div className="flex-1 w-full w-max-[] flex flex-col bg-gray-50">
+      <DashboardNavbar />
+      <div className="p-3 sm:p-6 lg:p-8">
+        {/* <div className="flex items-center mb-4">
+          <SidebarTrigger className="md:hidden" />
+          <div className="ml-2 md:ml-0 text-xl font-bold">{getPageTitle()}</div>
+        </div> */}
 
-      
-      
-      {/* NEW TWO-COLUMN LAYOUT */}
-      {location.pathname === '/dashboard' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT COLUMN - Account Overview + Collections */}
-          <div className="lg:col-span-2 space-y-6">
-            <WalletOverview />
-            <CollectionsOverview />
+
+        {/* NEW TWO-COLUMN LAYOUT */}
+        {location.pathname === '/dashboard' ? (
+          <div className="flex flex-col md:flex-row justify-between w-full items-start gap-6">
+            {/* LEFT COLUMN - Account Overview + Collections */}
+            <div className="space-y-6 w-full md:w-[55%]">
+              <WalletOverview />
+              <div>
+                <h2 className='text-[24px] font-semibold mb-4'>Quick actions</h2>
+                <div className='flex gap-4 mb-6'>
+                  <Button asChild className="bg-green-600 text-[16px] hover:bg-kolekto/90">
+                    <Link to="/dashboard/create-collection">
+                      <Plus className="mr-2 h-4 w-4 " />
+                      Create collection
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="bg-green-600 text-white px-10 hover:bg-kolekto/90"
+                  >
+                    Withdraw
+                  </Button>
+                </div>
+              </div>
+              <CollectionsOverview />
+            </div>
+
+            {/* RIGHT COLUMN - Activity */}
+            <div className="w-full md:w-[40%]">
+              <ActivityFeed />
+            </div>
           </div>
-          
-          {/* RIGHT COLUMN - Activity */}
-          <div className="lg:col-span-1">
-            <ActivityFeed />
-          </div>
-        </div>
-      ) : (
-        <Outlet />
-      )}
+        ) : (
+          <Outlet />
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 const DashboardLayout: React.FC = () => {
@@ -95,7 +113,7 @@ const DashboardLayout: React.FC = () => {
 
   return (
     <SidebarProvider defaultOpen={!isMobile}>
-      <div className="min-h-screen flex w-full overflow-hidden">
+      <div className="min-h-screen max-w-[1440px] m-auto flex w-full overflow-hidden">
         <DashboardSidebar />
         <DashboardContent />
       </div>

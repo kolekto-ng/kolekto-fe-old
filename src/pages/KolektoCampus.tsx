@@ -84,9 +84,13 @@ export default function KolektoCampusSignup() {
       };
 
       const res = await axiosInstance.post('/landing-page/join-campus', payload);
-
-      if (res.data && res.data.success) {
-        setFormSuccess(`Thank you for joining the ${selectedCampus} campus community!`);
+      console.log(selectedCampus)
+      if (res.data) {
+        if (selectedCampus != "Other (Not Listed)") {
+          setFormSuccess(`Thank you for joining the ${selectedCampus} campus community!`);
+        } else {
+          setFormSuccess("Thank you for joining the Kolekto Campus community!");
+        }
         e.target.reset();
         setSelectedCampus("");
         setSearchTerm("");

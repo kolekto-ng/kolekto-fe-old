@@ -13,6 +13,7 @@ import HowItWorks from "@/components/lpMain/hwWorks/HowItWorks";
 const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col overflow-hidden">
+      <div className='bg-[#E3FFE6] text-center text-[18px] py-[12px]'>Be part of the leaders shaping Kolekto on campus</div>
       <NavBar />
 
       <main className="flex-grow bg-[#FAFAFA] overflow-hidden">

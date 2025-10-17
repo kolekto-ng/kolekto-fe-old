@@ -92,7 +92,7 @@ const NavBar: React.FC = () => {
           >
             <BookOpen className="mr-2 h-4 w-4 inline" />
 
-            Kolekto in campus
+            Kolekto On campus
           </Link>
           <MobileNav />
         </div>
@@ -124,7 +124,7 @@ const NavBar: React.FC = () => {
               <Link to="/kolekto-campus">
                 <Button className="bg-green-900 text-white hover:bg-green-700 transition-colors duration-200 ">
                   <BookOpen className="mr-2 h-4 w-4" />
-                  Kolekto In Campus
+                  Kolekto On Campus
                 </Button>
               </Link>
 
