@@ -68,6 +68,9 @@ const CollectionsOverview = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {collectionss.length === 0 && (
+          <p className="text-sm text-muted-foreground">No collections found. <a href="/dashboard/create-collection">Create collection</a></p>
+        )}
         {collections.map((collection) => (
           <div key={collection.id} className="p-4 bg-white rounded-xl hover:shadow-md transition-shadow">
             <div className="flex items-start gap-3 mb-4">

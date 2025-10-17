@@ -89,9 +89,11 @@ export default function PaymentAccounts() {
                     <CardTitle className="text-lg font-semibold">
                         Connected Bank Accounts
                     </CardTitle>
-                    <Button onClick={handleAddAccount}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Account
-                    </Button>
+                    {kycVerified &&
+                        <Button onClick={handleAddAccount}>
+                            <Plus className="w-4 h-4 mr-1" /> Add Account
+                        </Button>
+                    }
                 </CardHeader>
                 <CardContent>
                     {!kycVerified && (
@@ -103,7 +105,7 @@ export default function PaymentAccounts() {
                         </Alert>
                     )}
 
-                    {payoutAccounts.length > 0 ? (
+                    {payoutAccounts.length > 0 && (
                         <div className="grid gap-4 sm:grid-cols-2">
                             {payoutAccounts.map((account, i) => (
                                 <div
@@ -132,17 +134,21 @@ export default function PaymentAccounts() {
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <Banknote className="w-10 h-10 text-muted-foreground mb-2" />
-                            <p className="text-muted-foreground mb-2">
-                                No bank accounts linked yet.
-                            </p>
-                            <Button onClick={handleAddAccount}>
-                                <Plus className="w-4 h-4 mr-1" /> Add your first account
-                            </Button>
-                        </div>
                     )}
+
+                    {kycVerified && payoutAccounts.length === 0 &&
+                        (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <Banknote className="w-10 h-10 text-muted-foreground mb-2" />
+                                <p className="text-muted-foreground mb-2">
+                                    No bank accounts linked yet.
+                                </p>
+                                <Button onClick={handleAddAccount}>
+                                    <Plus className="w-4 h-4 mr-1" /> Add your first account
+                                </Button>
+                            </div>
+                        )
+                    }
                 </CardContent>
             </Card>
 
