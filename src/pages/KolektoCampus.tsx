@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { axiosInstance } from "@/utils/axios";
+import { toast } from "sonner";
 
 export default function KolektoCampusSignup() {
   // Animation controls
@@ -56,8 +57,8 @@ export default function KolektoCampusSignup() {
       try {
         const campuses = await axiosInstance.get('/landing-page/campuses');
         if (campuses?.data) {
-          const campusList = campuses.data.map(campus => campus.campus_name);
-          campusList.push("Other (Not Listed)");
+          const campusList = campuses.data.map(campus => campus.campus_name + ' ' + campus.campus_code);
+          // campusList.push("Other (Not Listed)");
           setNigerianUniversities(campusList);
         }
       } catch (error) {
@@ -66,6 +67,17 @@ export default function KolektoCampusSignup() {
       }
     })();
   }, []);
+
+  // when theis component mounts, scroll to the #form-section if its on the url hash
+  useEffect(() => {
+    if (window.location.hash === "#form-section") {
+      const formSection = document.getElementById("form-section");
+      if (formSection) {
+        formSection.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  }, []);
+
 
   const handleCampusJoin = async (e) => {
     try {
@@ -88,8 +100,10 @@ export default function KolektoCampusSignup() {
       if (res.data) {
         if (selectedCampus != "Other (Not Listed)") {
           setFormSuccess(`Thank you for joining the ${selectedCampus} campus community!`);
+          toast.success(`Thank you for joining the ${selectedCampus} campus community!`);
         } else {
           setFormSuccess("Thank you for joining the Kolekto Campus community!");
+          toast.success("Thank you for joining the Kolekto Campus community!");
         }
         e.target.reset();
         setSelectedCampus("");
@@ -97,9 +111,11 @@ export default function KolektoCampusSignup() {
         setShowOtherInput(false);
       } else {
         setFormError("Something went wrong. Please try again.");
+        toast.error("Something went wrong. Please try again.");
       }
     } catch (error: any) {
       setFormError(error?.response?.data?.message || "Network error. Please try again.");
+      toast.error(error?.response?.data?.message || "Network error. Please try again.");
     } finally {
       setFormLoading(false);
     }
@@ -416,7 +432,7 @@ export default function KolektoCampusSignup() {
               </div>
 
               {/* Show loading, error, or success states */}
-              {formLoading && (
+              {/* {formLoading && (
                 <div className="mb-4 flex items-center justify-center text-emerald-700">
                   <Rocket className="animate-spin h-5 w-5 mr-2" />
                   Submitting your details...
@@ -431,7 +447,7 @@ export default function KolektoCampusSignup() {
                 <div className="mb-4 text-green-700 font-medium text-center">
                   {formSuccess}
                 </div>
-              )}
+              )} */}
 
               <form className="space-y-6" onSubmit={handleCampusJoin}>
                 {[
@@ -544,8 +560,15 @@ export default function KolektoCampusSignup() {
                             ))
                           ) : (
                             <div className="px-4 py-3 text-gray-500">
-                              No universities found. Try a different search
+                              No universities found. Try a different search or choose others
                               term.
+                              <button
+                                type="button"
+                                className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors"
+                                onClick={() => handleCampusChange("Other (Not Listed)")}
+                              >
+                                Other (Not Listed)
+                              </button>
                             </div>
                           )}
                         </div>
@@ -587,6 +610,22 @@ export default function KolektoCampusSignup() {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </motion.button>
                 </motion.div>
+                {formLoading && (
+                  <div className="mb-4 flex items-center justify-center text-emerald-700">
+                    <Rocket className="animate-spin h-5 w-5 mr-2" />
+                    Submitting your details...
+                  </div>
+                )}
+                {formError && (
+                  <div className="mb-4 text-red-600 font-medium text-center">
+                    {formError}
+                  </div>
+                )}
+                {formSuccess && (
+                  <div className="mb-4 text-green-700 font-medium text-center">
+                    {formSuccess}
+                  </div>
+                )}
               </form>
             </motion.div>
           </div>
