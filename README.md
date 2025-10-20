@@ -1,126 +1,93 @@
-# Kolekto - Smart Group Payment Platform
+<a href="https://demo-nextjs-with-supabase.vercel.app/">
+  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
+  <h1 align="center">Next.js and Supabase Starter Kit</h1>
+</a>
 
-A modern web application that simplifies group payment collection. Perfect for class representatives, event organizers, and anyone who needs to collect payments from multiple people.
+<p align="center">
+ The fastest way to build apps with Next.js and Supabase
+</p>
 
-## 🚀 Features
+<p align="center">
+  <a href="#features"><strong>Features</strong></a> ·
+  <a href="#demo"><strong>Demo</strong></a> ·
+  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
+  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
+  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
+  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
+</p>
+<br/>
 
-- **Easy Payment Collection**: Create payment links and QR codes
-- **No Account Required**: Contributors can pay without creating accounts
-- **Multiple Payment Methods**: Support for Opay, Flutterwave, cards, and bank transfers
-- **Bulk Payments**: Pay for multiple people in one transaction
-- **Real-time Updates**: Instant payment confirmations
-- **Secure**: Enterprise-grade security practices
+## Features
 
-## 🛠️ Tech Stack
+- Works across the entire [Next.js](https://nextjs.org) stack
+  - App Router
+  - Pages Router
+  - Middleware
+  - Client
+  - Server
+  - It just works!
+- supabase-ssr. A package to configure Supabase Auth to use cookies
+- Styling with [Tailwind CSS](https://tailwindcss.com)
+- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
+  - Environment variables automatically assigned to Vercel project
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS + shadcn/ui
-- **State Management**: Zustand
-- **Backend**: Supabase
-- **Payments**: Paystack
-- **Routing**: React Router DOM
-- **Forms**: React Hook Form + Zod
-- **Data Fetching**: TanStack Query
+## Demo
 
-## 📦 Installation
+You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd kolekto-fe
-```
+## Deploy to Vercel
 
-2. Install dependencies:
-```bash
-npm install
-```
+Vercel deployment will guide you through creating a Supabase account and project.
 
-3. Set up environment variables:
-```bash
-cp .env.example .env
-```
+After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
 
-4. Start the development server:
-```bash
-npm run dev
-```
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This%20starter%20configures%20Supabase%20Auth%20to%20use%20cookies%2C%20making%20the%20user's%20session%20available%20throughout%20the%20entire%20Next.js%20app%20-%20Client%20Components%2C%20Server%20Components%2C%20Route%20Handlers%2C%20Server%20Actions%20and%20Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png&integration-ids=oac_VqOgBHqhEoFTPzGkPd7L0iH6)
 
-## 🔧 Environment Variables
+The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
 
-Create a `.env` file with the following variables:
+If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
 
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_PAYSTACK_PUBLIC_KEY=your_paystack_public_key
-```
+## Clone and run locally
 
-## 📁 Project Structure
+1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
 
-```
-src/
-├── components/
-│   ├── ui/           # shadcn/ui components
-│   ├── home/         # Landing page components
-│   ├── dashboard/    # Dashboard components
-│   └── contribute/   # Payment contribution components
-├── pages/
-│   ├── auth/         # Authentication pages
-│   ├── dashboard/    # Dashboard pages
-│   └── contribute/   # Payment pages
-├── context/          # React context providers
-├── store/           # Zustand state management
-├── lib/             # Utility functions
-└── types/           # TypeScript type definitions
-```
+2. Create a Next.js app using the Supabase Starter template npx command
 
-## 🚀 Available Scripts
+   ```bash
+   npx create-next-app -e with-supabase
+   ```
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run build:dev` - Build for development
-- `npm run lint` - Run ESLint
-- `npm run preview` - Preview production build
+3. Use `cd` to change into the app's directory
 
-## 🎯 Key Components
+   ```bash
+   cd name-of-new-app
+   ```
 
-### Authentication
-- Login/Register pages
-- Password reset functionality
-- Protected routes
+4. Rename `.env.example` to `.env.local` and update the following:
 
-### Dashboard
-- Collection management
-- Payment tracking
-- User profile
-- Transaction history
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
+   ```
 
-### Payment Flow
-- Collection creation
-- QR code generation
-- Payment processing
-- Real-time updates
+   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://app.supabase.com/project/_/settings/api)
 
-## 🔒 Security Features
+5. You can now run the Next.js local development server:
 
-- JWT token authentication
-- Secure payment processing
-- Input validation with Zod
-- XSS protection
-- CSRF protection
+   ```bash
+   npm run dev
+   ```
 
-## 🤝 Contributing
+   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
 
-## 📄 License
+## Feedback and issues
 
-This project is licensed under the MIT License.
+Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
 
-## 🆘 Support
+## More Supabase examples
 
-For support, email support@kolekto.com or create an issue in the repository.
+- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
+- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
+- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)

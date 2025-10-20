@@ -156,10 +156,10 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       toast.error("Please enter a valid collection deadline");
       return false;
     }
-    if (!useFundraising && support.trim() !== '') {
-      toast.error("Please enter a valid number");
-      return false;
-    }
+    // if (support.trim() != '') {
+    //   toast.error("Please enter a valid number");
+    //   return false;
+    // }
     if (!title.trim()) {
       toast.error("Please enter a collection title");
       return false;
@@ -341,7 +341,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         min_contribution: useFundraising && minAmount ? parseFloat(minAmount) : null,
         is_fundraising: useFundraising,
         collection_type: useFundraising ? 'fundraising' : (usePriceTiers ? 'tiered' : 'fixed'),
-        status: "active" as const
+        status: "active" as const,
+        support: support || null,
       };
 
       console.log(collectionData, 'collection data');
@@ -473,7 +474,8 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               setDescription={setDescription}
               deadline={deadline}
               setDeadline={setDeadline}
-              support={''}
+              support={support}
+              setSupport={setSupport}
             />
           </div>
         );
