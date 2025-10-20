@@ -71,12 +71,12 @@ const DashboardContent = () => {
                       Create collection
                     </Link>
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="secondary"
                     className="bg-green-600 text-white px-10 hover:bg-kolekto/90"
                   >
                     Withdraw
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
               <CollectionsOverview />
