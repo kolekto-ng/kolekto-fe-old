@@ -93,12 +93,13 @@ export default function KolektoCampusSignup() {
         email: formData.get('email'),
         phone_number: formData.get('whatsapp'),
         campus: selectedCampus,
+        other_campus: showOtherInput ? formData.get('other-campus') : null,
       };
 
       const res = await axiosInstance.post('/landing-page/join-campus', payload);
       console.log(selectedCampus)
       if (res.data) {
-        if (selectedCampus != "Other (Not Listed)") {
+        if (selectedCampus != "Other (Not Listed) OTHER") {
           setFormSuccess(`Thank you for joining the ${selectedCampus} campus community!`);
           toast.success(`Thank you for joining the ${selectedCampus} campus community!`);
         } else {
@@ -126,7 +127,7 @@ export default function KolektoCampusSignup() {
     setSelectedCampus(university);
     setSearchTerm(university);
     setIsDropdownOpen(false);
-    setShowOtherInput(university === "Other (Not Listed)");
+    setShowOtherInput(university === "Other (Not Listed) OTHER");
   };
 
   // Filter universities based on search term

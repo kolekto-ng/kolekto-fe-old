@@ -95,13 +95,13 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
         </div>
 
         <div className="flex justify-between items-center px-6 py-4 bg-[#00700D] rounded-b-[24px]">
-          <div className='flex gap-4'>
-            <p className="text-xl text-white">Available</p>
-            <p className="text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>
+          <div className='flex justify-between items-center  gap-4'>
+            <p className="text-[14px] text-white">Available</p>
+            <p className="text-[16px] md:text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>
           </div>
-          <div className='flex gap-4'>
-            <p className="text-xl text-white mb-2 ">Pending</p>
-            <p className="text-xl text-white font-semibold pr-5">{formatCurrency(pendingBalance)}</p>
+          <div className='flex justify-between items-center gap-4'>
+            <p className="text-[14px] text-white ">Pending</p>
+            <p className="text-[16px] md:text-xl text-white font-semibold ">{formatCurrency(pendingBalance)}</p>
           </div>
         </div>
       </div>

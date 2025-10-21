@@ -32,7 +32,7 @@ const DashboardNavbar: React.FC = () => {
   return (
     <div className='space-y-6 mt-3 mx-[24px]'>
       {/* Header Section */}
-      <div className="flex flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <SidebarTrigger className="md:hidden" />
           <div className="ml-2 md:ml-0 text-2xl font-bold">{getPageTitle()}</div>
