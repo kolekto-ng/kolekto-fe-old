@@ -41,6 +41,7 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
     });
 
     // Map sorted collections to CollectionEarning format
+
     const earnings = sortedCollections.map((col) => {
       const wallet = Array.isArray(col.wallets) && col.wallets.length > 0 ? col.wallets[0] : {};
       return {
@@ -54,13 +55,19 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
         balance: wallet.ledger_balance || 0,
         withdrawable: wallet.available_balance || 0,
         pendingWithdrawals: wallet.pending_withdrawals ?? 0,
+        available_balance: wallet.available_balance ?? 0,
+        pending_balance: wallet.pending_balance ?? 0,
+        ...col
       };
     });
     setCollectionEarnings(earnings);
 
   }, [collections]);
 
-  const totalBalance = collectionEarnings?.reduce((sum: number, col: any) => sum + (col.balance || 0), 0) || 0;
+  const pendingBalance = collectionEarnings?.reduce((sum: number, col: any) => sum + (col.pending_balance || 0), 0) || 0;
+  const availableBalance = collectionEarnings?.reduce((sum: number, col: any) => sum + (col.available_balance || 0), 0) || 0;
+
+  const totalBalance = availableBalance + pendingBalance;
 
   console.log(collectionEarnings, 'total balnce', totalBalance);
 
@@ -90,12 +97,12 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
         <div className="flex justify-between items-center px-6 py-4 bg-[#00700D] rounded-b-[24px]">
           <div className='flex gap-4'>
             <p className="text-xl text-white">Available</p>
-            <p className="text-xl text-white font-semibold">{formatCurrency(totalBalance)}</p>
+            <p className="text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>
           </div>
-          {/* <div className='flex gap-4'>
-          <p className="text-xl text-white mb-2 ">Pending</p>
-          <p className="text-xl text-white font-semibold pr-5">{formatCurrency(pending)}</p>
-        </div> */}
+          <div className='flex gap-4'>
+            <p className="text-xl text-white mb-2 ">Pending</p>
+            <p className="text-xl text-white font-semibold pr-5">{formatCurrency(pendingBalance)}</p>
+          </div>
         </div>
       </div>
     </div>

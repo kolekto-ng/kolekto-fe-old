@@ -11,6 +11,7 @@ interface BasicInfoSectionProps {
   setDescription: (value: string) => void;
   deadline: string;
   support: string;
+  setSupport: string;
   setDeadline: (value: string) => void;
 }
 
@@ -22,6 +23,7 @@ const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   deadline,
   setDeadline,
   support,
+  setSupport,
 }) => {
   return (
     <div className="space-y-4">
@@ -68,7 +70,7 @@ const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           type="tel"
           required
           value={support}
-          onChange={(e) => setDeadline(e.target.value)}
+          onChange={(e) => setSupport(e.target.value)}
           className="w-full"
           placeholder='Your support'
         />
