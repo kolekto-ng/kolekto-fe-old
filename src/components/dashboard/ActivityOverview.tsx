@@ -61,8 +61,8 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Activity</h3>
-        <Button variant="link" className="text-sm">
+        <h3 className="text-[24px] font-semibold">Activities</h3>
+        <Button variant="link" className="text-[16px]">
           see more
         </Button>
       </div>
