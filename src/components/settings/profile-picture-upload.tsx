@@ -92,7 +92,7 @@ export default function ProfilePictureUpload() {
       formData.append('additionalData', JSON.stringify({ key: 'value' }));
 
       try {
-        const response = await axiosInstance.post('settings/upload-avatar', formData);
+        const response = await axiosInstance.post('settings/profile/upload-avatar', formData);
         console.log(response, 'avatar image');
 
         setProfileImage(profile.avatar_url)

@@ -566,7 +566,7 @@ export default function KolektoCampusSignup() {
                               <button
                                 type="button"
                                 className="w-full text-left px-4 py-3 hover:bg-emerald-50 transition-colors"
-                                onClick={() => handleCampusChange("Other (Not Listed)")}
+                                onClick={() => handleCampusChange("Other (Not Listed) OTHER")}
                               >
                                 Other (Not Listed)
                               </button>
