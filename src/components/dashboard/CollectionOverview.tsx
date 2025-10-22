@@ -78,7 +78,7 @@ const CollectionsOverview = ({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {collections.length === 0 && (
           <p className="text-sm text-muted-foreground">No active collections. <a href="/dashboard/create-collection">Create collection</a></p>
         )}
