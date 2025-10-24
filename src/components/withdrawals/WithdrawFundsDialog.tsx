@@ -88,24 +88,24 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     }
   };
 
-  if (profile?.bank_verified !== true || profile?.identity_verified !== true || profile?.address_verified !== true) {
-    return (
-      <div>
-        <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Withdraw Funds</DialogTitle>
-              <DialogDescription>
-                To withdraw funds, please complete the verification of your bank details, identity, and address in your profile settings.
-              </DialogDescription>
-            </DialogHeader>
-            <Link className='bg-green-700 rounded-lg py-2 px-2 text-center text-[18px] font-semibold text-white' to="/dashboard/settings">profile</Link>
-          </DialogContent>
-        </Dialog>
+  // if (profile?.bank_verified !== true || profile?.identity_verified !== true || profile?.address_verified !== true) {
+  //   return (
+  //     <div>
+  //       <Dialog open={open} onOpenChange={onOpenChange}>
+  //         <DialogContent className="sm:max-w-md">
+  //           <DialogHeader>
+  //             <DialogTitle>Withdraw Funds</DialogTitle>
+  //             <DialogDescription>
+  //               To withdraw funds, please complete the verification of your bank details, identity, and address in your profile settings.
+  //             </DialogDescription>
+  //           </DialogHeader>
+  //           <Link className='bg-green-700 rounded-lg py-2 px-2 text-center text-[18px] font-semibold text-white' to="/dashboard/settings">profile</Link>
+  //         </DialogContent>
+  //       </Dialog>
 
-      </div>
-    )
-  }
+  //     </div>
+  //   )
+  // }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
