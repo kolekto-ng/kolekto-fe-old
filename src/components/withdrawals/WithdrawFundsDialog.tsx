@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useWithdrawalStore } from '@/store';
 import { useAuthStore } from '@/store';
 import { axiosInstance } from '@/utils/axios';
+import { Link } from 'react-router-dom';
 
 interface WithdrawFundsDialogProps {
   open: boolean;
@@ -33,6 +34,26 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const { createWithdrawal } = useWithdrawalStore();
   const { user } = useAuthStore();
+  const [profile, setProfile] = useState();
+
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]); // ✅ run only when user changes
+
+  const fetchUserProfile = () => {
+    axiosInstance
+      .get('/settings/profile')
+      .then((response) => {
+        console.log(response.data, 'response data');
+        setProfile(response.data.data);
+      })
+      .catch((error) => {
+        console.error('Error fetching user data:', error);
+      });
+  };
+
 
   const handleWithdraw = async (data: {
     amount: number;
@@ -66,6 +87,25 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
       setIsLoading(false);
     }
   };
+
+  // if (profile?.bank_verified !== true || profile?.identity_verified !== true || profile?.address_verified !== true) {
+  //   return (
+  //     <div>
+  //       <Dialog open={open} onOpenChange={onOpenChange}>
+  //         <DialogContent className="sm:max-w-md">
+  //           <DialogHeader>
+  //             <DialogTitle>Withdraw Funds</DialogTitle>
+  //             <DialogDescription>
+  //               To withdraw funds, please complete the verification of your bank details, identity, and address in your profile settings.
+  //             </DialogDescription>
+  //           </DialogHeader>
+  //           <Link className='bg-green-700 rounded-lg py-2 px-2 text-center text-[18px] font-semibold text-white' to="/dashboard/settings">profile</Link>
+  //         </DialogContent>
+  //       </Dialog>
+
+  //     </div>
+  //   )
+  // }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
