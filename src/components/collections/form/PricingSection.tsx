@@ -47,6 +47,24 @@ const PricingSection: React.FC<PricingSectionProps> = ({
   totalPayable,
   getKolektoFeePercentage,
 }) => {
+  // Helpers for currency input formatting
+  const sanitizeCurrencyInput = (input: string) => {
+    if (!input) return '';
+    const onlyDigitsAndDot = input.replace(/,/g, '').replace(/[^\d.]/g, '');
+    const [intPart, decPart] = onlyDigitsAndDot.split('.');
+    const trimmedInt = intPart.replace(/^0+(?!$)/, '');
+    if (decPart !== undefined) {
+      return `${trimmedInt || '0'}.${decPart.slice(0, 2)}`;
+    }
+    return trimmedInt;
+  };
+
+  const formatCurrencyDisplay = (raw: string) => {
+    if (!raw) return '';
+    const [intPart, decPart] = raw.split('.');
+    const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
+  };
   const handleAddPriceTier = () => {
     const newId = (priceTiers.length + 1).toString();
     setPriceTiers([
@@ -119,7 +137,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
             <h3 className="font-medium mb-3">Fee Bearer Selection</h3>
             <RadioGroup
               value={feeBearer}
-              onValueChange={(value) => setFeeBearer(value as 'organizer' | 'contributor')}
+              onValueChange={(value: 'organizer' | 'contributor') => setFeeBearer(value)}
               className="space-y-3"
             >
               <div className="flex items-center space-x-2">
@@ -151,14 +169,13 @@ const PricingSection: React.FC<PricingSectionProps> = ({
           <Label htmlFor="amount">Amount per Person (NGN)</Label>
           <Input
             id="amount"
-            type="number"
+            type="text"
             required
-            min="0"
-            step="0.01"
-            placeholder="e.g. 2000"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            placeholder="e.g. 2,000"
+            value={formatCurrencyDisplay(amount)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(sanitizeCurrencyInput(e.target.value))}
             className="w-full"
+            inputMode="decimal"
           />
         </div>
       ) : (
@@ -198,13 +215,12 @@ const PricingSection: React.FC<PricingSectionProps> = ({
                   <div className="space-y-2">
                     <Label>Price (NGN)</Label>
                     <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={tier.price}
-                      onChange={(e) => handlePriceTierChange(tier.id, 'price', e.target.value)}
-                      placeholder="e.g. 5000"
+                      type="text"
+                      value={formatCurrencyDisplay(tier.price)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handlePriceTierChange(tier.id, 'price', sanitizeCurrencyInput(e.target.value))}
+                      placeholder="e.g. 5,000"
                       required={usePriceTiers}
+                      inputMode="decimal"
                     />
                   </div>
                 </div>
@@ -284,7 +300,7 @@ const PricingSection: React.FC<PricingSectionProps> = ({
 
               <RadioGroup
                 value={feeBearer}
-                onValueChange={(value) => setFeeBearer(value as 'organizer' | 'contributor')}
+                onValueChange={(value: 'organizer' | 'contributor') => setFeeBearer(value)}
                 className="space-y-3"
               >
                 <div className="flex items-center space-x-2">

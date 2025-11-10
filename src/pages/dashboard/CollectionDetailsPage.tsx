@@ -138,7 +138,10 @@ const CollectionDetailsPage: React.FC = () => {
     }
   }, [location]);
 
-  const shareUrl = `${window.location.origin}/contribute/${id}`;
+  console.log(currentCollection, 'current collection');
+
+
+  const shareUrl = `${window.location.origin}/contribute/${currentCollection?.slug}`;
 
   const handleShare = () => {
     setIsShareDrawerOpen(true);

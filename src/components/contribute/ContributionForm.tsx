@@ -63,7 +63,7 @@ interface ContributionFormProps {
   pricingTiers?: PriceTier[];
   onPaymentSuccess?: (data: any) => void;
   onPaymentError?: (error: string) => void;
-
+  supportPhone?: string;
   // New props from second version
   collectionId?: string;
   collectionTitle?: string;
@@ -92,7 +92,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const amountBreakdown = props.amountBreakdown;
   const onPaymentSuccess = props.onPaymentSuccess;
   const onPaymentError = props.onPaymentError;
-
+  const supportPhone = props.supportPhone || props.collection?.support_phone_number || '';
   // State management
   const [step, setStep] = useState<"pricing" | "details" | "contact" | "payment">(
     pricingTiers && pricingTiers.length > 0 ? "pricing" : "details"
@@ -907,6 +907,28 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <Card>
+        {supportPhone && (
+          <div className="mt-4 mx-4 p-3 border rounded-md bg-gray-50 text-sm flex items-center justify-between">
+            <div>
+              <span className="font-medium">Need help?</span>
+              <span className="ml-1">Contact the organizer:</span>
+              <a
+                href={`tel:${supportPhone}`}
+                className="ml-1 text-kolekto font-medium"
+              >
+                {supportPhone}
+              </a>
+            </div>
+            <a
+              href={`https://wa.me/${supportPhone.replace(/^\+/, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-green-600 hover:underline"
+            >
+              WhatsApp
+            </a>
+          </div>
+        )}
         <CardHeader>
           <CardTitle>{collectionTitle}</CardTitle>
           <CardDescription>

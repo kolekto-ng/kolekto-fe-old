@@ -34,6 +34,7 @@ interface ContributionWrapperProps {
   fee_bearer?: '',
   wallet?: [],
   collection?: any; // Add this line to accept the entire collection object
+  supportPhone?: string;
 }
 
 const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
@@ -49,7 +50,7 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   priceTiers,
   fee_bearer,
   wallet,
-  collection
+  collection,
 }) => {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'error'>('pending');
   const [paymentData, setPaymentData] = useState<any>(null);
@@ -60,6 +61,10 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(true);
 
   const isExpired = deadline ? new Date(deadline) < new Date() : false;
+
+  // Resolve organizer support phone from collection (supports multiple keys)
+  const supportPhone: string | undefined =
+    collection?.support || collection?.support_phone_number || undefined;
 
   const handlePaymentSuccess = (data: any) => {
     // Handle both old and new data formats
@@ -184,6 +189,7 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           formFields={fields}
           fields={fields}
           description={description}
+          supportPhone={supportPhone}
           max_contributions={max_contributions}
           total_contributions={total_contributions}
           pricingTiers={priceTiers}
@@ -204,6 +210,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           transactionRef={transactionRef}
         />
       )}
+
+
     </div>
   );
 };
