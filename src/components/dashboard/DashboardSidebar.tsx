@@ -32,7 +32,7 @@ const DashboardSidebar = () => {
   const navigate = useNavigate();
   const { signOut } = useAuthStore();
   const user = useAuthStore((state) => state.user);
-  const { setOpen } = useSidebar();
+  const { setOpen, setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
 
   const isActive = (path: string) => {
@@ -42,12 +42,15 @@ const DashboardSidebar = () => {
 
   const handleSignOut = async () => {
     await signOut();
+    if (isMobile) {
+      setOpenMobile(false);
+    }
   };
 
   const handleNavigation = (path: string) => {
     navigate(path);
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
 
@@ -149,6 +152,9 @@ const DashboardSidebar = () => {
             className="w-full flex gap-3 p-2 items-center font-semibold text-[14px] justify-start hover:bg-kolekto/80 hover:text-white"
             size="sm"
             href='mailto:team@kolekto.com.ng'
+            onClick={() => {
+              if (isMobile) setOpenMobile(false);
+            }}
           >
             <BarChart2 className="mr-2 h-4 w-4" />
             Support

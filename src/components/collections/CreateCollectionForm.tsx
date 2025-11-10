@@ -21,6 +21,25 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
 
+  // Helpers for currency input formatting
+  const sanitizeCurrencyInput = (input: string) => {
+    if (!input) return '';
+    const onlyDigitsAndDot = input.replace(/,/g, '').replace(/[^\d.]/g, '');
+    const [intPart, decPart] = onlyDigitsAndDot.split('.');
+    const trimmedInt = intPart.replace(/^0+(?!$)/, '');
+    if (decPart !== undefined) {
+      return `${trimmedInt || '0'}.${decPart.slice(0, 2)}`;
+    }
+    return trimmedInt;
+  };
+
+  const formatCurrencyDisplay = (raw: string) => {
+    if (!raw) return '';
+    const [intPart, decPart] = raw.split('.');
+    const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
+  };
+
   // Form state
 
   const [title, setTitle] = useState('');
@@ -54,7 +73,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const [feeBearer, setFeeBearer] = useState<'organizer' | 'contributor'>('organizer');
+  const [feeBearer, setFeeBearer] = useState<'organizer' | 'contributor'>('contributor');
   const [kolektoFee, setKolektoFee] = useState(0);
   const [paymentGatewayFee, setPaymentGatewayFee] = useState(0);
   const [totalFees, setTotalFees] = useState(0);
@@ -156,10 +175,31 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       toast.error("Please enter a valid collection deadline");
       return false;
     }
-    // if (support.trim() != '') {
-    //   toast.error("Please enter a valid number");
-    //   return false;
-    // }
+
+    if (support.trim() === '' || support.trim() === null) {
+      toast.error("Please enter a valid support number");
+      return false;
+    }
+
+    if (support.trim() !== '' && support.trim() !== null) {
+      const isValidNgE164 = /^\+234\d{10}$/.test(support.trim());
+
+      const supportNumber = support.slice(4);
+      if (supportNumber.length < 10) {
+        toast.error("Support number must be at least 10 digits");
+        return false;
+      }
+
+      if (supportNumber.length > 10) {
+        toast.error("Support number must not be more than 10 digits");
+        return false;
+      }
+
+      if (!isValidNgE164) {
+        toast.error("Support number must be in the format +234XXXXXXXXXX");
+        return false;
+      }
+    }
     if (!title.trim()) {
       toast.error("Please enter a collection title");
       return false;
@@ -343,6 +383,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         collection_type: useFundraising ? 'fundraising' : (usePriceTiers ? 'tiered' : 'fixed'),
         status: "active" as const,
         support: support || null,
+        code_prefix: codePrefix || null,
       };
 
       console.log(collectionData, 'collection data');
@@ -430,7 +471,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   </div>
                 </div>
                 <div>
-                  <p className='text-[14px]'>Want to use Fundraising feature? contact <a className='text-green-600' href="wa.me/+2349019840377">Kolekto</a></p>
+                  <p className='text-[14px]'>Want to use Fundraising feature? contact <a className='text-green-600' target="_blank" href="https://wa.me/+2349019840377">Kolekto</a></p>
 
                   <div className={`p-4 border opacity-40 rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
                     onClick={() => {
@@ -559,13 +600,12 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                         Amount (₦) *
                       </label>
                       <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        type="text"
+                        value={formatCurrencyDisplay(amount)}
+                        onChange={(e) => setAmount(sanitizeCurrencyInput(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                         placeholder="Enter amount"
-                        min="0"
-                        step="0.01"
+                        inputMode="decimal"
                       />
                     </div>
                     <div>
@@ -599,10 +639,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                         <span className="absolute left-3 top-2 text-gray-500">₦</span>
                         <input
                           type="text"
-                          value={minAmount}
-                          onChange={(e) => setMinAmount(e.target.value)}
+                          value={formatCurrencyDisplay(minAmount)}
+                          onChange={(e) => setMinAmount(sanitizeCurrencyInput(e.target.value))}
                           className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                           placeholder="Leave empty for no limit"
+                          inputMode="decimal"
                         />
                       </div>
                     </div>
@@ -613,11 +654,12 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                       <div className='relative'>
                         <span className="absolute left-3 top-2 text-gray-500">₦</span>
                         <input
-                          type='number'
-                          value={fundraisingTarget}
-                          onChange={(e) => setFundraisingTarget(e.target.value)}
+                          type='text'
+                          value={formatCurrencyDisplay(fundraisingTarget)}
+                          onChange={(e) => setFundraisingTarget(sanitizeCurrencyInput(e.target.value))}
                           className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                           placeholder="Leave empty for no limit"
+                          inputMode="decimal"
                         />
                       </div>
                     </div>
@@ -705,17 +747,16 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                             Price (₦)
                           </label>
                           <input
-                            type="number"
-                            value={tier.price}
+                            type="text"
+                            value={formatCurrencyDisplay(tier.price)}
                             onChange={(e) => {
                               const updatedTiers = [...priceTiers];
-                              updatedTiers[index] = { ...tier, price: e.target.value };
+                              updatedTiers[index] = { ...tier, price: sanitizeCurrencyInput(e.target.value) };
                               setPriceTiers(updatedTiers);
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                             placeholder="0.00"
-                            min="0"
-                            step="0.01"
+                            inputMode="decimal"
                           />
                         </div>
                       </div>
