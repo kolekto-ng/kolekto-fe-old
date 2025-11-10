@@ -51,7 +51,6 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   fee_bearer,
   wallet,
   collection,
-  supportPhone
 }) => {
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'success' | 'error'>('pending');
   const [paymentData, setPaymentData] = useState<any>(null);
