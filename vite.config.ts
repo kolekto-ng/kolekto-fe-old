@@ -36,8 +36,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Increase file size limit for large assets (e.g., images)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+
         // Cache strategy for better offline support
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -50,6 +54,18 @@ export default defineConfig({
               },
               cacheableResponse: {
                 statuses: [0, 200],
+              },
+            },
+          },
+          // Cache large images with network-first strategy
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "images-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
             },
           },
@@ -80,21 +96,67 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true,
+    chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB
     rollupOptions: {
       input: {
         landing: resolve(__dirname, "index.html"),
         pwa: resolve(__dirname, "pwa.html"),
       },
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom"],
-          ui: [
-            "@radix-ui/react-accordion",
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-          ],
-          forms: ["react-hook-form", "@hookform/resolvers", "zod"],
-          payments: ["react-paystack"],
+        manualChunks: (id) => {
+          // Core vendor libraries
+          if (id.includes("node_modules")) {
+            // React core
+            if (id.includes("react") || id.includes("react-dom")) {
+              return "vendor-react";
+            }
+
+            // React Router
+            if (id.includes("react-router")) {
+              return "vendor-router";
+            }
+
+            // Radix UI components (split into smaller chunks)
+            if (id.includes("@radix-ui")) {
+              return "vendor-radix";
+            }
+
+            // Form libraries
+            if (
+              id.includes("react-hook-form") ||
+              id.includes("zod") ||
+              id.includes("@hookform")
+            ) {
+              return "vendor-forms";
+            }
+
+            // Chart/visualization libraries
+            if (id.includes("recharts") || id.includes("d3")) {
+              return "vendor-charts";
+            }
+
+            // Payment libraries
+            if (id.includes("paystack")) {
+              return "vendor-payments";
+            }
+
+            // Supabase
+            if (id.includes("@supabase")) {
+              return "vendor-supabase";
+            }
+
+            // Other utilities
+            if (id.includes("framer-motion")) {
+              return "vendor-animation";
+            }
+
+            if (id.includes("axios")) {
+              return "vendor-http";
+            }
+
+            // All other node_modules
+            return "vendor-misc";
+          }
         },
       },
     },
