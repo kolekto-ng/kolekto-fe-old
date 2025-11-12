@@ -5,8 +5,6 @@ import { Toaster } from './components/ui/toaster'
 import { Toaster as Sonner } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 import PwaLayout from './layouts/PwaLayout'
-import PwaHome from './pages/pwa/Home'
-import Splash from './pages/pwa/Splash'
 import PwaLogin from './pages/pwa/auth/Login'
 import PwaRegister from './pages/pwa/auth/Register'
 import PwaForgotPassword from './pages/pwa/auth/ForgotPassword'
@@ -20,8 +18,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter basename="/pwa">
         <PwaLayout>
           <Routes>
-            <Route path="/" element={<Splash />} />
-            <Route path="/home" element={<PwaLogin />} />
+            {/* Root redirects to login (removed splash screen) */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<PwaLogin />} />
             <Route path="/register" element={<PwaRegister />} />
             <Route path="/forgot-password" element={<PwaForgotPassword />} />
