@@ -8,6 +8,7 @@ import SimplifyCollection from "@/components/lpMain/simCol/SimplifyCollection";
 import WhyKolekto from "@/components/lpMain/whyKolekto/whyKolekto";
 import FAQSection from "@/components/FAQSection/FAQSection";
 import HowItWorks from "@/components/lpMain/hwWorks/HowItWorks";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 
 const HomePage: React.FC = () => {
@@ -28,6 +29,9 @@ const HomePage: React.FC = () => {
         <SimplifyCollection />
       </main>
       <Footer />
+
+      {/* PWA Install Prompt - Shows when installable */}
+      <PWAInstallPrompt variant="banner" />
     </div>
   );
 };

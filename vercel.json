@@ -1,9 +1,7 @@
 {
   "rewrites": [
       { "source": "/pwa", "destination": "/pwa.html" },
-      { "source": "/pwa/(.)", "destination": "/pwa.html" },
-      { "source": "/app/(.)", "destination": "/" },
-      { "source": "/(.)", "destination": "/" },
+      { "source": "/pwa/(.*)", "destination": "/pwa.html" },
       { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

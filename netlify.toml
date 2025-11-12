@@ -2,7 +2,19 @@
   command = "npm run build"
   publish = "dist"
 
+# PWA routes - must come BEFORE the catch-all
 [[redirects]]
-  from = "/(.*)"
+  from = "/pwa"
+  to = "/pwa.html"
+  status = 200
+
+[[redirects]]
+  from = "/pwa/*"
+  to = "/pwa.html"
+  status = 200
+
+# Catch-all for main SPA (must be LAST)
+[[redirects]]
+  from = "/*"
   to = "/index.html"
   status = 200

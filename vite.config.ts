@@ -10,52 +10,53 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
-      pwaAssets: {
-        image: "public/kelekto_logo-removebg-preview.png",
-      },
+      includeAssets: ["favicon.ico", "kelekto_logo-removebg-preview.png"],
       manifest: {
-        name: "Kolekto PWA",
+        name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
+        description: "Simplify group payments and collections with Kolekto",
         start_url: "/pwa/",
         scope: "/pwa/",
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#16a34a",
         icons: [
-          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
-          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
           {
-            src: "pwa-maskable-192x192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "maskable any",
-          },
-          {
-            src: "pwa-maskable-512x512.png",
+            src: "kelekto_logo-removebg-preview.png",
             sizes: "512x512",
             type: "image/png",
-            purpose: "maskable any",
-          },
-        ],
-        screenshots: [
-          {
-            src: "screenshot-mobile.png",
-            sizes: "750x1334",
-            type: "image/png",
-            form_factor: "narrow",
+            purpose: "any",
           },
           {
-            src: "screenshot-desktop.png",
-            sizes: "1280x800",
+            src: "kelekto_logo-removebg-preview.png",
+            sizes: "192x192",
             type: "image/png",
-            form_factor: "wide",
+            purpose: "maskable",
           },
         ],
       },
       workbox: {
-        // Keep PWA navigation out of app/landing routes
-        navigateFallbackDenylist: [/^\/app\//, /^\/$/],
+        // Cache strategy for better offline support
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true, // Enable PWA in dev mode for testing
       },
     }),
   ],
