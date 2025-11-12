@@ -1,0 +1,4 @@
+/pwa /pwa.html 200
+/pwa/* /pwa.html 200
+/app/* /index.html 200
+/* /index.html 200
