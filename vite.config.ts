@@ -40,16 +40,24 @@ export default defineConfig({
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
 
-        // Cache all static assets
+        // Cache all static assets including HTML
         globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2}"],
 
-        // CRITICAL for Android: Navigation fallback
+        // Clean URLs - remove hash from precache
+        cleanupOutdatedCaches: true,
+
+        // CRITICAL: Navigation fallback for SPA routing
         navigateFallback: "/pwa.html",
-        navigateFallbackAllowlist: [/^\/pwa/],
-        navigateFallbackDenylist: [/^\/api/, /^\/$/],
+        navigateFallbackAllowlist: [/^\/pwa\/.*/], // Match /pwa/* (with trailing slash)
+        navigateFallbackDenylist: [
+          /^\/api/, // API routes
+          /^\/$/, // Root
+          /\/[^/?]+\.[^/]+$/, // Files with extensions (e.g., .js, .css, .png)
+        ],
 
         // Runtime caching strategies
         runtimeCaching: [
+          // Fonts
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
@@ -61,14 +69,28 @@ export default defineConfig({
               },
             },
           },
+          // Images
           {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "images-cache",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+          // API calls (network first, fallback to cache)
+          {
+            urlPattern: /^https:\/\/.*\/api\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 5, // 5 minutes
               },
             },
           },
