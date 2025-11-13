@@ -23,13 +23,13 @@ export default defineConfig({
         theme_color: "#16a34a",
         icons: [
           {
-            src: "kelekto_logo-removebg-preview.png",
+            src: "favicon.ico",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "kelekto_logo-removebg-preview.png",
+            src: "favicon.ico",
             sizes: "192x192",
             type: "image/png",
             purpose: "maskable",
