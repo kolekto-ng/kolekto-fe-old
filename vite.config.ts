@@ -15,9 +15,10 @@ export default defineConfig({
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
         description: "Simplify group payments and collections with Kolekto",
-        start_url: "/pwa/",
+        start_url: "/pwa/login",
         scope: "/pwa/",
         display: "standalone",
+        orientation: "portrait",
         background_color: "#ffffff",
         theme_color: "#16a34a",
         icons: [
@@ -32,6 +33,44 @@ export default defineConfig({
             sizes: "192x192",
             type: "image/png",
             purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        // Increase file size limit for large assets
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+
+        // Cache all static assets
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2}"],
+
+        // CRITICAL for Android: Navigation fallback
+        navigateFallback: "/pwa.html",
+        navigateFallbackAllowlist: [/^\/pwa/],
+        navigateFallbackDenylist: [/^\/api/, /^\/$/],
+
+        // Runtime caching strategies
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+            },
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "images-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
           },
         ],
       },
