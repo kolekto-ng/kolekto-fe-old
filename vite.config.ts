@@ -10,7 +10,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "kelekto_logo-removebg-preview.png"],
+      includeAssets: [
+        "https://i.imgur.com/Lb0KU2l.png",
+        "kelekto_logo-removebg-preview.png",
+      ],
       manifest: {
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
@@ -20,16 +23,16 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         background_color: "#ffffff",
-        theme_color: "#16a34a",
+        theme_color: "#ffffff",
         icons: [
           {
-            src: "favicon.ico",
+            src: "https://i.imgur.com/Lb0KU2l.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "favicon.ico",
+            src: "https://i.imgur.com/Lb0KU2l.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "maskable",

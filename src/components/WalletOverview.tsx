@@ -80,7 +80,7 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
       <div className='bg-green-900 text-white rounded-[24px]'>
         <div className="flex justify-between p-6 items-start">
           <div>
-            <p className="text-sm text-green-200 mb-1">Total balance</p>
+            <p className="text-sm text-green-200 mb-1">Total Balance</p>
             <h2 className="text-4xl font-bold">{formatCurrency(totalBalance)}</h2>
           </div>
 
@@ -89,12 +89,12 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
           </svg>
         </div>
 
-        <div className="flex justify-between items-center px-6 py-4 bg-[#00700D] rounded-b-[24px]">
-          <div className='flex justify-between items-center  gap-4'>
+        <div className="flex justify-between items-center gap-8 px-6 py-4 bg-[#00700D] rounded-b-[24px]">
+          <div className='flex justify-between items-center gap-1  md:gap-4'>
             <p className="text-[14px] text-white">Available</p>
             <p className="text-[16px] md:text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>
           </div>
-          <div className='flex justify-between items-center gap-4'>
+          <div className='flex justify-between items-center gap-1 md:gap-4'>
             <p className="text-[14px] text-white ">Pending</p>
             <p className="text-[16px] md:text-xl text-white font-semibold ">{formatCurrency(pendingBalance)}</p>
           </div>
