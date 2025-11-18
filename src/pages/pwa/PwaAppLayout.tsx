@@ -49,37 +49,7 @@ const PwaAppLayout: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-emerald-700/10 relative">
-            {/* Header */}
-            <header className="sticky top-0 z-20 bg-white border-b">
-                <div className="px-4 py-3 flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl font-bold text-emerald-600">Kolekto</h1>
-                        <p className="text-xs text-gray-500">Dashboard</p>
-                    </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>
-                                <div>
-                                    <p className="font-medium">{user?.email}</p>
-                                    <p className="text-xs text-gray-500 font-normal">
-                                        {user?.user_metadata?.full_name || 'User'}
-                                    </p>
-                                </div>
-                            </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={handleSignOut}>
-                                <LogOut className="mr-2 h-4 w-4" />
-                                Sign Out
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </header>
+
 
             {/* Main Content - render nested routes via Outlet */}
             <main className="">

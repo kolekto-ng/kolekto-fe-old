@@ -20,7 +20,9 @@ import {
 import DashboardLayout from '../../../components/dashboard/DashboardLayout'
 import WalletOverview from '../../../components/WalletOverview'
 import CollectionsOverview from '../../../components/dashboard/CollectionOverview'
-
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Bell, Search, ChevronDown, Users } from 'lucide-react';
+import ActivityFeed from '../../../components/dashboard/ActivityOverview'
 const PwaDashboard: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -60,11 +62,29 @@ const PwaDashboard: React.FC = () => {
       {/* Main Content */}
       <main className="px-4 py-6 pb-20 space-y-6">
         <div className="space-y-6 w-full md:w-[55%]">
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center gap-4'>
+              <Avatar className="h-14 w-14">
+                {user?.avatar_url ? (
+                  <AvatarImage src={user.avatar_url} alt={user?.email || "User"} />
+                ) : (
+                  <AvatarFallback>{(user?.user_metadata.full_name.split(' ')[1] || user?.email || "U").charAt(0)}</AvatarFallback>
+                )}
+              </Avatar>
+              <p className="text-xl font-bold mb-3">
+                Hi, {user?.user_metadata.full_name.split(' ')[1] || user?.user_metadata.firstName || 'User'}
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+            </Button>
+          </div>
           <WalletOverview />
           <div>
-            <h2 className='text-[24px] font-semibold mb-4'>Quick actions</h2>
+            <h2 className='text-[18px] md:text-[24px] font-semibold mb-4'>Quick actions</h2>
             <div className='flex gap-4 mb-6'>
-              <Button asChild className="bg-green-600 text-[16px] hover:bg-green-700">
+              <Button asChild className="bg-green-600 text-[16px] font-semibold hover:bg-green-700">
                 <Link to="/create-collection">
                   <Plus className="mr-2 h-4 w-4" />
                   Create collection
@@ -73,6 +93,7 @@ const PwaDashboard: React.FC = () => {
             </div>
           </div>
           <CollectionsOverview />
+          <ActivityFeed />
         </div>
       </main>
 

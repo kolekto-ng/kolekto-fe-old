@@ -46,7 +46,7 @@ const PwaCollections: React.FC = () => {
     });
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-2 md:p-6 mb-24 md:mb-0">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold">Collections</h1>
                 <Button asChild className="bg-green-600 hover:bg-green-700">

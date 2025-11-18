@@ -15,6 +15,7 @@ import PwaCreateCollection from './pages/pwa/pages/CreateCollection'
 import PwaAppLayout from './pages/pwa/PwaAppLayout';
 import PwaCollections from './pages/pwa/pages/Collections'
 import PwaProfile from './pages/pwa/pages/Profile'
+import PwaCollectionDetails from './pages/pwa/pages/CollectionDetails'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="/dashboard" element={<PwaDashboard />} />
             <Route path="/create-collection" element={<PwaCreateCollection />} />
             <Route path="/collections" element={<PwaCollections />} />
+            <Route path="collections/:id" element={<PwaCollectionDetails />} />
             <Route path="/wallet" element={<div>Wallet Page</div>} />
             <Route path="/profile" element={<PwaProfile />} />
           </Route>
