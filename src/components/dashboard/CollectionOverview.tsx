@@ -72,7 +72,7 @@ const CollectionsOverview = ({
         <Button
           variant="link"
           className="text-[16px]"
-          onClick={() => navigate('/dashboard/collections')}
+          onClick={() => navigate('/collections')}
         >
           see more
         </Button>
