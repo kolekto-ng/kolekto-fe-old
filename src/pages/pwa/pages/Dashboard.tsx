@@ -57,13 +57,13 @@ const PwaDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50">
 
       {/* Main Content */}
-      <main className="px-4 py-6 pb-20 space-y-6">
+      <main className=" space-y-6">
         <div className="space-y-6 w-full md:w-[55%]">
           <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-4'>
+            <div className='flex items-center gap-4' onClick={() => navigate('/profile')}>
               <Avatar className="h-14 w-14">
                 {user?.avatar_url ? (
                   <AvatarImage src={user.avatar_url} alt={user?.email || "User"} />

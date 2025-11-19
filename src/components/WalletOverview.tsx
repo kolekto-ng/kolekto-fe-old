@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore, useCollectionStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
 
 
 interface WalletOverviewProps {
@@ -73,12 +74,13 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
 
 
 
+  const navigate = useNavigate()
 
   return (
     <div>
 
       <div className='bg-green-900 text-white rounded-[24px]'>
-        <div className="flex justify-between p-6 items-start">
+        <div className="flex justify-between p-6 items-start" onClick={() => navigate('/wallet')} >
           <div>
             <p className="text-sm text-green-200 mb-1">Total Balance</p>
             <h2 className="text-4xl font-bold">{formatCurrency(totalBalance)}</h2>
@@ -89,7 +91,7 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
           </svg>
         </div>
 
-        <div className="flex justify-between items-center gap-8 px-6 py-4 bg-[#00700D] rounded-b-[24px]">
+        <div className="flex justify-between items-center gap-8 px-6 py-4 bg-green-800 rounded-b-[24px]">
           <div className='flex justify-between items-center gap-1  md:gap-4'>
             <p className="text-[14px] text-white">Available</p>
             <p className="text-[16px] md:text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>

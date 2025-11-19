@@ -65,7 +65,7 @@ const DashboardContent = () => {
               <div>
                 <h2 className='text-[24px] font-semibold mb-4'>Quick actions</h2>
                 <div className='flex gap-4 mb-6'>
-                  <Button asChild className="bg-green-600 text-[16px] hover:bg-kolekto/90">
+                  <Button asChild className="bg-green-700 text-[16px] hover:bg-green-800">
                     <Link to="/dashboard/create-collection">
                       <Plus className="mr-2 h-4 w-4 " />
                       Create collection
