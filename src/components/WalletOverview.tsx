@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore, useCollectionStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
 
 
 interface WalletOverviewProps {
@@ -73,33 +74,29 @@ const WalletOverview: React.FC<WalletOverviewProps> = ({
 
 
 
+  const navigate = useNavigate()
 
   return (
     <div>
-      <p className="text-xl font-bold mb-3">
-        Hi {user?.full_name.split(' ')[1] || user?.firstName || 'User'}, welcome back.
-      </p>
+
       <div className='bg-green-900 text-white rounded-[24px]'>
-        <div className="flex justify-between p-6 items-start mb-2">
+        <div className="flex justify-between p-6 items-start" onClick={() => navigate('/wallet')} >
           <div>
-            <h2 className='text-xl font-semibold mb-2'>Wallet </h2>
-            <p className="text-sm text-green-200 mb-1">Total balance</p>
+            <p className="text-sm text-green-200 mb-1">Total Balance</p>
             <h2 className="text-4xl font-bold">{formatCurrency(totalBalance)}</h2>
           </div>
-          {/* <Button
-            variant="secondary"
-            className="bg-green-950 text-white px-10 hover:bg-green-500"
-          >
-            Withdraw
-          </Button> */}
+
+          <svg class="w-[42px] h-[42px] text-white dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 5 7 7-7 7" />
+          </svg>
         </div>
 
-        <div className="flex justify-between items-center px-6 py-4 bg-[#00700D] rounded-b-[24px]">
-          <div className='flex justify-between items-center  gap-4'>
+        <div className="flex justify-between items-center gap-8 px-6 py-4 bg-green-800 rounded-b-[24px]">
+          <div className='flex justify-between items-center gap-1  md:gap-4'>
             <p className="text-[14px] text-white">Available</p>
             <p className="text-[16px] md:text-xl text-white font-semibold">{formatCurrency(availableBalance)}</p>
           </div>
-          <div className='flex justify-between items-center gap-4'>
+          <div className='flex justify-between items-center gap-1 md:gap-4'>
             <p className="text-[14px] text-white ">Pending</p>
             <p className="text-[16px] md:text-xl text-white font-semibold ">{formatCurrency(pendingBalance)}</p>
           </div>

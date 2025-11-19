@@ -1,0 +1,6 @@
+# PWA routes - must come BEFORE the catch-all
+/pwa /pwa.html 200
+/pwa/* /pwa.html 200
+
+# Catch-all for main SPA (must be LAST)
+/* /index.html 200

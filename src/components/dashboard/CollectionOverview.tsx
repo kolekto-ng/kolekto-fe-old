@@ -63,7 +63,7 @@ const CollectionsOverview = ({
   return (
     <div>
       <div className="flex justify-between items-center mb-4 mt-4">
-        <h3 className="text-[24px] font-semibold flex items-center gap-2">
+        <h3 className="text-[18px] md:text-[24px] font-semibold flex items-center gap-2">
           Collections
           <span className="bg-green-600 -mt-4 text-white text-[18px] font-medium h-7 w-7 flex items-center justify-center rounded-full">
             {collections.length}
@@ -72,7 +72,7 @@ const CollectionsOverview = ({
         <Button
           variant="link"
           className="text-[16px]"
-          onClick={() => navigate('/dashboard/collections')}
+          onClick={() => navigate('/collections')}
         >
           see more
         </Button>

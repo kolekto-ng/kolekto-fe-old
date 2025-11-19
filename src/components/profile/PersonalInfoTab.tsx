@@ -108,11 +108,11 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 flex-col mb-24">
       {/* Profile Header */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center space-x-6">
+        <CardContent className="pt-6 flex-col">
+          <div className="flex items-center flex-col space-x-6">
             <div className="relative">
               <ProfilePictureUpload />
             </div>
