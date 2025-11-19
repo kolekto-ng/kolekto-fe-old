@@ -25,8 +25,8 @@ const PwaCreateCollection: React.FC = () => {
     };
 
     return (
-        <div className="p-4 mb-24 md:mb-0">
-            <div ref={tabsRef} className="mb-12">
+        <div className="">
+            <div ref={tabsRef} className="">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="mb-4">
                         <TabsTrigger value="create">Create</TabsTrigger>

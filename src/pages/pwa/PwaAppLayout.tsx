@@ -1,16 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../../store';
-import { Loader2, Menu, LogOut, Home, Grid3X3, Wallet, User, Plus } from 'lucide-react';
-import { Button } from '../../components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '../../components/ui/dropdown-menu';
+import { Loader2, Home, Grid3X3, Wallet, User, Plus } from 'lucide-react';
 
 const PwaAppLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -48,8 +39,7 @@ const PwaAppLayout: React.FC = () => {
     if (!user) return null;
 
     return (
-        <div className="min-h-screen bg-emerald-700/10 relative">
-
+        <div className="min-h-screen py-4 px-2 bg-gray-50 relative">
 
             {/* Main Content - render nested routes via Outlet */}
             <main className="">
@@ -57,11 +47,11 @@ const PwaAppLayout: React.FC = () => {
             </main>
 
             {/* Pill nav + FAB on top of rectangle */}
-            <nav className="fixed left-0 right-0 bottom-0 z-5 backdrop-blur-xl bg-transparent flex justify-center pointer-events-none  w-full max-w-4xl rounded-t-xl h-24 bg-emerald-700 items-center shadow-2xl">
+            <nav className="fixed left-0 right-0 bottom-0 z-5 backdrop-blur-xl flex justify-center pointer-events-none  w-full max-w-4xl rounded-t-xl h-24 bg-[#00994D]/10 items-center shadow-2xl">
                 <div className="relative w-full mx-4 flex items-center justify-center gap-4">
                     {/* Pill container */}
                     <div
-                        className="pointer-events-auto rounded-full px-4 py-1 flex items-center justify-between w-full max-w-[60%] bg-gradient-to-br from-emerald-600/85 to-emerald-500/85 backdrop-blur-md border border-white/10"
+                        className="pointer-events-auto rounded-full px-4 py-1 flex items-center justify-between w-full max-w-[60%] bg-gradient-to-br from-[#00994D]/85 to-[#00994D]/85 backdrop-blur-md border border-white/80"
                         style={{
                             maxWidth: '920px',
                             boxShadow:
@@ -106,7 +96,7 @@ const PwaAppLayout: React.FC = () => {
                     <div className="right-0 -top-6 pointer-events-auto">
                         <button
                             onClick={() => navigate('/create-collection')}
-                            className="bg-emerald-500/95 hover:bg-emerald-600/95 text-white rounded-full p-5 shadow-xl transform transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
+                            className="bg-[#00994D]/95 hover:bg-[#00994D]/95 text-white rounded-full p-5 shadow-xl transform transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#00994D]"
                             aria-label="Create new collection"
                         >
                             <Plus className="h-8 w-8" strokeWidth={2} />
