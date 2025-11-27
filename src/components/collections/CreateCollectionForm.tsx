@@ -41,7 +41,6 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   };
 
   // Form state
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -70,6 +69,19 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { createCollection } = useCollectionStore();
+
+  const FUNDRAISING_ALLOWED = (
+    import.meta.env.VITE_FUNDRAISING_APPROVED_EMAILS || ''
+  )
+    .split(',')
+    .map((email: string) => email.trim())
+    .filter((email: string) => email.length > 0);
+
+  // whether the currently signed in user can use fundraising
+  const canUseFundraising = !!user?.email && FUNDRAISING_ALLOWED
+    .map((e: string) => e.toLowerCase())
+    .includes(user.email.toLowerCase());
+
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -214,14 +226,14 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
 
   const validateStep3 = () => {
     if (useFundraising) {
-      if (!fundraisingTarget || parseFloat(fundraisingTarget) <= 0) {
-        toast.error('Please Enter a Valid target');
-        return false;
-      }
-      if (minAmount && parseFloat(minAmount) <= 0) {
-        toast.error('Amount must be greater than 0');
-        return false;
-      }
+      // if (!fundraisingTarget || parseFloat(fundraisingTarget) <= 0) {
+      //   toast.error('Please Enter a Valid target');
+      //   return false;
+      // }
+      // if (minAmount && parseFloat(minAmount) <= 0) {
+      //   toast.error('Amount must be greater than 0');
+      //   return false;
+      // }
       if (feeBearer != 'contributor') {
         setFeeBearer('contributor')
       }
@@ -398,7 +410,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error("An unexpected error occurred. Please try again.");
+      toast.error(err.response.data.message || "An unexpected error occurred while creating the collection.");
     }
 
 
@@ -473,25 +485,40 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                 <div>
                   <p className='text-[14px]'>Want to use Fundraising feature? contact <a className='text-green-600' target="_blank" href="https://wa.me/+2349019840377">Kolekto</a></p>
 
-                  <div className={`p-4 border opacity-40 rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
+                  <div
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : canUseFundraising ? 'border-gray-300 hover:border-gray-400' : 'opacity-40 cursor-not-allowed border-gray-300'}`}
                     onClick={() => {
-                      // setUseFundraising(true);
-                      // setUsePriceTiers(false);
+                      if (!canUseFundraising) {
+                        // quick fallback: open contact link so user can request access
+                        window.open('https://wa.me/+2349019840377', '_blank');
+                        return;
+                      }
+                      setUseFundraising(true);
+                      setUsePriceTiers(false);
                     }}
+                    role="button"
+                    aria-disabled={!canUseFundraising}
                   >
-                    <div className="flex items-center pointer-events-none">
+                    <div className="flex items-center" >
                       <input
                         type="radio"
                         checked={useFundraising}
                         onChange={() => {
-                          // setUseFundraising(true);
-                          // setUsePriceTiers(false);
+                          if (!canUseFundraising) return;
+                          setUseFundraising(true);
+                          setUsePriceTiers(false);
                         }}
-                        disabled
-                        className="mr-3 accent-green-600" />
+                        disabled={!canUseFundraising}
+                        className="mr-3 accent-green-600"
+                      />
                       <div>
                         <h4 className="font-medium">Fundraising</h4>
                         <p className="text-sm text-gray-600">Open-ended contribution amounts</p>
+                        {!canUseFundraising && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Fundraising is limited. <button type="button" onClick={() => window.open('https://wa.me/+2349019840377', '_blank')} className="text-green-600 underline">Request access</button>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
