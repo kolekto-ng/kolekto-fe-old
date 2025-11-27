@@ -54,7 +54,7 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'banner' 
                         <div className="flex-1">
                             <p className="font-semibold text-sm sm:text-base">Install Kolekto App</p>
                             <p className="text-xs sm:text-sm text-white/90">
-                                Access faster and work offline
+                                Access faster and use on the GO
                             </p>
                         </div>
                     </div>

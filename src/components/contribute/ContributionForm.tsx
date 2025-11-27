@@ -948,6 +948,9 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
                 </span>
               )}
             </div>)}
+            {collectionType == 'fundraising' && (<div className="mt-2">
+              {`total amount contributed: ${formatCurrency(props.collection.wallets[0].net_payment)}`}
+            </div>)}
 
             {props.max_contributions && (
               <div className="text-sm text-gray-600">
