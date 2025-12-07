@@ -42,7 +42,7 @@ const PwaAppLayout: React.FC = () => {
         <div className="min-h-screen py-4 px-2 bg-gray-50 relative">
 
             {/* Main Content - render nested routes via Outlet */}
-            <main className="">
+            <main className="mb-[65px]">
                 <Outlet />
             </main>
 
