@@ -166,9 +166,69 @@ const CollectionDetailsPage: React.FC = () => {
   // Get available tiers from the collection
   const availableTiers = currentCollection?.price_tiers || [];
 
-  // Function to get tier name from amount
-  const getTierNameFromAmount = (amount: number) => {
-    const tier = availableTiers.find(t => t.price === amount);
+  // normalize helper
+  const normalizeAmount = (v: any): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // find tier that matches a contribution amount (handles kobo vs naira)
+  const findMatchingTier = (contributionAmount: any) => {
+    const amt = normalizeAmount(contributionAmount);
+    if (amt === null) {
+      console.log('❌ findMatchingTier: contribution amount is null/invalid', contributionAmount);
+      return null;
+    }
+
+    console.log('🔍 findMatchingTier: looking for tier matching amount:', amt);
+    console.log('📊 availableTiers:', availableTiers.map(t => ({ name: t.name, price: t.price, priceNormalized: normalizeAmount(t.price) })));
+    console.log(availableTiers, 'avt');
+
+    // try direct numeric match first
+    let tier = availableTiers.find(t => {
+      const tierPrice = normalizeAmount(t.price);
+      const match = tierPrice === amt;
+      console.log(`  → Tier "${t.name}": price=${t.price} (norm=${tierPrice}), amt=${amt}, directMatch=${match}`);
+      return match;
+    });
+    if (tier) {
+      console.log('✅ Found direct match:', tier.name);
+      return tier;
+    }
+
+    // contribution may be in kobo (×100)
+    tier = availableTiers.find(t => {
+      const p = normalizeAmount(t.price);
+      const match = p !== null && Math.round(p * 100) === Math.round(amt);
+      console.log(`  → Tier "${t.name}" (kobo×100): tierPrice=${t.price}, amt=${amt}, match=${match}`);
+      return match;
+    });
+    if (tier) {
+      console.log('✅ Found kobo×100 match:', tier.name);
+      return tier;
+    }
+
+    // tier price might be in kobo while contribution is naira
+    tier = availableTiers.find(t => {
+      console.log(t);
+
+      const p = normalizeAmount(t.price);
+      const match = p !== null && Math.round(p) === Math.round(amt / 100);
+      console.log(`  → Tier "${t.name}" (naira/100): tierPrice=${t.price}, amt=${amt}, match=${match}`);
+      return match;
+    });
+    if (tier) {
+      console.log('✅ Found naira/100 match:', tier.name);
+      return tier;
+    }
+
+    console.log('❌ No tier match found for amount:', amt);
+    return null;
+  };
+
+  // safe getter used in UI where you want to show the tier name
+  const getTierNameFromAmount = (amount: any) => {
+    const tier = findMatchingTier(amount);
     return tier ? tier.name : `₦${amount}`;
   };
 
@@ -191,20 +251,31 @@ const CollectionDetailsPage: React.FC = () => {
 
     // Apply search term filter
     if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
       filteredData = filteredData.filter(contribution => {
-        const matchesSearch =
-          (contribution.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            contribution.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            contribution.contributor_unique_code?.toLowerCase().includes(searchTerm.toLowerCase()));
-        return matchesSearch;
+        // Search in top-level fields
+        const topLevelMatch =
+          (contribution.name?.toLowerCase().includes(searchLower) ||
+            contribution.email?.toLowerCase().includes(searchLower) ||
+            contribution.contributor_unique_code?.toLowerCase().includes(searchLower));
+
+        // Also search in contributor_information fields
+        const infoMatch = (contribution.contributor_information || []).some(info =>
+          Object.values(info).some(val =>
+            String(val).toLowerCase().includes(searchLower)
+          )
+        );
+
+        return topLevelMatch || infoMatch;
       });
     }
 
     // Apply tier filter
     if (selectedTiers.size > 0) {
       filteredData = filteredData.filter(contribution => {
-        const tierName = getTierNameFromAmount(contribution.amount);
-        return selectedTiers.has(tierName);
+        // Get tier name from contributor_information
+        const tierName = (contribution.contributor_information || [])[0]?.Tier;
+        return tierName && selectedTiers.has(tierName);
       });
     }
 
@@ -731,7 +802,7 @@ const CollectionDetailsPage: React.FC = () => {
                         <DropdownMenuCheckboxItem
                           key={tier.name}
                           checked={selectedTiers.has(tier.name)}
-                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, checked)}
+                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, !!checked)}
                         >
                           {tier.name} - ₦{tier.price.toLocaleString()}
                         </DropdownMenuCheckboxItem>
@@ -948,7 +1019,7 @@ const CollectionDetailsPage: React.FC = () => {
                   toast.success('Link copied to clipboard!');
                 }
               }}
-              className="w-full bg-kolekto hover:bg-kolekto/90"
+              className="w-full bg-koleko hover:bg-koleko/90"
             >
               <Share className="mr-2 h-4 w-4" />
               {navigator.share ? 'Share via apps' : 'Copy link'}
