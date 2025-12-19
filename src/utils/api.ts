@@ -1,17 +1,17 @@
 // API utility functions for authenticated requests with cross-origin cookies
 
 // API configuration
-const API_BASE_URL = import.meta.env.MODE === 'production' 
+const API_BASE_URL = import.meta.env.MODE === 'production'
   ? import.meta.env.VITE_API_URL || 'https://api.kolekto.com.ng/api'
-  : import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+  : import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Generic authenticated API call function
 export const authenticatedFetch = async (
-  endpoint: string, 
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const defaultOptions: RequestInit = {
     credentials: 'include', // CRUCIAL: This sends cookies cross-domain
     headers: {
@@ -49,7 +49,7 @@ export const handleApiResponse = async (response: Response) => {
       localStorage.removeItem("kolekto-auth-token");
       throw new Error('Authentication required');
     }
-    
+
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || error.message || `HTTP ${response.status}`);
   }

@@ -2,7 +2,7 @@ define(['exports'], (function (exports) { 'use strict';
 
     // @ts-ignore
     try {
-      self['workbox:core:7.2.0'] && _();
+      self['workbox:core:7.3.0'] && _();
     } catch (e) {}
 
     /*
@@ -455,7 +455,7 @@ define(['exports'], (function (exports) { 'use strict';
 
     // @ts-ignore
     try {
-      self['workbox:routing:7.2.0'] && _();
+      self['workbox:routing:7.3.0'] && _();
     } catch (e) {}
 
     /*
@@ -1542,7 +1542,7 @@ define(['exports'], (function (exports) { 'use strict';
 
     // @ts-ignore
     try {
-      self['workbox:expiration:7.2.0'] && _();
+      self['workbox:expiration:7.3.0'] && _();
     } catch (e) {}
 
     /*
@@ -2134,171 +2134,6 @@ define(['exports'], (function (exports) { 'use strict';
       }
     }
 
-    // @ts-ignore
-    try {
-      self['workbox:cacheable-response:7.2.0'] && _();
-    } catch (e) {}
-
-    /*
-      Copyright 2018 Google LLC
-
-      Use of this source code is governed by an MIT-style
-      license that can be found in the LICENSE file or at
-      https://opensource.org/licenses/MIT.
-    */
-    /**
-     * This class allows you to set up rules determining what
-     * status codes and/or headers need to be present in order for a
-     * [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response)
-     * to be considered cacheable.
-     *
-     * @memberof workbox-cacheable-response
-     */
-    class CacheableResponse {
-      /**
-       * To construct a new CacheableResponse instance you must provide at least
-       * one of the `config` properties.
-       *
-       * If both `statuses` and `headers` are specified, then both conditions must
-       * be met for the `Response` to be considered cacheable.
-       *
-       * @param {Object} config
-       * @param {Array<number>} [config.statuses] One or more status codes that a
-       * `Response` can have and be considered cacheable.
-       * @param {Object<string,string>} [config.headers] A mapping of header names
-       * and expected values that a `Response` can have and be considered cacheable.
-       * If multiple headers are provided, only one needs to be present.
-       */
-      constructor(config = {}) {
-        {
-          if (!(config.statuses || config.headers)) {
-            throw new WorkboxError('statuses-or-headers-required', {
-              moduleName: 'workbox-cacheable-response',
-              className: 'CacheableResponse',
-              funcName: 'constructor'
-            });
-          }
-          if (config.statuses) {
-            finalAssertExports.isArray(config.statuses, {
-              moduleName: 'workbox-cacheable-response',
-              className: 'CacheableResponse',
-              funcName: 'constructor',
-              paramName: 'config.statuses'
-            });
-          }
-          if (config.headers) {
-            finalAssertExports.isType(config.headers, 'object', {
-              moduleName: 'workbox-cacheable-response',
-              className: 'CacheableResponse',
-              funcName: 'constructor',
-              paramName: 'config.headers'
-            });
-          }
-        }
-        this._statuses = config.statuses;
-        this._headers = config.headers;
-      }
-      /**
-       * Checks a response to see whether it's cacheable or not, based on this
-       * object's configuration.
-       *
-       * @param {Response} response The response whose cacheability is being
-       * checked.
-       * @return {boolean} `true` if the `Response` is cacheable, and `false`
-       * otherwise.
-       */
-      isResponseCacheable(response) {
-        {
-          finalAssertExports.isInstance(response, Response, {
-            moduleName: 'workbox-cacheable-response',
-            className: 'CacheableResponse',
-            funcName: 'isResponseCacheable',
-            paramName: 'response'
-          });
-        }
-        let cacheable = true;
-        if (this._statuses) {
-          cacheable = this._statuses.includes(response.status);
-        }
-        if (this._headers && cacheable) {
-          cacheable = Object.keys(this._headers).some(headerName => {
-            return response.headers.get(headerName) === this._headers[headerName];
-          });
-        }
-        {
-          if (!cacheable) {
-            logger.groupCollapsed(`The request for ` + `'${getFriendlyURL(response.url)}' returned a response that does ` + `not meet the criteria for being cached.`);
-            logger.groupCollapsed(`View cacheability criteria here.`);
-            logger.log(`Cacheable statuses: ` + JSON.stringify(this._statuses));
-            logger.log(`Cacheable headers: ` + JSON.stringify(this._headers, null, 2));
-            logger.groupEnd();
-            const logFriendlyHeaders = {};
-            response.headers.forEach((value, key) => {
-              logFriendlyHeaders[key] = value;
-            });
-            logger.groupCollapsed(`View response status and headers here.`);
-            logger.log(`Response status: ${response.status}`);
-            logger.log(`Response headers: ` + JSON.stringify(logFriendlyHeaders, null, 2));
-            logger.groupEnd();
-            logger.groupCollapsed(`View full response details here.`);
-            logger.log(response.headers);
-            logger.log(response);
-            logger.groupEnd();
-            logger.groupEnd();
-          }
-        }
-        return cacheable;
-      }
-    }
-
-    /*
-      Copyright 2018 Google LLC
-
-      Use of this source code is governed by an MIT-style
-      license that can be found in the LICENSE file or at
-      https://opensource.org/licenses/MIT.
-    */
-    /**
-     * A class implementing the `cacheWillUpdate` lifecycle callback. This makes it
-     * easier to add in cacheability checks to requests made via Workbox's built-in
-     * strategies.
-     *
-     * @memberof workbox-cacheable-response
-     */
-    class CacheableResponsePlugin {
-      /**
-       * To construct a new CacheableResponsePlugin instance you must provide at
-       * least one of the `config` properties.
-       *
-       * If both `statuses` and `headers` are specified, then both conditions must
-       * be met for the `Response` to be considered cacheable.
-       *
-       * @param {Object} config
-       * @param {Array<number>} [config.statuses] One or more status codes that a
-       * `Response` can have and be considered cacheable.
-       * @param {Object<string,string>} [config.headers] A mapping of header names
-       * and expected values that a `Response` can have and be considered cacheable.
-       * If multiple headers are provided, only one needs to be present.
-       */
-      constructor(config) {
-        /**
-         * @param {Object} options
-         * @param {Response} options.response
-         * @return {Response|null}
-         * @private
-         */
-        this.cacheWillUpdate = async ({
-          response
-        }) => {
-          if (this._cacheableResponse.isResponseCacheable(response)) {
-            return response;
-          }
-          return null;
-        };
-        this._cacheableResponse = new CacheableResponse(config);
-      }
-    }
-
     /*
       Copyright 2020 Google LLC
       Use of this source code is governed by an MIT-style
@@ -2420,7 +2255,7 @@ define(['exports'], (function (exports) { 'use strict';
 
     // @ts-ignore
     try {
-      self['workbox:strategies:7.2.0'] && _();
+      self['workbox:strategies:7.3.0'] && _();
     } catch (e) {}
 
     /*
@@ -2434,7 +2269,7 @@ define(['exports'], (function (exports) { 'use strict';
       return typeof input === 'string' ? new Request(input) : input;
     }
     /**
-     * A class created every time a Strategy instance instance calls
+     * A class created every time a Strategy instance calls
      * {@link workbox-strategies.Strategy~handle} or
      * {@link workbox-strategies.Strategy~handleAll} that wraps all fetch and
      * cache actions around plugin callbacks and keeps track of when the strategy
@@ -2838,7 +2673,7 @@ define(['exports'], (function (exports) { 'use strict';
       /**
        * Adds a promise to the
        * [extend lifetime promises]{@link https://w3c.github.io/ServiceWorker/#extendableevent-extend-lifetime-promises}
-       * of the event event associated with the request being handled (usually a
+       * of the event associated with the request being handled (usually a
        * `FetchEvent`).
        *
        * Note: you can await
@@ -2859,13 +2694,17 @@ define(['exports'], (function (exports) { 'use strict';
        *
        * Note: any work done after `doneWaiting()` settles should be manually
        * passed to an event's `waitUntil()` method (not this handler's
-       * `waitUntil()` method), otherwise the service worker thread my be killed
+       * `waitUntil()` method), otherwise the service worker thread may be killed
        * prior to your work completing.
        */
       async doneWaiting() {
-        let promise;
-        while (promise = this._extendLifetimePromises.shift()) {
-          await promise;
+        while (this._extendLifetimePromises.length) {
+          const promises = this._extendLifetimePromises.splice(0);
+          const result = await Promise.allSettled(promises);
+          const firstRejection = result.find(i => i.status === 'rejected');
+          if (firstRejection) {
+            throw firstRejection.reason;
+          }
         }
       }
       /**
@@ -3251,6 +3090,237 @@ define(['exports'], (function (exports) { 'use strict';
     }
 
     /*
+      Copyright 2018 Google LLC
+
+      Use of this source code is governed by an MIT-style
+      license that can be found in the LICENSE file or at
+      https://opensource.org/licenses/MIT.
+    */
+    const cacheOkAndOpaquePlugin = {
+      /**
+       * Returns a valid response (to allow caching) if the status is 200 (OK) or
+       * 0 (opaque).
+       *
+       * @param {Object} options
+       * @param {Response} options.response
+       * @return {Response|null}
+       *
+       * @private
+       */
+      cacheWillUpdate: async ({
+        response
+      }) => {
+        if (response.status === 200 || response.status === 0) {
+          return response;
+        }
+        return null;
+      }
+    };
+
+    /*
+      Copyright 2018 Google LLC
+
+      Use of this source code is governed by an MIT-style
+      license that can be found in the LICENSE file or at
+      https://opensource.org/licenses/MIT.
+    */
+    /**
+     * An implementation of a
+     * [network first](https://developer.chrome.com/docs/workbox/caching-strategies-overview/#network-first-falling-back-to-cache)
+     * request strategy.
+     *
+     * By default, this strategy will cache responses with a 200 status code as
+     * well as [opaque responses](https://developer.chrome.com/docs/workbox/caching-resources-during-runtime/#opaque-responses).
+     * Opaque responses are are cross-origin requests where the response doesn't
+     * support [CORS](https://enable-cors.org/).
+     *
+     * If the network request fails, and there is no cache match, this will throw
+     * a `WorkboxError` exception.
+     *
+     * @extends workbox-strategies.Strategy
+     * @memberof workbox-strategies
+     */
+    class NetworkFirst extends Strategy {
+      /**
+       * @param {Object} [options]
+       * @param {string} [options.cacheName] Cache name to store and retrieve
+       * requests. Defaults to cache names provided by
+       * {@link workbox-core.cacheNames}.
+       * @param {Array<Object>} [options.plugins] [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
+       * to use in conjunction with this caching strategy.
+       * @param {Object} [options.fetchOptions] Values passed along to the
+       * [`init`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters)
+       * of [non-navigation](https://github.com/GoogleChrome/workbox/issues/1796)
+       * `fetch()` requests made by this strategy.
+       * @param {Object} [options.matchOptions] [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
+       * @param {number} [options.networkTimeoutSeconds] If set, any network requests
+       * that fail to respond within the timeout will fallback to the cache.
+       *
+       * This option can be used to combat
+       * "[lie-fi]{@link https://developers.google.com/web/fundamentals/performance/poor-connectivity/#lie-fi}"
+       * scenarios.
+       */
+      constructor(options = {}) {
+        super(options);
+        // If this instance contains no plugins with a 'cacheWillUpdate' callback,
+        // prepend the `cacheOkAndOpaquePlugin` plugin to the plugins list.
+        if (!this.plugins.some(p => 'cacheWillUpdate' in p)) {
+          this.plugins.unshift(cacheOkAndOpaquePlugin);
+        }
+        this._networkTimeoutSeconds = options.networkTimeoutSeconds || 0;
+        {
+          if (this._networkTimeoutSeconds) {
+            finalAssertExports.isType(this._networkTimeoutSeconds, 'number', {
+              moduleName: 'workbox-strategies',
+              className: this.constructor.name,
+              funcName: 'constructor',
+              paramName: 'networkTimeoutSeconds'
+            });
+          }
+        }
+      }
+      /**
+       * @private
+       * @param {Request|string} request A request to run this strategy for.
+       * @param {workbox-strategies.StrategyHandler} handler The event that
+       *     triggered the request.
+       * @return {Promise<Response>}
+       */
+      async _handle(request, handler) {
+        const logs = [];
+        {
+          finalAssertExports.isInstance(request, Request, {
+            moduleName: 'workbox-strategies',
+            className: this.constructor.name,
+            funcName: 'handle',
+            paramName: 'makeRequest'
+          });
+        }
+        const promises = [];
+        let timeoutId;
+        if (this._networkTimeoutSeconds) {
+          const {
+            id,
+            promise
+          } = this._getTimeoutPromise({
+            request,
+            logs,
+            handler
+          });
+          timeoutId = id;
+          promises.push(promise);
+        }
+        const networkPromise = this._getNetworkPromise({
+          timeoutId,
+          request,
+          logs,
+          handler
+        });
+        promises.push(networkPromise);
+        const response = await handler.waitUntil((async () => {
+          // Promise.race() will resolve as soon as the first promise resolves.
+          return (await handler.waitUntil(Promise.race(promises))) || (
+          // If Promise.race() resolved with null, it might be due to a network
+          // timeout + a cache miss. If that were to happen, we'd rather wait until
+          // the networkPromise resolves instead of returning null.
+          // Note that it's fine to await an already-resolved promise, so we don't
+          // have to check to see if it's still "in flight".
+          await networkPromise);
+        })());
+        {
+          logger.groupCollapsed(messages.strategyStart(this.constructor.name, request));
+          for (const log of logs) {
+            logger.log(log);
+          }
+          messages.printFinalResponse(response);
+          logger.groupEnd();
+        }
+        if (!response) {
+          throw new WorkboxError('no-response', {
+            url: request.url
+          });
+        }
+        return response;
+      }
+      /**
+       * @param {Object} options
+       * @param {Request} options.request
+       * @param {Array} options.logs A reference to the logs array
+       * @param {Event} options.event
+       * @return {Promise<Response>}
+       *
+       * @private
+       */
+      _getTimeoutPromise({
+        request,
+        logs,
+        handler
+      }) {
+        let timeoutId;
+        const timeoutPromise = new Promise(resolve => {
+          const onNetworkTimeout = async () => {
+            {
+              logs.push(`Timing out the network response at ` + `${this._networkTimeoutSeconds} seconds.`);
+            }
+            resolve(await handler.cacheMatch(request));
+          };
+          timeoutId = setTimeout(onNetworkTimeout, this._networkTimeoutSeconds * 1000);
+        });
+        return {
+          promise: timeoutPromise,
+          id: timeoutId
+        };
+      }
+      /**
+       * @param {Object} options
+       * @param {number|undefined} options.timeoutId
+       * @param {Request} options.request
+       * @param {Array} options.logs A reference to the logs Array.
+       * @param {Event} options.event
+       * @return {Promise<Response>}
+       *
+       * @private
+       */
+      async _getNetworkPromise({
+        timeoutId,
+        request,
+        logs,
+        handler
+      }) {
+        let error;
+        let response;
+        try {
+          response = await handler.fetchAndCachePut(request);
+        } catch (fetchError) {
+          if (fetchError instanceof Error) {
+            error = fetchError;
+          }
+        }
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        {
+          if (response) {
+            logs.push(`Got response from network.`);
+          } else {
+            logs.push(`Unable to get a response from the network. Will respond ` + `with a cached response.`);
+          }
+        }
+        if (error || !response) {
+          response = await handler.cacheMatch(request);
+          {
+            if (response) {
+              logs.push(`Found a cached response in the '${this.cacheName}'` + ` cache.`);
+            } else {
+              logs.push(`No response found in the '${this.cacheName}' cache.`);
+            }
+          }
+        }
+        return response;
+      }
+    }
+
+    /*
       Copyright 2019 Google LLC
 
       Use of this source code is governed by an MIT-style
@@ -3290,7 +3360,7 @@ define(['exports'], (function (exports) { 'use strict';
 
     // @ts-ignore
     try {
-      self['workbox:precaching:7.2.0'] && _();
+      self['workbox:precaching:7.3.0'] && _();
     } catch (e) {}
 
     /*
@@ -4540,9 +4610,9 @@ define(['exports'], (function (exports) { 'use strict';
     }
 
     exports.CacheFirst = CacheFirst;
-    exports.CacheableResponsePlugin = CacheableResponsePlugin;
     exports.ExpirationPlugin = ExpirationPlugin;
     exports.NavigationRoute = NavigationRoute;
+    exports.NetworkFirst = NetworkFirst;
     exports.cleanupOutdatedCaches = cleanupOutdatedCaches;
     exports.clientsClaim = clientsClaim;
     exports.createHandlerBoundToURL = createHandlerBoundToURL;
@@ -4550,4 +4620,4 @@ define(['exports'], (function (exports) { 'use strict';
     exports.registerRoute = registerRoute;
 
 }));
-//# sourceMappingURL=workbox-ce4f0d5f.js.map
+//# sourceMappingURL=workbox-f87553f6.js.map

@@ -5,7 +5,7 @@ import axios from "axios";
 const API_BASE_URL =
   import.meta.env.MODE === "production"
     ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
-    : import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+    : import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // const { session } = useAuthStore()
 
@@ -54,12 +54,7 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Unauthorized - clear local storage and redirect to login
-      localStorage.removeItem("kolekto-auth-token");
-      // You might want to trigger a store action here to clear user state
-      window.location.href = '/login';
-    }
+    // Return any error which is not due to authentication then let the calling side handle it (e.g. show toast)
     return Promise.reject(error);
   }
 );

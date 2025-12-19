@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
@@ -6,20 +6,40 @@ import CollectionCard from '@/components/collections/CollectionCard';
 import { toast } from 'sonner';
 
 import { useCollectionStore } from '@/store/useCollectionStore';
+import { getUserCampaigns } from '@/services/fundraisingService'; // Import fetching service
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store';
 
 const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { collections, isLoading, error, fetchCollections } = useCollectionStore();
+  const { collections, isLoading: isStoreLoading, error, fetchCollections } = useCollectionStore();
+
+  const [fundraisingCampaigns, setFundraisingCampaigns] = useState<any[]>([]);
+  const [isFundraisingLoading, setIsFundraisingLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
+      // Fetch Store Collections
       fetchCollections(user.id).catch((err) => {
         console.error('Error loading collections:', err);
         toast.error('Failed to load collections. Please try again.');
       });
+
+      // Fetch Fundraising Campaigns
+      const loadFundraising = async () => {
+        setIsFundraisingLoading(true);
+        try {
+          const campaigns = await getUserCampaigns(user.id);
+          setFundraisingCampaigns(campaigns || []);
+        } catch (err) {
+          console.error("Error loading fundraising campaigns:", err);
+        } finally {
+          setIsFundraisingLoading(false);
+        }
+      };
+
+      loadFundraising();
     }
   }, [user, fetchCollections]);
 
@@ -42,11 +62,31 @@ const CollectionsPage: React.FC = () => {
   };
 
   // Sort collections by created_at descending (newest first)
-  const sortedCollections = [...collections].sort((a, b) => {
+  // Merge both lists
+  const allCollections = [
+    ...collections.map(c => ({ ...c, source: 'store' })),
+    ...fundraisingCampaigns.map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.summary, // Map summary to description
+      amount: c.target_amount || 0, // Target amount
+      deadline: c.deadline,
+      status: c.status,
+      type: 'fundraising', // Explicit type
+      total_contributions: c.donations_count, // Map count
+      max_contributions: null, // Unlimited usually
+      created_at: c.created_at,
+      price_tiers: null,
+      source: 'fundraising',
+      total_raised: c.total_raised // Pass total raised
+    }))
+  ].sort((a, b) => {
     const dateA = new Date(a.created_at).getTime();
     const dateB = new Date(b.created_at).getTime();
     return dateB - dateA;
   });
+
+  const isLoading = isStoreLoading || isFundraisingLoading;
 
   return (
     <div className="space-y-6">
@@ -67,9 +107,9 @@ const CollectionsPage: React.FC = () => {
               <p className="text-gray-500">Loading collections...</p>
             </CardContent>
           </Card>
-        ) : sortedCollections && sortedCollections.length > 0 ? (
+        ) : allCollections && allCollections.length > 0 ? (
 
-          sortedCollections.map(collection => {
+          allCollections.map(collection => {
             console.log("Collection object:", collection);
             return (
               <CollectionCard
@@ -80,7 +120,7 @@ const CollectionsPage: React.FC = () => {
                 amount={collection.amount}
                 deadline={collection.deadline || new Date().toISOString()}
                 status={collection.status as 'active' | "paused" | 'expired' | 'completed'}
-                type={collection.type as 'flat' | 'tier'}
+                type={collection.type as 'fixed' | 'tiered' | 'fundraising'}
                 participantsCount={collection.total_contributions || 0}
                 maxParticipants={collection.max_contributions || undefined}
                 dateCreated={collection.created_at}
@@ -101,6 +141,7 @@ const CollectionsPage: React.FC = () => {
                     return undefined;
                   }
                 })()}
+                totalRaised={(collection as any).total_raised} // Pass totalRaised for fundraising
                 onShare={() => handleShare(collection.id)}
                 onViewDetails={() => handleViewDetails(collection.id)}
               />

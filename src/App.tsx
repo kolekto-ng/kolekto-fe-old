@@ -11,6 +11,7 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import CreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
 import CollectionsPage from "./pages/dashboard/CollectionsPage";
+import CreateCampaignLayout from "./pages/create-campaign/CreateCampaignLayout";
 // import ProfilePage from "./pages/dashboard/ProfilePage";
 import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
 import ContributePage from "./pages/contribute/ContributePage";
@@ -82,6 +83,14 @@ const AuthenticatedApp = () => {
         <Route path="settings" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
       </Route>
+      <Route
+        path="/create-campaign"
+        element={
+          <ProtectedRoute>
+            <CreateCampaignLayout />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch-all for 404 */}
       <Route path="*" element={<NotFound />} />
