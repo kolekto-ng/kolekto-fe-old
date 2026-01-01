@@ -22,7 +22,7 @@ interface CollectionCardProps {
   amount: number;
   deadline: string;
   status: Status;
-  type: "fixed" | "tiered";
+  type: "fixed" | "tiered" | "fundraising";
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
@@ -43,6 +43,7 @@ interface StatusRule {
     targetAmount: number;
     deadlineDate: Date;
     now: Date;
+    type?: string;
   }) => boolean;
 }
 
@@ -65,7 +66,13 @@ const statusRules: StatusRule[] = [
   {
     name: "completed",
     priority: 70,
-    check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount,
+    check: ({ totalRaised, targetAmount, type }) => {
+      // For fundraising, completion is strictly when target is met
+      if (type === 'fundraising') {
+        return targetAmount > 0 && totalRaised >= targetAmount;
+      }
+      return totalRaised >= targetAmount;
+    },
   },
   {
     name: "expired",
@@ -85,6 +92,7 @@ function computeStatus(ctx: {
   targetAmount: number;
   deadlineDate: Date;
   now?: Date;
+  type?: string;
 }): Status {
   const now = ctx.now ?? new Date();
 
@@ -100,7 +108,8 @@ function useCollectionStatus(
   initialStatus: Status,
   deadline: string,
   totalRaised: number,
-  targetAmount: number
+  targetAmount: number,
+  type: string
 ) {
   const deadlineDate = React.useMemo(() => new Date(deadline), [deadline]);
   const computedStatus = React.useMemo(
@@ -110,8 +119,9 @@ function useCollectionStatus(
         totalRaised,
         targetAmount,
         deadlineDate,
+        type
       }),
-    [initialStatus, totalRaised, targetAmount, deadlineDate]
+    [initialStatus, totalRaised, targetAmount, deadlineDate, type]
   );
 
   return { computedStatus, deadlineDate };
@@ -143,12 +153,18 @@ function calcTotalRaised(amount: number, participants: number) {
 // ---------------------------
 // Components
 // ---------------------------
+
+function getLowestTierAmount(tiers?: { amount: number; name: string }[]): number {
+  if (!tiers || tiers.length === 0) return 0;
+  return Math.min(...tiers.map((t) => t.amount));
+}
+
 const statusColors: Record<Status, string> = {
   active: "bg-green-100 text-green-800",
   paused: "bg-yellow-100 text-yellow-800",
   expired: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  closed: "bg-gray-200 text-gray-800",
+  completed: "bg-blue-100 text-blue-800", // Success
+  closed: "bg-gray-200 text-gray-800",     // Manual Close
   deleted: "bg-gray-400 text-gray-900",
 };
 
@@ -160,7 +176,8 @@ const StatusBadge: React.FC<{ status: Status }> = ({ status }) => {
 // ---------------------------
 // Main Component
 // ---------------------------
-const CollectionCard: React.FC<CollectionCardProps> = ({
+const CollectionCard: React.FC<CollectionCardProps & { totalRaised?: number }> = ({
+  id,
   title,
   description,
   amount,
@@ -171,17 +188,22 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   maxParticipants,
   dateCreated,
   tiers,
+  totalRaised: propTotalRaised,
   onShare,
   onViewDetails,
 }) => {
-  const totalRaised = calcTotalRaised(amount, participantsCount);
-  const targetAmount = calcTotalRaised(amount, maxParticipants);
+  // Use passed totalRaised if available (for fundraising), otherwise calculate
+  const totalRaised = propTotalRaised !== undefined ? propTotalRaised : calcTotalRaised(amount, participantsCount);
+
+  // For fundraising, amount is the target
+  const targetAmount = type === 'fundraising' ? amount : calcTotalRaised(amount, maxParticipants || 0);
 
   const { computedStatus } = useCollectionStatus(
     status,
     deadline,
     totalRaised,
-    targetAmount // using amount as target (if you support tier goals, swap logic here)
+    targetAmount,
+    type
   );
 
   const formattedDeadline = useFormattedDate(deadline);
@@ -193,31 +215,32 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         <div className="flex justify-between items-start">
           <h3 className="font-semibold text-lg">{title}</h3>
           <div className="flex gap-1">
-            <Badge className="bg-purple-100 text-purple-800">
-              {type === "fixed" ? "Fixed" : "Tier"}
+            <Badge className={`
+              ${type === "fixed" ? "bg-purple-100 text-purple-800" : ""}
+              ${type === "tiered" ? "bg-blue-100 text-blue-800" : ""}
+              ${type === "fundraising" ? "bg-orange-100 text-orange-800" : ""}
+            `}>
+              {type === "fixed" ? "Fixed" : type === "tiered" ? "Tier" : "Fundraising"}
             </Badge>
             <StatusBadge status={computedStatus} />
           </div>
         </div>
         {description && (
-          <p className="text-sm text-gray-600 mt-1">{description}</p>
+          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{description}</p>
         )}
       </CardHeader>
 
       <CardContent className="py-2 flex-grow">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
-            <p className="text-sm text-gray-600">Amount</p>
+            <p className="text-sm text-gray-600">
+              {type === 'fundraising' ? 'Goal' : 'Amount'}
+            </p>
             <p className="font-medium">
               {(() => {
-                const displayAmount = type === "tier" ? getLowestTierAmount(tiers) : amount;
-                  console.log("Type:", type);
-                  console.log("Amount prop:", amount);
-                  console.log("Tiers:", tiers);
-                  console.log("Display amount:", displayAmount);
-
-                return displayAmount > 0 ? formatCurrency(displayAmount) : "__";
-              }) ()}
+                const displayAmount = type === "tiered" ? getLowestTierAmount(tiers) : amount;
+                return displayAmount > 0 ? formatCurrency(displayAmount) : (type === 'fundraising' ? 'No Limit' : "__");
+              })()}
             </p>
           </div>
           <div>
@@ -225,7 +248,9 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <p className="font-medium">{formattedDeadline}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600">Contributors</p>
+            <p className="text-sm text-gray-600">
+              {type === 'fundraising' ? 'Donors' : 'Contributors'}
+            </p>
             <p className="font-medium">
               {participantsCount}
               {maxParticipants && ` / ${maxParticipants}`}
@@ -241,6 +266,19 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
               <span>Created: {formattedCreatedDate}</span>
             </div>
           )}
+
+          {/* Progress Bar for Fundraising */}
+          {type === 'fundraising' && amount > 0 && (
+            <div className="col-span-2 mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${Math.min((totalRaised / amount) * 100, 100)}%` }}></div>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>{Math.round((totalRaised / amount) * 100)}% Funded</span>
+              </div>
+            </div>
+          )}
+
         </div>
       </CardContent>
 

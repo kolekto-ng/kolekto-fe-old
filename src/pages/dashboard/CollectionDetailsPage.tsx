@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { getCampaignById, getCampaignDonations } from '@/services/fundraisingService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +9,7 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { useContributionStore } from '@/store/useContributionStore';
 import { useWithdrawalStore } from '@/store/useWithdrawalStore';
 import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X } from 'lucide-react';
+import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X, Lock } from 'lucide-react';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { toast } from 'sonner';
 import { ChartContainer } from "@/components/ui/chart";
@@ -20,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import FundraisingOverview from '@/components/collections/FundraisingOverview';
+import EditCampaignDialog from '@/components/collections/EditCampaignDialog';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -46,14 +49,27 @@ interface StatusRule {
     targetAmount: number;
     deadlineDate: Date;
     now: Date;
+    type?: string;
   }) => boolean;
 }
 
 const statusRules: StatusRule[] = [
   { name: "deleted", priority: 100, check: ({ statusFlag }) => statusFlag === "deleted" },
-  { name: "closed", priority: 90, check: ({ statusFlag }) => statusFlag === "closed" },
+  { name: "closed", priority: 90, check: ({ statusFlag }) => statusFlag === "closed" }, // Manual Close
   { name: "paused", priority: 80, check: ({ statusFlag }) => statusFlag === "paused" },
-  { name: "completed", priority: 70, check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount },
+  // Auto-complete (Goal Reached or Fixed Collection Sold Out)
+  {
+    name: "completed",
+    priority: 70,
+    check: ({ totalRaised, targetAmount, type }) => {
+      // For fundraising, completion is strictly when target is met
+      if (type === 'fundraising') {
+        return targetAmount > 0 && totalRaised >= targetAmount;
+      }
+      // For fixed/tiered, completion is regarding spots/amount
+      return totalRaised >= targetAmount;
+    }
+  },
   { name: "expired", priority: 60, check: ({ deadlineDate, now }) => deadlineDate <= now },
   { name: "active", priority: 10, check: () => true },
 ];
@@ -64,6 +80,7 @@ function computeStatus(ctx: {
   targetAmount: number;
   deadlineDate: Date;
   now?: Date;
+  type?: string;
 }): Status {
   const now = ctx.now ?? new Date();
   return statusRules
@@ -75,8 +92,8 @@ const statusColors: Record<Status, string> = {
   active: "bg-green-100 text-green-800",
   paused: "bg-yellow-100 text-yellow-800",
   expired: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  closed: "bg-gray-200 text-gray-800",
+  completed: "bg-blue-100 text-blue-800", // Success
+  closed: "bg-gray-200 text-gray-800",     // Manually Closed
   deleted: "bg-gray-400 text-gray-900",
 };
 
@@ -85,13 +102,18 @@ const statusIcons: Record<Status, React.ReactNode> = {
   paused: <AlertCircle className="h-4 w-4 mr-1" />,
   expired: <TimerOff className="h-4 w-4 mr-1" />,
   completed: <CheckCircle className="h-4 w-4 mr-1" />,
-  closed: <AlertCircle className="h-4 w-4 mr-1" />,
+  closed: <Lock className="h-4 w-4 mr-1" />, // Lock icon for closed
   deleted: <AlertCircle className="h-4 w-4 mr-1" />,
+};
+
+// Helper for display label
+const getStatusLabel = (status: Status) => {
+  // Return capitalized status
+  return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [showQR, setShowQR] = useState(false);
@@ -107,6 +129,11 @@ const CollectionDetailsPage: React.FC = () => {
   const { fetchCollectionById, currentCollection, fetchCollections, isLoading } = useCollectionStore();
   const { fetchContributions, contributions } = useContributionStore();
   const { createWithdrawal } = useWithdrawalStore();
+
+  // Local state for fundraising campaigns (Supabase)
+  const [fundraisingCampaign, setFundraisingCampaign] = useState<any>(null);
+  const [fundraisingDonations, setFundraisingDonations] = useState<any[]>([]);
+  const [isFundraisingLoading, setIsFundraisingLoading] = useState(false);
 
   console.log(currentCollection, 'current coll');
 
@@ -131,6 +158,95 @@ const CollectionDetailsPage: React.FC = () => {
     }
   }, [id, fetchCollections, fetchCollectionById, fetchContributions]);
 
+  // Effect to fetch from Supabase if not found in Store (Fundraising)
+  useEffect(() => {
+    const fetchFundraisingData = async () => {
+      if (id && !isLoading && !currentCollection && !activeCollection) {
+        // Only fetch if main store is done loading and didn't find it
+        setIsFundraisingLoading(true);
+        try {
+          const campaign = await getCampaignById(id);
+          if (campaign) {
+            setFundraisingCampaign(campaign);
+            const donations = await getCampaignDonations(id);
+            setFundraisingDonations(donations || []);
+          }
+        } catch (error) {
+          console.error("Failed to fetch fundraising campaign:", error);
+        } finally {
+          setIsFundraisingLoading(false);
+        }
+      }
+    };
+
+    // Slight delay to allow store to settle
+    const timber = setTimeout(() => {
+      fetchFundraisingData();
+    }, 500);
+    return () => clearTimeout(timber);
+  }, [id, isLoading, currentCollection]); // Depend on store loading state
+
+  // Unified Collection Object (Store or Fundraising)
+  const activeCollection = useMemo(() => {
+    if (currentCollection) return currentCollection;
+    if (fundraisingCampaign) {
+      // Map Campaign to Collection interface
+      return {
+        id: fundraisingCampaign.id,
+        title: fundraisingCampaign.title,
+        description: fundraisingCampaign.description || fundraisingCampaign.story, // Use story as description equivalent
+        amount: fundraisingCampaign.goal_amount || 0, // Target amount
+        status: fundraisingCampaign.status,
+        created_at: fundraisingCampaign.created_at,
+        updated_at: fundraisingCampaign.created_at,
+        organizer_id: fundraisingCampaign.creator_id,
+        type: 'fundraising', // Explicitly mark as fundraising
+        max_participants: null,
+        form_fields: [],
+        pricing_tiers: [],
+        total_amount: 0, // Calculated separately
+        wallets: [{ available_balance: 0 }], // Placeholder for now
+        slug: fundraisingCampaign.slug || fundraisingCampaign.id,
+        // Add images for banner
+        images: fundraisingCampaign.campaign_images?.map((img: any) => img.image_url) || []
+      };
+    }
+    return null;
+  }, [currentCollection, fundraisingCampaign]);
+
+  // Unified Contributions
+  const activeContributions = useMemo(() => {
+    if (currentCollection) return contributions || [];
+    if (fundraisingCampaign) {
+      // Map donations to contributions
+      return fundraisingDonations.map(donation => ({
+        id: donation.id,
+        amount: donation.amount,
+        contributor_name: donation.donor_name || 'Anonymous',
+        contributor_email: donation.donor_email || '',
+        created_at: donation.created_at,
+        status: donation.status,
+        // Add extra fields as needed
+        contributor_information: [{ email: donation.donor_email, name: donation.donor_name }]
+      }));
+    }
+    return [];
+  }, [currentCollection, contributions, fundraisingCampaign, fundraisingDonations]);
+
+  // Override standard variables with unified versions
+  const displayCollection = activeCollection;
+  const displayContributions = activeContributions;
+
+  // Recalculate derived details based on displayCollection
+  const totalRaisedUnified = displayCollection?.type === 'fundraising'
+    ? activeContributions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
+    : (displayContributions?.reduce((sum, contribution) => contribution.status === 'paid' ? sum + (contribution.amount || 0) : sum, 0) || 0);
+
+  const contributorsCountUnified = displayCollection?.type === 'fundraising'
+    ? activeContributions.length
+    : (displayContributions?.filter((c) => c.status === 'paid').length || 0);
+
+
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     if (searchParams.get('share') === 'true') {
@@ -141,13 +257,17 @@ const CollectionDetailsPage: React.FC = () => {
   console.log(currentCollection, 'current collection');
 
 
-  const shareUrl = `${window.location.origin}/contribute/${currentCollection?.slug}`;
+  const shareUrl = `${window.location.origin}/contribute/${displayCollection?.slug || displayCollection?.id}`;
 
   const handleShare = () => {
     setIsShareDrawerOpen(true);
   };
 
   const handleEditCollection = () => {
+    // Check if it's a campaign, opens different dialog
+    if (displayCollection?.type === 'fundraising') {
+      // logic handled by rendering correct dialog below
+    }
     setIsEditDialogOpen(true);
   };
 
@@ -164,7 +284,7 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   // Get available tiers from the collection
-  const availableTiers = currentCollection?.price_tiers || [];
+  const availableTiers = displayCollection?.pricing_tiers || []; // Changed from price_tiers to pricing_tiers to match interface, check actual data
 
   // normalize helper
   const normalizeAmount = (v: any): number | null => {
@@ -299,7 +419,7 @@ const CollectionDetailsPage: React.FC = () => {
 
   const exportToCSV = () => {
     // Apply filters to get the data to export
-    const paidContributions = (contributions || []).filter(c => c.status === "paid");
+    const paidContributions = (displayContributions || []).filter(c => c.status === "paid" || c.status === "succeeded"); // Allow succeeded for some gateways
     const filteredData = applyFilters(paidContributions);
 
     if (filteredData.length === 0) {
@@ -326,7 +446,7 @@ const CollectionDetailsPage: React.FC = () => {
     // 3. Define headers for CSV (include Tier if it's a tiered collection)
     const headers = [
       ...allDynamicFields,
-      ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
+      ...(displayCollection?.type === 'tiered' ? ['Tier'] : []),
       ...(hasUniqueCode ? ['Unique Code'] : []),
     ];
 
@@ -337,7 +457,7 @@ const CollectionDetailsPage: React.FC = () => {
         ...allDynamicFields.map(field =>
           (contribution.contributor_information || [])[0]?.[field] || ''
         ),
-        ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
+        ...(displayCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
         ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
       ];
       csvContent += row.map(val =>
@@ -349,7 +469,7 @@ const CollectionDetailsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
+    link.setAttribute('download', `${displayCollection?.title || 'collection'}-contributors.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -386,14 +506,14 @@ const CollectionDetailsPage: React.FC = () => {
   };
 
   // Helper to check if collection is active based on deadline
-  const isActiveByDeadline = currentCollection?.deadline
-    ? new Date(currentCollection.deadline) > new Date()
+  const isActiveByDeadline = displayCollection?.deadline
+    ? new Date(displayCollection.deadline) > new Date()
     : false;
 
   // Helper to get status string based on deadline
   const getDeadlineStatus = () => {
-    if (!currentCollection?.deadline) return currentCollection?.status || "No deadline";
-    return currentCollection.status;
+    if (!displayCollection?.deadline) return displayCollection?.status || "No deadline";
+    return displayCollection.status;
   };
 
   // Helper to get status color based on deadline
@@ -441,7 +561,7 @@ const CollectionDetailsPage: React.FC = () => {
   const filteredContributors = applyFilters(paidContributions);
 
   // Group contributions by date for chart data
-  const contributionsByDate = contributions?.reduce((acc, curr) => {
+  const contributionsByDate = displayContributions?.reduce((acc, curr) => {
     const date = new Date(curr.created_at).toLocaleDateString('en-NG');
     acc[date] = (acc[date] || 0) + (curr.amount || 0);
     return acc;
@@ -453,13 +573,13 @@ const CollectionDetailsPage: React.FC = () => {
   }));
 
   // Calculate total collected amount and withdrawable amount
-  const totalCollected = contributions?.reduce((sum, contribution) => {
-    return contribution.status === 'paid' ? sum + (contribution.amount || 0) : sum;
-  }, 0) || 0;
+  const totalCollected = totalRaisedUnified; // Use unified calc
+
+  const withdrawableAmount = displayCollection?.wallets?.[0]?.available_balance || 0;
 
   const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
 
-  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
+  // Removed duplicate withdrawableAmount calc
 
   // Function to clear all filters
   const clearAllFilters = () => {
@@ -480,7 +600,16 @@ const CollectionDetailsPage: React.FC = () => {
   }
 
 
-  if (!currentCollection) {
+  if (isLoading || isFundraisingLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin h-6 w-6 text-gray-600" />
+      </div>
+    );
+  }
+
+
+  if (!displayCollection) {
     return (
       <div className="py-10 text-center">
         <h2 className="text-2xl font-bold text-gray-700 mb-4">Collection Not Found</h2>
@@ -523,15 +652,22 @@ const CollectionDetailsPage: React.FC = () => {
     });
   };
 
-  const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
-  const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
-  const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
+  const totalRaised = totalRaisedUnified; // Use unified calc
+  const deadlineDate = displayCollection?.deadline ? new Date(displayCollection.deadline) : new Date();
+  const targetAmount = displayCollection?.amount * (displayCollection?.max_participants || 1);
+  // For fundraising, amount is the target, max_participants is irrelevant/1.
+  // Wait, Amount for fundraising is GOAL. For fixed, it's per person.
+  // Logic:
+  const computedTarget = displayCollection?.type === 'fundraising'
+    ? displayCollection.amount
+    : (displayCollection?.amount * (displayCollection?.max_participants || 1));
 
   const computedStatus: Status = computeStatus({
-    statusFlag: currentCollection?.status as Status,
+    statusFlag: displayCollection?.status as Status,
     totalRaised,
-    targetAmount,
+    targetAmount: computedTarget,
     deadlineDate,
+    type: displayCollection?.type
   });
 
   return (
@@ -539,20 +675,21 @@ const CollectionDetailsPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
+            <h1 className="text-2xl font-bold">{displayCollection.title}</h1>
             <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
               {statusIcons[computedStatus]}
-              {computedStatus}
+              {getStatusLabel(computedStatus)}
             </span>
             <CollectionManagementMenu
               collectionId={id as string}
               onEditClick={handleEditCollection}
-              currentStatus={currentCollection.status || 'active'}
+              currentStatus={displayCollection.status || 'active'}
               onDeleteSuccess={handleCollectionDeleted}
+              isFundraising={displayCollection.type === 'fundraising'}
             />
           </div>
-          {currentCollection.description && (
-            <p className="text-gray-600 mt-1">{currentCollection.description}</p>
+          {displayCollection.description && (
+            <p className="text-gray-600 mt-1">{displayCollection.description}</p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -582,7 +719,7 @@ const CollectionDetailsPage: React.FC = () => {
         <div className="mb-6">
           <QRCodeDisplay
             collectionId={id || ''}
-            collectionTitle={currentCollection.title || 'Collection'}
+            collectionTitle={displayCollection.title || 'Collection'}
             shareUrl={shareUrl}
           />
         </div>
@@ -594,10 +731,12 @@ const CollectionDetailsPage: React.FC = () => {
             <Eye className="h-4 w-4 mr-1" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="contributors" className="flex items-center gap-1">
-            <Users className="h-4 w-4 mr-1" />
-            Contributors
-          </TabsTrigger>
+          {displayCollection.type !== 'fundraising' && (
+            <TabsTrigger value="contributors" className="flex items-center gap-1">
+              <Users className="h-4 w-4 mr-1" />
+              Contributors
+            </TabsTrigger>
+          )}
           <TabsTrigger value="activity" className="flex items-center gap-1">
             <BarChart className="h-4 w-4 mr-1" />
             Activity
@@ -608,13 +747,13 @@ const CollectionDetailsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
             {
-              currentCollection.type === "fixed" && (
+              displayCollection.type === "fixed" && (
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">₦{displayCollection.amount.toLocaleString()}</div>
                     <p className="text-sm text-gray-500">Per contributor</p>
                   </CardContent>
                 </Card>
@@ -622,13 +761,13 @@ const CollectionDetailsPage: React.FC = () => {
 
             }
 
-            {currentCollection.type === "tiered" && (
+            {displayCollection.type === "tiered" && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">Collection Tier(s)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {currentCollection.price_tiers.map((tier, i) => {
+                  {displayCollection.pricing_tiers?.map((tier: any, i: number) => {
 
                     return (<div key={i} >
                       <div className=' text-2xl font-bold flex justify-between items-center mb-2'>
@@ -652,8 +791,8 @@ const CollectionDetailsPage: React.FC = () => {
               </CardHeader>
               <CardContent>
 
-                <div className="text-2xl font-bold">₦{currentCollection.type === 'fundraising' ? Number(totalCollected / 1.025).toFixed(2) : totalCollected.toLocaleString()}</div>
-                <p className="text-sm text-gray-500">From {contributorsCount} contributors</p>
+                <div className="text-2xl font-bold">₦{displayCollection.type === 'fundraising' ? Number(totalCollected).toFixed(2) : totalCollected.toLocaleString()}</div>
+                <p className="text-sm text-gray-500">From {contributorsCountUnified} contributors</p>
               </CardContent>
             </Card>
 
@@ -663,260 +802,270 @@ const CollectionDetailsPage: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {currentCollection.deadline ?
-                    new Date(currentCollection.deadline).toLocaleDateString('en-NG', {
+                  {displayCollection.deadline ?
+                    new Date(displayCollection.deadline).toLocaleDateString('en-NG', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric'
                     }) : 'No deadline set'}
                 </div>
                 <p className="text-sm text-gray-500">
-                  {currentCollection.deadline && isActiveByDeadline
-                    ? `${Math.ceil((new Date(currentCollection.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left`
-                    : currentCollection.deadline ? 'Expired' : 'No deadline'}
+                  {displayCollection.deadline && isActiveByDeadline
+                    ? `${Math.ceil((new Date(displayCollection.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left`
+                    : displayCollection.deadline ? 'Expired' : 'No deadline'}
                 </p>
               </CardContent>
             </Card>
           </div>
 
+
+
           <div className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Collection Information</CardTitle>
-                <CardDescription>Details about this collection and how to contribute</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="font-medium mb-2">Collection Details</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Created On</span>
-                        <span className="font-medium">
-                          {new Date(currentCollection.created_at).toLocaleDateString('en-NG')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
-                          {statusIcons[computedStatus]}
-                          {computedStatus}
-                        </span>
-                      </div>
-                      {currentCollection.max_participants && (
-                        <div className="flex justify-between border-b pb-2">
-                          <span className="text-gray-600">Max Contributors</span>
-                          <span className="font-medium">{currentCollection.max_participants}</span>
+            {displayCollection.type === 'fundraising' ? (
+              <FundraisingOverview
+                campaign={displayCollection}
+                donations={displayContributions}
+              />
+            ) : (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Collection Information</CardTitle>
+                    <CardDescription>Details about this collection and how to contribute</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h3 className="font-medium mb-2">Collection Details</h3>
+                        <div className="space-y-2">
+                          <div className="flex justify-between border-b pb-2">
+                            <span className="text-gray-600">Created On</span>
+                            <span className="font-medium">
+                              {new Date(displayCollection.created_at).toLocaleDateString('en-NG')}
+                            </span>
+                          </div>
+                          <div className="flex justify-between border-b pb-2">
+                            <span className="text-gray-600">Status</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+                              {statusIcons[computedStatus]}
+                              {computedStatus}
+                            </span>
+                          </div>
+                          {displayCollection.max_participants && (
+                            <div className="flex justify-between border-b pb-2">
+                              <span className="text-gray-600">Max Contributors</span>
+                              <span className="font-medium">{displayCollection.max_participants}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-b pb-2">
+                            <span className="text-gray-600">Current Contributors</span>
+                            <span className="font-medium">{contributorsCountUnified}</span>
+                          </div>
+                          <div className="flex justify-between pb-2">
+                            <span className="text-gray-600">Unique Payment Link</span>
+                            <a
+                              href={shareUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-kolekto hover:underline truncate max-w-[200px]"
+                            >
+                              {shareUrl.split('/').pop()}
+                            </a>
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Current Contributors</span>
-                        <span className="font-medium">{contributorsCount}</span>
                       </div>
-                      <div className="flex justify-between pb-2">
-                        <span className="text-gray-600">Unique Payment Link</span>
-                        <a
-                          href={shareUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-kolekto hover:underline truncate max-w-[200px]"
-                        >
-                          {shareUrl.split('/').pop()}
-                        </a>
+                      <div>
+                        <h3 className="font-medium mb-2">Quick Actions</h3>
+                        <div className="space-y-3">
+                          <Button
+                            onClick={handleShare}
+                            variant="outline"
+                            className="w-full flex items-center justify-center"
+                          >
+                            <Share className="mr-2 h-4 w-4" />
+                            Share Collection
+                          </Button>
+                          <Button
+                            onClick={() => setShowQR(!showQR)}
+                            variant="outline"
+                            className="w-full flex items-center justify-center"
+                          >
+                            {showQR ? 'Hide QR Code' : 'Show QR Code'}
+                          </Button>
+                          <Button
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Export {displayCollection.type === 'fundraising' ? 'Donors' : 'Contributors'} Data
+                          </Button>
+                          <Button
+                            onClick={handleWithdraw}
+                            className="w-full bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
+                            disabled={withdrawableAmount <= 0}
+                          >
+                            <Wallet className="mr-2 h-4 w-4" />
+                            Withdraw Funds
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">Quick Actions</h3>
-                    <div className="space-y-3">
-                      <Button
-                        onClick={handleShare}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        <Share className="mr-2 h-4 w-4" />
-                        Share Collection
-                      </Button>
-                      <Button
-                        onClick={() => setShowQR(!showQR)}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        {showQR ? 'Hide QR Code' : 'Show QR Code'}
-                      </Button>
-                      <Button
-                        onClick={exportToCSV}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Contributors Data
-                      </Button>
-                      <Button
-                        onClick={handleWithdraw}
-                        className="w-full bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
-                        disabled={withdrawableAmount <= 0}
-                      >
-                        <Wallet className="mr-2 h-4 w-4" />
-                        Withdraw Funds
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         </TabsContent>
 
-        <TabsContent value="contributors" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Contributors Details</CardTitle>
-              <div className="flex flex-col md:flex-row gap-2 w-full sm:w-auto">
-                <Input
-                  type="text"
-                  placeholder="Search contributors..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="px-3 py-1 border rounded w-full sm:w-auto"
-                />
+        {displayCollection.type !== 'fundraising' && (
+          <TabsContent value="contributors" className="mt-6">
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle>Contributors Details</CardTitle>
+                <div className="flex flex-col md:flex-row gap-2 w-full sm:w-auto">
+                  <Input
+                    type="text"
+                    placeholder="Search contributors..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-3 py-1 border rounded w-full sm:w-auto"
+                  />
 
-                {/* Tier Filter Dropdown - Only show for tiered collections */}
-                {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
-                        <Filter className="mr-2 h-4 w-4" />
-                        Filter by Tier
-                        {selectedTiers.size > 0 && (
-                          <Badge variant="secondary" className="ml-2">
-                            {selectedTiers.size}
-                          </Badge>
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56">
-                      <DropdownMenuLabel>Filter by Tier</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {availableTiers.map((tier) => (
+                  {/* Tier Filter Dropdown - Only show for tiered collections */}
+                  {displayCollection?.type === 'tiered' && availableTiers.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
+                          <Filter className="mr-2 h-4 w-4" />
+                          Filter by Tier
+                          {selectedTiers.size > 0 && (
+                            <Badge variant="secondary" className="ml-2">
+                              {selectedTiers.size}
+                            </Badge>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuLabel>Filter by Tier</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {availableTiers.map((tier) => (
+                          <DropdownMenuCheckboxItem
+                            key={tier.name}
+                            checked={selectedTiers.has(tier.name)}
+                            onCheckedChange={(checked) => handleTierFilterChange(tier.name, !!checked)}
+                          >
+                            {tier.name} - ₦{tier.price.toLocaleString()}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                        <DropdownMenuSeparator />
                         <DropdownMenuCheckboxItem
-                          key={tier.name}
-                          checked={selectedTiers.has(tier.name)}
-                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, !!checked)}
+                          checked={false}
+                          onCheckedChange={() => setSelectedTiers(new Set())}
+                          className="text-red-600"
                         >
-                          {tier.name} - ₦{tier.price.toLocaleString()}
+                          Clear All
                         </DropdownMenuCheckboxItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={false}
-                        onCheckedChange={() => setSelectedTiers(new Set())}
-                        className="text-red-600"
-                      >
-                        Clear All
-                      </DropdownMenuCheckboxItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
 
-                {hasActiveFilters && (
+                  {hasActiveFilters && (
+                    <Button
+                      onClick={clearAllFilters}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center whitespace-nowrap text-red-600 hover:text-red-700"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Clear Filters
+                    </Button>
+                  )}
+
                   <Button
-                    onClick={clearAllFilters}
+                    onClick={exportToCSV}
                     variant="outline"
                     size="sm"
-                    className="flex items-center whitespace-nowrap text-red-600 hover:text-red-700"
+                    className="flex items-center whitespace-nowrap"
                   >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear Filters
+                    <Download className="mr-2 h-4 w-4" />
+                    Export Data
                   </Button>
-                )}
+                </div>
+              </CardHeader>
 
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center whitespace-nowrap"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Data
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <div className="w-full overflow-x-auto">
-                {filteredContributors.length > 0 ? (
-                  <Table className="min-w-[700px]">
-                    <TableHeader className='overflow-x-auto'>
-                      <TableRow>
-                        {allDynamicFields.map(field => (
-                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
-                        ))}
-                        {/* {currentCollection?.type === 'tiered' && (
-                          <TableHead className="lg:table-cell">Tier</TableHead>
-                        )} */}
-                        {hasUniqueCode && (
-                          <TableHead className="lg:table-cell">Unique Code</TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredContributors.map(contributor => (
-                        <TableRow key={contributor.id}>
+              <CardContent className="p-0">
+                <div className="w-full overflow-x-auto">
+                  {filteredContributors.length > 0 ? (
+                    <Table className="min-w-[700px]">
+                      <TableHeader className='overflow-x-auto'>
+                        <TableRow>
                           {allDynamicFields.map(field => (
-                            <TableCell key={field} className="lg:table-cell">
-                              {(contributor.contributor_information || [])[0]?.[field] || ''}
-                            </TableCell>
+                            <TableHead key={field} className="lg:table-cell">{field}</TableHead>
                           ))}
                           {/* {currentCollection?.type === 'tiered' && (
-                            <TableCell className="lg:table-cell">
-                              <Badge variant="outline">
-                                {getTierNameFromAmount(contributor.amount)}
-                              </Badge>
-                            </TableCell>
+                            <TableHead className="lg:table-cell">Tier</TableHead>
                           )} */}
                           {hasUniqueCode && (
-                            <TableCell className="lg:table-cell">
-                              {contributor.contributor_unique_code || ''}
-                            </TableCell>
+                            <TableHead className="lg:table-cell">Unique Code</TableHead>
                           )}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="py-8 text-center text-gray-500">
-                    {searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0
-                      ? 'No contributors match your filters'
-                      : 'No contributors yet'}
-                  </div>
-                )}
-              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredContributors.map(contributor => (
+                          <TableRow key={contributor.id}>
+                            {allDynamicFields.map(field => (
+                              <TableCell key={field} className="lg:table-cell">
+                                {(contributor.contributor_information || [])[0]?.[field] || ''}
+                              </TableCell>
+                            ))}
+                            {/* {currentCollection?.type === 'tiered' && (
+                              <TableCell className="lg:table-cell">
+                                <Badge variant="outline">
+                                  {getTierNameFromAmount(contributor.amount)}
+                                </Badge>
+                              </TableCell>
+                            )} */}
+                            {hasUniqueCode && (
+                              <TableCell className="lg:table-cell">
+                                {contributor.contributor_unique_code || ''}
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="py-8 text-center text-gray-500">
+                      {searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0
+                        ? 'No contributors match your filters'
+                        : 'No contributors yet'}
+                    </div>
+                  )}
+                </div>
 
-              {/* Filter Summary */}
-              {hasActiveFilters && (
-                <div className="px-4 py-3 bg-gray-50 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      Showing {filteredContributors.length} of {paidContributions.length} contributors
-                    </span>
-                    <div className="flex gap-2 items-center">
-                      {selectedTiers.size > 0 && (
-                        <div className="flex gap-1">
-                          {Array.from(selectedTiers).map(tier => (
-                            <Badge key={tier} variant="secondary" className="text-xs">
-                              {tier}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                {/* Filter Summary */}
+                {hasActiveFilters && (
+                  <div className="px-4 py-3 bg-gray-50 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">
+                        Showing {filteredContributors.length} of {paidContributions.length} contributors
+                      </span>
+                      <div className="flex gap-2 items-center">
+                        {selectedTiers.size > 0 && (
+                          <div className="flex gap-1">
+                            {Array.from(selectedTiers).map(tier => (
+                              <Badge key={tier} variant="secondary" className="text-xs">
+                                {tier}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="activity" className="mt-6">
           <Card>
@@ -942,8 +1091,8 @@ const CollectionDetailsPage: React.FC = () => {
                         key={contributor.id}
                         className="flex justify-between items-center border-b pb-2"
                       >
-                        <div>
-                          <div className="font-medium">
+                        <div className="min-w-0 flex-1 mr-2">
+                          <div className="font-medium truncate">
                             {contributor.name}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -998,7 +1147,7 @@ const CollectionDetailsPage: React.FC = () => {
           <div className="px-4">
             <QRCodeDisplay
               collectionId={id || ''}
-              collectionTitle={currentCollection.title || 'Collection'}
+              collectionTitle={displayCollection.title || 'Collection'}
               shareUrl={shareUrl}
             />
           </div>
@@ -1007,8 +1156,8 @@ const CollectionDetailsPage: React.FC = () => {
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: `Contribute to ${currentCollection.title}`,
-                    text: `Join me in contributing to ${currentCollection.title}`,
+                    title: `Contribute to ${displayCollection.title}`,
+                    text: `Join me in contributing to ${displayCollection.title}`,
                     url: shareUrl,
                   }).catch(err => {
                     console.error('Error sharing:', err);
@@ -1045,21 +1194,47 @@ const CollectionDetailsPage: React.FC = () => {
       }
 
       <EditCollectionDialog
-        open={isEditDialogOpen}
+        open={isEditDialogOpen && displayCollection.type !== 'fundraising'}
         onOpenChange={setIsEditDialogOpen}
         collectionId={id || ''}
         initialData={{
-          title: currentCollection.title,
-          description: currentCollection.description || '',
-          deadline: currentCollection.deadline,
-          type: currentCollection.type,
-          max_contributions: currentCollection.max_contributions,
-          price_tiers: currentCollection.price_tiers,
-          code_prefix: currentCollection.code_prefix || '',
-          contributions_fields: currentCollection.contributions_fields || [],
+          title: displayCollection.title,
+          description: displayCollection.description || '',
+          deadline: displayCollection.deadline,
+          type: displayCollection.type as any,
+          max_contributions: displayCollection.max_participants || 0,
+          price_tiers: displayCollection.pricing_tiers,
+          code_prefix: (displayCollection as any).code_prefix || '',
+          contributions_fields: displayCollection.form_fields || [],
         }}
         onSuccess={handleEditSuccess}
       />
+
+      {
+        displayCollection.type === 'fundraising' && (
+          <EditCampaignDialog
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            campaignId={displayCollection.id}
+            initialData={{
+              title: displayCollection.title,
+              description: displayCollection.description || '', // fallback
+              story_for: (displayCollection as any).story_for,
+              story_why: (displayCollection as any).story_why,
+              story_achieve: (displayCollection as any).story_achieve,
+              city: (displayCollection as any).city,
+              country: (displayCollection as any).country,
+              category: (displayCollection as any).category,
+              targetAmount: displayCollection.amount,
+              minContribution: (displayCollection as any).min_contribution,
+              deadline: displayCollection.deadline,
+              status: displayCollection.status || 'active',
+              main_image_url: (displayCollection as any).main_image_url,
+            }}
+            onSuccess={handleEditSuccess}
+          />
+        )
+      }
     </div >
   );
 };

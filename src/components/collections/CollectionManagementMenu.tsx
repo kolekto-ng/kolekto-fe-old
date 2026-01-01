@@ -22,15 +22,17 @@ import { MoreVertical, Edit, Trash2, Pause, Play, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCollectionStore } from '@/store';
+import { updateCampaign } from '@/services/fundraisingService';
 
 interface CollectionManagementMenuProps {
   collectionId: string;
-  currentStatus: 'active' | 'paused' | 'closed';
+  currentStatus: 'active' | 'paused' | 'closed' | 'completed' | 'expired';
   isMenuOpen?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
   onEditClick: () => void;
   onDeleteSuccess?: () => void;
   onStatusChange?: () => void; // refresh callback
+  isFundraising?: boolean;
 }
 
 const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
@@ -41,6 +43,7 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
   onEditClick,
   onDeleteSuccess,
   onStatusChange,
+  isFundraising = false,
 }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -52,8 +55,14 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
     if (!collectionId) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase.from('collections').delete().eq('id', collectionId);
-      if (error) throw error;
+      if (isFundraising) {
+        // Logic for deleting campaign from Supabase
+        const { error } = await supabase.from('campaigns').delete().eq('id', collectionId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('collections').delete().eq('id', collectionId);
+        if (error) throw error;
+      }
 
       toast.success('Collection deleted successfully');
       if (onDeleteSuccess) onDeleteSuccess();
@@ -77,8 +86,11 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
     if (!collectionId) return;
     setIsUpdatingStatus(true);
     try {
-
-      const res = await updateCollectionStatus(collectionId, newStatus);
+      if (isFundraising) {
+        await updateCampaign(collectionId, { status: newStatus });
+      } else {
+        await updateCollectionStatus(collectionId, newStatus);
+      }
 
       toast.success(
         newStatus === 'paused'
@@ -115,8 +127,8 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
             <span>Edit Collection</span>
           </DropdownMenuItem>
 
-          {/* Pause/Resume */}
-          {currentStatus !== 'closed' && (
+          {/* Pause/Resume: Only for Active or Paused */}
+          {(currentStatus === 'active' || currentStatus === 'paused') && (
             <DropdownMenuItem
               onClick={() =>
                 handleUpdateStatus(currentStatus === 'active' ? 'paused' : 'active')
@@ -127,18 +139,18 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
               {currentStatus === 'active' ? (
                 <>
                   <Pause className="mr-2 h-4 w-4" />
-                  <span>Pause Collection</span>
+                  <span>{isFundraising ? 'Pause Campaign' : 'Pause Collection'}</span>
                 </>
               ) : (
                 <>
                   <Play className="mr-2 h-4 w-4" />
-                  <span>Resume Collection</span>
+                  <span>{isFundraising ? 'Resume Campaign' : 'Resume Collection'}</span>
                 </>
               )}
             </DropdownMenuItem>
           )}
 
-          {/* Close */}
+          {/* Close / Complete */}
           {currentStatus !== 'closed' && (
             <DropdownMenuItem
               onClick={() => handleUpdateStatus('closed')}
@@ -146,20 +158,22 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
               className="cursor-pointer text-yellow-600 focus:text-yellow-600"
             >
               <Lock className="mr-2 h-4 w-4" />
-              <span>Close Collection</span>
+              <span>{isFundraising ? 'Close Campaign' : 'Close Collection'}</span>
             </DropdownMenuItem>
           )}
 
           <DropdownMenuSeparator />
 
           {/* Delete */}
-          <DropdownMenuItem
-            onClick={() => setIsDeleteDialogOpen(true)}
-            className="text-red-600 cursor-pointer focus:text-red-600"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            <span>Delete Collection</span>
-          </DropdownMenuItem>
+          {(!isFundraising || currentStatus !== 'active') && (
+            <DropdownMenuItem
+              onClick={() => setIsDeleteDialogOpen(true)}
+              className="text-red-600 cursor-pointer focus:text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              <span>{isFundraising ? 'Delete Campaign' : 'Delete Collection'}</span>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

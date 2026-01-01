@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import NavBar from '@/components/NavBar';
 import Footer from '@/components/Footer';
 import ContributionWrapper from '@/components/contribute/ContributionWrapper';
+import FundraisingPublicPage from '@/components/contribute/FundraisingPublicPage';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,6 +12,7 @@ import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from "react-icons/fa";
 import Logo from '@/components/Logo';
 import { useCollectionStore, useContributionStore } from '@/store';
 import Maintenance from '@/components/Maintenance';
+import { getCampaignById } from '@/services/fundraisingService';
 
 const ContributePage: React.FC = () => {
   const { collectionId } = useParams<{ collectionId: string }>();
@@ -18,6 +20,7 @@ const ContributePage: React.FC = () => {
   const [collection, setCollection] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFundraising, setIsFundraising] = useState(false);
 
   const { fetchCollectionById } = useContributionStore()
 
@@ -29,25 +32,63 @@ const ContributePage: React.FC = () => {
         return;
       }
 
-      try {
-        const data = await fetchCollectionById(collectionId);
-        console.log(data, 'Fetched collection data');
+      setError(null);
+      setLoading(true);
 
-        if (!data) {
+      try {
+        // 1. Try fetching as a Standard Collection
+        try {
+          const data = await fetchCollectionById(collectionId);
+          console.log(data, 'Fetched collection data');
+
+          if (data) {
+            // Check if collection is still active
+            if (data.status !== 'active') {
+              throw new Error('This collection is no longer accepting contributions');
+            }
+
+            // Check if deadline has passed
+            if (data.deadline && new Date(data.deadline) < new Date()) {
+              throw new Error('The deadline for this collection has passed');
+            }
+
+            setCollection(data);
+            setIsFundraising(false);
+            setLoading(false);
+            return; // Found it, exit
+          }
+        } catch (stdError: any) {
+          console.log("Standard fetch failed, trying fundraising...", stdError.message);
+          // Continue to step 2
+        }
+
+        // 2. Try fetching as a Fundraising Campaign (Supabase)
+        const campaign = await getCampaignById(collectionId);
+
+        if (campaign) {
+          // Check campaign status if needed
+          if (campaign.status === 'suspended') {
+            throw new Error('This campaign has been suspended');
+          }
+
+          // Fundraising Lifecycle Checks
+          // 1. Pending: Not accessible publicy
+          if (campaign.status === 'pending') {
+            throw new Error('This campaign is pending approval');
+          }
+          // 2. Rejected: Not accessible
+          if (campaign.status === 'rejected') {
+            throw new Error('This campaign is not available');
+          }
+          // 3. Paused/Closed: Accessible but read-only (Handled in FundraisingPublicPage)
+          // 4. Active: Accessible (Default)
+
+          setCollection(campaign);
+          setIsFundraising(true);
+        } else {
           throw new Error('Collection not found');
         }
 
-        // Check if collection is still active
-        if (data.status !== 'active') {
-          throw new Error('This collection is no longer accepting contributions');
-        }
-
-        // Check if deadline has passed
-        if (data.deadline && new Date(data.deadline) < new Date()) {
-          throw new Error('The deadline for this collection has passed');
-        }
-
-        setCollection(data);
       } catch (err: any) {
         console.error('Error fetching collection:', err);
         setError(err.message || 'Failed to fetch collection details');
@@ -63,7 +104,6 @@ const ContributePage: React.FC = () => {
   // Process form fields from collection
   const getFormFields = () => {
     if (!collection) return [];
-    console.log(collection, 'loooking for conyribution fields');
 
     // Use the form_fields or contributions_fields from the collection if available
     const formFields = collection.contributions_fields || collection.form_fields;
@@ -180,6 +220,17 @@ const ContributePage: React.FC = () => {
             <Link to="/register">Create Your Account</Link>
           </Button>
         </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Render Fundraising Page if type matches
+  if (isFundraising) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <ContributionNavBar />
+        <FundraisingPublicPage campaign={collection} />
         <Footer />
       </div>
     );

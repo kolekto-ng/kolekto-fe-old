@@ -11,15 +11,21 @@ import ContributorFieldsSection from './form/ContributorFieldsSection';
 import { FormField, PriceTier } from '@/types';
 import { useAuthStore } from '@/store';
 
+import { createCampaign } from "@/services/fundraisingService";
+import { UploadCloud, Bold, Italic, List, ImagePlus, ShieldCheck, CheckCircle, Twitter, Instagram, Facebook, X } from 'lucide-react';
+
 interface CreateCollectionFormProps {
   onPreview?: (data: any) => void;
 }
 
 const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }) => {
   // Step state
-
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
+  // If fundraising, we have 5 steps: Type, Basics, Amount, Story, Verification
+  // If collection, we have 4 steps: Type, Basics, Amount, Contributor Fields
+  // Form state
+  const [useFundraising, setUseFundraising] = useState(false);
+  const totalSteps = useFundraising ? 5 : 4;
 
   // Helpers for currency input formatting
   const sanitizeCurrencyInput = (input: string) => {
@@ -40,7 +46,6 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
     return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
   };
 
-  // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -55,15 +60,29 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
   ]);
 
   const [usePriceTiers, setUsePriceTiers] = useState(false);
-  const [useFundraising, setUseFundraising] = useState(false);
   const [fundraisingTarget, setFundraisingTarget] = useState('');
   const [minAmount, setMinAmount] = useState('');
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([
     { id: '1', name: 'Regular', price: '0', description: '', quantity: '' }
   ]);
 
-  // For fixed price quantity when not using price tiers
+  // Fundraising Specific State
+  const [mainImage, setMainImage] = useState<File | null>(null);
+  const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
+  const [storyFor, setStoryFor] = useState('');
+  const [storyWhy, setStoryWhy] = useState('');
+  const [storyAchieve, setStoryAchieve] = useState('');
+  const [supportingImages, setSupportingImages] = useState<File[]>([]);
+  const [supportingImagePreviews, setSupportingImagePreviews] = useState<string[]>([]);
 
+  const [verificationDocs, setVerificationDocs] = useState<File[]>([]);
+  const [category, setCategory] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [country, setCountry] = useState('Nigeria');
+  const [city, setCity] = useState('');
+  const [socials, setSocials] = useState({ twitter: '', instagram: '', facebook: '' });
+
+  // For fixed price quantity when not using price tiers
   const [fixedPriceQuantity, setFixedPriceQuantity] = useState('');
 
   const { user } = useAuthStore();
@@ -368,6 +387,49 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       const deadlineDate = deadline ? new Date(deadline) : null;
       const maxContributorsValue = isMaxContributorsEnabled ? parseInt(maxContributors) : null;
 
+      if (useFundraising) {
+        if (!mainImage) {
+          toast.error("Campaign image is required for fundraising");
+          setIsLoading(false);
+          return;
+        }
+
+        const campaignParams = {
+          title,
+          summary: description,
+          mainImage,
+          minContribution: minAmount,
+          targetAmount: fundraisingTarget,
+          isOpenEnded: !deadline,
+          deadline: deadlineDate,
+          currency: 'NGN',
+          storyFor,
+          storyWhy,
+          storyAchieve,
+          supportingImages,
+          verificationDocs,
+          category,
+          keywords,
+          phoneNumber: support,
+          countryCode: 'NG',
+          country,
+          city,
+          socials
+        };
+
+        try {
+          await createCampaign(campaignParams);
+          toast.success("Fundraising campaign created successfully!");
+          navigate('/dashboard/collections');
+        } catch (err: any) {
+          console.error("Error creating campaign:", err);
+          toast.error(err.message || "Failed to create campaign.");
+        }
+
+        setIsLoading(false);
+        return;
+      }
+
       // This handles formatting of price tiers when using price tiers
 
       const formattedPriceTiers = usePriceTiers
@@ -410,12 +472,59 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error(err.response.data.message || "An unexpected error occurred while creating the collection.");
+      toast.error(err.response?.data?.message || err.message || "An unexpected error occurred while creating the collection.");
     }
 
 
     setIsLoading(false);
   };
+
+  const handleMainImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("File size too large (max 5MB)");
+        return;
+      }
+      setMainImage(file);
+      const objectUrl = URL.createObjectURL(file);
+      setMainImagePreview(objectUrl);
+    }
+  };
+
+  const handleSupportingImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      if (supportingImages.length + files.length > 5) {
+        toast.error("You can only upload up to 5 images.");
+        return;
+      }
+      const validFiles = files.filter(f => f.size <= 5 * 1024 * 1024);
+      if (validFiles.length < files.length) {
+        toast.error("Some files were skipped (max 5MB each).");
+      }
+      setSupportingImages([...supportingImages, ...validFiles]);
+      const newPreviews = validFiles.map(f => URL.createObjectURL(f));
+      setSupportingImagePreviews([...supportingImagePreviews, ...newPreviews]);
+    }
+  };
+
+  const removeSupportingImage = (index: number) => {
+    const newImages = [...supportingImages];
+    newImages.splice(index, 1);
+    setSupportingImages(newImages);
+    const newPreviews = [...supportingImagePreviews];
+    newPreviews.splice(index, 1);
+    setSupportingImagePreviews(newPreviews);
+  };
+
+  const handleVerificationDocsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setVerificationDocs([...verificationDocs, ...files]);
+    }
+  };
+
 
   // This handles rendering of each step's content
 
@@ -434,8 +543,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
                 <div
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${!usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${!usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
                   onClick={() => {
                     setUsePriceTiers(false);
                     setUseFundraising(false);
@@ -458,13 +566,11 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                   </div>
                 </div>
                 <div
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'
-                    }`}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${usePriceTiers && !useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
                   onClick={() => {
                     setUsePriceTiers(true);
                     setUseFundraising(false);
                   }}
-
                 >
                   <div className="flex items-center">
                     <input
@@ -482,52 +588,37 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                     </div>
                   </div>
                 </div>
-                <div>
-                  <p className='text-[14px]'>Want to use Fundraising feature? contact <a className='text-green-600' target="_blank" href="https://wa.me/+2349019840377">Kolekto</a></p>
-
-                  <div
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : canUseFundraising ? 'border-gray-300 hover:border-gray-400' : 'opacity-40 cursor-not-allowed border-gray-300'}`}
-                    onClick={() => {
-                      if (!canUseFundraising) {
-                        // quick fallback: open contact link so user can request access
-                        window.open('https://wa.me/+2349019840377', '_blank');
-                        return;
-                      }
-                      setUseFundraising(true);
-                      setUsePriceTiers(false);
-                    }}
-                    role="button"
-                    aria-disabled={!canUseFundraising}
-                  >
-                    <div className="flex items-center" >
-                      <input
-                        type="radio"
-                        checked={useFundraising}
-                        onChange={() => {
-                          if (!canUseFundraising) return;
-                          setUseFundraising(true);
-                          setUsePriceTiers(false);
-                        }}
-                        disabled={!canUseFundraising}
-                        className="mr-3 accent-green-600"
-                      />
-                      <div>
-                        <h4 className="font-medium">Fundraising</h4>
-                        <p className="text-sm text-gray-600">Open-ended contribution amounts</p>
-                        {!canUseFundraising && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Fundraising is limited. <button type="button" onClick={() => window.open('https://wa.me/+2349019840377', '_blank')} className="text-green-600 underline">Request access</button>
-                          </p>
-                        )}
-                      </div>
+                <div
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${useFundraising ? 'border-green-600 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
+                  onClick={() => {
+                    setUseFundraising(true);
+                    setUsePriceTiers(false);
+                  }}
+                  role="button"
+                >
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={useFundraising}
+                      onChange={() => {
+                        setUseFundraising(true);
+                        setUsePriceTiers(false);
+                      }}
+                      className="mr-3 accent-green-600"
+                    />
+                    <div>
+                      <h4 className="font-medium">Fundraising</h4>
+                      <p className="text-sm text-gray-600">Open-ended contribution amounts</p>
                     </div>
                   </div>
                 </div>
-
               </div>
+
             </div>
           </div>
+
         )
+
       case 2:
         return (
           <div className="space-y-6">
@@ -535,6 +626,42 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Basic Information</h2>
               <p className="text-gray-600">Let's start with the basics of your collection</p>
             </div>
+
+            {useFundraising && (
+              <div className="mb-6">
+                <label className="mb-2 block text-base font-medium text-foreground">Campaign Image</label>
+                <div className="relative group">
+                  <label
+                    className={`flex h-48 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed ${mainImagePreview ? 'border-primary' : 'border-gray-300'} bg-gray-50 text-center text-muted-foreground transition hover:border-green-600 group-hover:bg-gray-100 relative overflow-hidden`}
+                  >
+                    {mainImagePreview ? (
+                      <div className="absolute inset-0 w-full h-full">
+                        <img src={mainImagePreview} alt="Preview" className="w-full h-full object-cover rounded-lg opacity-90" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                          <UploadCloud className="w-10 h-10" />
+                          <p className="mt-2 text-sm font-medium">Change Image</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <UploadCloud className="w-10 h-10 text-gray-400" />
+                        <p className="mt-2 text-sm font-medium text-gray-600">
+                          Drag & drop or <span className="font-bold text-green-600">browse files</span>
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">JPG, PNG, GIF up to 5MB</p>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleMainImageChange}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             <BasicInfoSection
               title={title}
               setTitle={setTitle}
@@ -598,9 +725,6 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                     </div>
                   </div>
                 </div>
-
-                {/* Fee Structure Information */}
-
               </div>
             )}
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -613,10 +737,6 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
                 </ul>
               </div>
             </div>
-
-
-
-            {/* Handles Pricing Section */}
 
             <div className="space-y-4">
               {!usePriceTiers && !useFundraising ? (
@@ -941,25 +1061,267 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         );
 
       case 4:
+        if (useFundraising) {
+          // Additional Fundraising Details: Story
+          return (
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Campaign Story</h2>
+                <p className="text-gray-600">Tell your story to connect with contributors</p>
+              </div>
+
+              {/* Fundraising For */}
+              <div>
+                <label className="block text-base font-medium text-foreground" htmlFor="fundraising-for">What are you raising money for?</label>
+                <div className="mt-2">
+                  <textarea
+                    id="fundraising-for"
+                    rows={3}
+                    placeholder="e.g., Medical expenses for my dog, tuition for my final year."
+                    value={storyFor}
+                    onChange={(e) => setStoryFor(e.target.value)}
+                    className="w-full resize-none rounded-xl border border-gray-300 p-4 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-green-600 focus:outline-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              {/* Why */}
+              <div>
+                <label className="block text-base font-medium text-foreground" htmlFor="why">Why are you raising the funds?</label>
+                <div className="mt-2">
+                  <textarea
+                    id="why"
+                    rows={6}
+                    placeholder="Share your story. Be authentic and connect with potential contributors."
+                    value={storyWhy}
+                    onChange={(e) => setStoryWhy(e.target.value)}
+                    className="w-full resize-none rounded-xl border border-gray-300 p-4 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-green-600 focus:outline-none"
+                  ></textarea>
+                </div>
+              </div>
+
+              {/* Achieve */}
+              <div>
+                <label className="block text-base font-medium text-foreground" htmlFor="achieve">What will the funds raised help achieve?</label>
+                <div className="mt-2">
+                  <textarea
+                    id="achieve"
+                    rows={4}
+                    placeholder="e.g., Cover the full cost of surgery and post-operative care."
+                    value={storyAchieve}
+                    onChange={(e) => setStoryAchieve(e.target.value)}
+                    className="w-full resize-none rounded-xl border border-gray-300 p-4 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-green-600 focus:outline-none"
+                  ></textarea>
+                  <p className="mt-2 text-sm text-muted-foreground">Example: Funds will be used to cover the cost of surgery and post-operative care.</p>
+                </div>
+              </div>
+
+              {/* Images */}
+              <div>
+                <h3 className="text-base font-medium text-foreground">Supporting Images (Optional)</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Add up to 5 images to make your campaign more compelling.</p>
+                <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5">
+                  {supportingImagePreviews.map((src, index) => (
+                    <div key={index} className="relative col-span-1 h-24">
+                      <img src={src} alt={`Supporting ${index + 1}`} className="h-full w-full rounded-lg object-cover shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => removeSupportingImage(index)}
+                        className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {supportingImages.length < 5 && (
+                    <div className="relative col-span-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer">
+                      <input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleSupportingImageUpload} />
+                      <div className="flex flex-col items-center text-gray-500 hover:text-green-600">
+                        <ImagePlus className="w-6 h-6" />
+                        <span className="text-xs">Add</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        } else {
+          return (
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Contributor Details</h2>
+                <p className="text-gray-600">Define what information you want to collect and configure unique codes</p>
+              </div>
+              <ContributorFieldsSection
+                formFields={formFields}
+                setFormFields={setFormFields}
+              />
+
+              <UniqueCodesSection
+                generateUniqueCodes={generateUniqueCodes}
+                setGenerateUniqueCodes={setGenerateUniqueCodes}
+                codePrefix={codePrefix}
+                setCodePrefix={setCodePrefix}
+              />
+            </div>
+          );
+        }
+
+      case 5:
+        if (!useFundraising) return null; // Should not reach here
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Contributor Details</h2>
-              <p className="text-gray-600">Define what information you want to collect and configure unique codes</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification & Socials</h2>
+              <p className="text-gray-600">Verify your identity and add social proof</p>
             </div>
-            <ContributorFieldsSection
-              formFields={formFields}
-              setFormFields={setFormFields}
-            />
 
-            <UniqueCodesSection
-              generateUniqueCodes={generateUniqueCodes}
-              setGenerateUniqueCodes={setGenerateUniqueCodes}
-              codePrefix={codePrefix}
-              setCodePrefix={setCodePrefix}
-            />
+            <div className="mb-6 rounded-lg bg-green-50 p-4 border border-green-200">
+              <h2 className="text-base font-bold text-foreground mb-2">Information</h2>
+              <p className="text-sm text-gray-700 mb-2">
+                All campaigns are verified by the compliance team.
+              </p>
+              <p className="text-sm text-gray-700">
+                Please upload documents like national ID, medical report, admission letter, etc.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {/* Upload */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2" htmlFor="dropzone-file">Upload Verification Documents</label>
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 relative hover:border-green-600 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <UploadCloud className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="mb-2 text-sm text-gray-500"><span className="font-semibold text-green-600">Click to upload</span> or drag and drop</p>
+                      <p className="text-xs text-gray-500">PDF, JPG, PNG (MAX. 5MB)</p>
+                    </div>
+                    <input id="dropzone-file" type="file" multiple className="hidden" onChange={handleVerificationDocsChange} />
+                  </label>
+                </div>
+                {verificationDocs.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {verificationDocs.map((file: File, i: number) => (
+                      <p key={i} className="text-xs text-green-600 flex items-center">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        {file.name}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2" htmlFor="category">Fundraising Category</label>
+                <select
+                  id="category"
+                  className="w-full rounded-md border border-gray-300 bg-white p-3 text-foreground focus:outline-none focus:ring-2 focus:ring-green-600"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  <option value="">Select Category</option>
+                  <option value="Alumni">Alumni</option>
+                  <option value="Charity">Charity</option>
+                  <option value="Community">Community</option>
+                  <option value="Disaster">Disaster</option>
+                  <option value="Education">Education</option>
+                  <option value="Legal">Legal</option>
+                  <option value="Medical">Medical</option>
+                  <option value="Politics">Politics</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
+
+              {/* Keywords */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2" htmlFor="keywords">Keywords for Search</label>
+                <input
+                  id="keywords"
+                  type="text"
+                  placeholder="e.g., school, health, student"
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+                <p className="mt-2 text-xs text-gray-500">Separate keywords with commas.</p>
+              </div>
+
+              {/* Location */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2" htmlFor="city">City</label>
+                  <input
+                    id="city"
+                    type="text"
+                    placeholder="e.g., Lagos"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2" htmlFor="country">Country</label>
+                  <select
+                    id="country"
+                    className="w-full rounded-md border border-gray-300 bg-white p-3 text-foreground focus:outline-none focus:ring-2 focus:ring-green-600"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                  >
+                    <option value="Nigeria">Nigeria</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Socials */}
+              <div>
+                <h3 className="text-base font-semibold text-foreground pt-4 border-t border-border">Social Media (Optional)</h3>
+                <div className="space-y-4 mt-4">
+                  <div className="relative">
+                    {/* Twitter Icon */}
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Twitter className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <input
+                      className="w-full rounded-md border border-gray-300 p-3 pl-10 focus:outline-none focus:ring-2 focus:ring-green-600"
+                      placeholder="@twitter_handle"
+                      value={socials.twitter}
+                      onChange={(e) => setSocials({ ...socials, twitter: e.target.value })}
+                    />
+                  </div>
+                  <div className="relative">
+                    {/* Instagram Icon */}
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Instagram className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <input
+                      className="w-full rounded-md border border-gray-300 p-3 pl-10 focus:outline-none focus:ring-2 focus:ring-green-600"
+                      placeholder="@instagram_handle"
+                      value={socials.instagram}
+                      onChange={(e) => setSocials({ ...socials, instagram: e.target.value })}
+                    />
+                  </div>
+                  <div className="relative">
+                    {/* Facebook Icon */}
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <Facebook className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <input
+                      className="w-full rounded-md border border-gray-300 p-3 pl-10 focus:outline-none focus:ring-2 focus:ring-green-600"
+                      placeholder="@facebook_handle"
+                      value={socials.facebook}
+                      onChange={(e) => setSocials({ ...socials, facebook: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        );
+        )
 
       default:
         return null;
