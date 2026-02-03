@@ -23,7 +23,6 @@ function OtpBox({ value, onChange, index, inputRefs }) {
     />
   );
 }
-
 export default function Step4VerifyEmail({
   otp,
   setOtp,

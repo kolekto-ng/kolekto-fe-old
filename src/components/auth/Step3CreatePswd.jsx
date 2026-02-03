@@ -53,7 +53,6 @@ export default function Step3CreatePassword({
       acceptTerms
     );
   }, [password, confirmPassword, acceptTerms]);
-
   return (
     <section>
       <h1 className="text-sm font-semibold text-neutral-900 mb-6">

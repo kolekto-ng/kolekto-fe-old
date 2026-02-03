@@ -18,7 +18,6 @@ export default function AuthNavbar({ country, setCountry, onNext }) {
           <option>South Africa</option>
         </select>
       </div>
-
       <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 w-[436px] h-[79.4px]text-[#00BA16]">
         <div className="flex flex-row gap-2 mb-2 text-[#00BA16]">
           <svg

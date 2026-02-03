@@ -172,7 +172,6 @@ const handleStep3Submit = async () => {
   <p className="text-[10px] sm:text-[11px] tracking-[0.20em] text-neutral-500 uppercase leading-none whitespace-nowrap">
     STEP {step}
   </p>
-
   
   <p className="hidden sm:block mt-1 text-sm sm:text-base font-semibold text-neutral-900 leading-none whitespace-nowrap">
     {step === 1

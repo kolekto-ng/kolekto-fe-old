@@ -19,7 +19,6 @@ export default function RightImagePanel() {
           group contributions <br />
           seamlessly
         </h2>
-
         <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-gray-400">
           <span>© Kolekto. 2026</span>
           <div className="flex items-center gap-4">

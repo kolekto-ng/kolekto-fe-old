@@ -24,7 +24,6 @@ export default function StepTracker({ step, total }) {
                 <div className="h-2 w-2 rounded-full bg-white" />
               ) : null}
             </div>
-
             {s !== total && (
               <div
                 className={`h-[2px] w-12 transition-colors duration-300 ${

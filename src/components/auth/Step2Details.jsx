@@ -70,7 +70,6 @@ export default function Step2Details({
           onChange={(e) => setFirstName(e.target.value)}
           required
         />
-
         <Field
           label="Middle name"
           optional
