@@ -65,7 +65,7 @@ const Footer = () => {
 
           <div className='lg:col-span-1'>
             <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>
-              Comapny
+              Company
             </h4>
             <ul className='space-y-2 md:space-y-3'>
               <li>
