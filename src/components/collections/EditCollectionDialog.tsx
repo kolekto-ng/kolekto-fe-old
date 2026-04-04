@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Trash2, Info } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Info, Upload, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -54,135 +49,320 @@ interface EditCollectionDialogProps {
     total_contributions?: number;
     type?: 'fixed' | 'tiered';
     price_tiers?: PriceTier[];
+    collection_type?: string;
+    banner_image?: string;
+    story_what?: string;
+    story_why?: string;
+    story_impact?: string;
+    story_images?: string[];
+    event_date?: string;
   };
   onSuccess?: () => void;
 }
 
+// ── Image uploader ─────────────────────────────────────────────────────────────
+interface ImageUploaderProps {
+  label: string;
+  currentUrl: string;
+  onUrlChange: (url: string) => void;
+  pendingFile: File | null;
+  onFileChange: (file: File | null) => void;
+  previewUrl: string;
+  hint?: string;
+}
+
+const ImageUploader: React.FC<ImageUploaderProps> = ({
+  label, currentUrl, onUrlChange, pendingFile, onFileChange, previewUrl, hint,
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    onFileChange(file);
+  };
+
+  const handleRemove = () => {
+    onFileChange(null);
+    onUrlChange('');
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-1.5">
+        <Upload className="h-4 w-4" />
+        {label}
+      </Label>
+
+      {previewUrl ? (
+        <div className="relative">
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="w-full h-40 object-contain bg-gray-50 rounded-xl border"
+            onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.parentElement!.style.display = 'none'; }}
+          />
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="absolute top-2 right-2 bg-white rounded-full p-1 shadow hover:bg-red-50"
+          >
+            <X className="h-4 w-4 text-gray-600" />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-kolekto transition-colors"
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Click to upload image</p>
+          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP — max 5MB</p>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFile}
+      />
+
+      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+    </div>
+  );
+};
+
+// ── Main dialog ────────────────────────────────────────────────────────────────
 const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
-  open,
-  onOpenChange,
-  collectionId,
-  initialData,
-  onSuccess
+  open, onOpenChange, collectionId, initialData, onSuccess,
 }) => {
   const [title, setTitle] = useState(initialData.title || '');
   const [description, setDescription] = useState(initialData.description || '');
   const [deadline, setDeadline] = useState<Date | undefined>(
     initialData.deadline ? new Date(initialData.deadline) : undefined
   );
-  const [feeBearerState, setFeeBearerState] = useState(initialData.fee_bearer || 'contributor');
   const [maxContributions, setMaxContributions] = useState<number | undefined>(
     initialData.max_contributions || undefined
   );
-  const [codePrefix, setCodePrefix] = useState(initialData.code_prefix || '');
   const [contributionFields, setContributionFields] = useState<ContributionField[]>(
     initialData.contributions_fields || []
   );
-  const [priceTiers, setPriceTiers] = useState<PriceTier[]>(
-    initialData.price_tiers || []
+  const [priceTiers, setPriceTiers] = useState<PriceTier[]>(initialData.price_tiers || []);
+
+  // Type-specific
+  const [bannerUrl, setBannerUrl] = useState(initialData.banner_image || '');
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState(initialData.banner_image || '');
+  const [storyWhat, setStoryWhat] = useState(initialData.story_what || '');
+  const [storyWhy, setStoryWhy] = useState(initialData.story_why || '');
+  const [storyImpact, setStoryImpact] = useState(initialData.story_impact || '');
+  const [storyImageUrls, setStoryImageUrls] = useState<string[]>(initialData.story_images || []);
+  const [pendingStoryFiles, setPendingStoryFiles] = useState<{ file: File; localUrl: string }[]>([]);
+  const storyImgInputRef = useRef<HTMLInputElement>(null);
+  const [eventDate, setEventDate] = useState<Date | undefined>(
+    initialData.event_date ? new Date(initialData.event_date) : undefined
   );
+
   const [isLoading, setIsLoading] = useState(false);
+  const { updateCollection } = useCollectionStore();
 
-  const { updateCollection } = useCollectionStore()
-
-  // Check if collection has contributions to determine what can be edited
   const hasContributions = (initialData.total_contributions || 0) > 0;
-  const collectionType = initialData.type || 'fixed';
+  const collectionType = initialData.collection_type || (initialData.type === 'tiered' ? 'tiered' : 'fixed');
+  const isFundraising = collectionType === 'fundraising';
+  const isTicket = collectionType === 'ticket';
 
+  // Reset when dialog opens
   useEffect(() => {
-    if (open) {
-      // Reset form when dialog opens
-      setTitle(initialData.title || '');
-      setDescription(initialData.description || '');
-      setDeadline(initialData.deadline ? new Date(initialData.deadline) : undefined);
-      setFeeBearerState(initialData.fee_bearer || 'contributor');
-      setMaxContributions(initialData.max_contributions || undefined);
-      setCodePrefix(initialData.code_prefix || '');
-      setContributionFields(initialData.contributions_fields || []);
-      setPriceTiers(initialData.price_tiers || []);
-    }
-  }, [open, initialData]);
+    if (!open) return;
+    setTitle(initialData.title || '');
+    setDescription(initialData.description || '');
+    setDeadline(initialData.deadline ? new Date(initialData.deadline) : undefined);
+    setMaxContributions(initialData.max_contributions || undefined);
+    setContributionFields(initialData.contributions_fields || []);
+    setPriceTiers(initialData.price_tiers || []);
+    setBannerUrl(initialData.banner_image || '');
+    setBannerFile(null);
+    setBannerPreview(initialData.banner_image || '');
+    setStoryWhat(initialData.story_what || '');
+    setStoryWhy(initialData.story_why || '');
+    setStoryImpact(initialData.story_impact || '');
+    setStoryImageUrls(initialData.story_images || []);
+    setPendingStoryFiles([]);
+    setEventDate(initialData.event_date ? new Date(initialData.event_date) : undefined);
+  }, [open]);
 
+  // When file is selected, create a local preview URL
+  const handleBannerFileChange = (file: File | null) => {
+    setBannerFile(file);
+    if (file) {
+      setBannerPreview(URL.createObjectURL(file));
+    } else {
+      setBannerPreview(bannerUrl);
+    }
+  };
+
+  // ── Tier helpers ─────────────────────────────────────────────────────────────
   const updatePriceTier = (index: number, updates: Partial<PriceTier>) => {
-    setPriceTiers(tiers =>
-      tiers.map((tier, i) =>
-        i === index ? { ...tier, ...updates } : tier
-      )
-    );
+    setPriceTiers(t => t.map((tier, i) => i === index ? { ...tier, ...updates } : tier));
   };
 
+  // ── Form field helpers ───────────────────────────────────────────────────────
   const addContributionField = () => {
-    const newField: ContributionField = {
-      id: Date.now().toString(),
-      name: '',
-      type: 'text',
-      required: false,
-    };
-    setContributionFields([...contributionFields, newField]);
+    setContributionFields(f => [...f, { id: Date.now().toString(), name: '', type: 'text', required: false }]);
   };
 
-  const updateContributionField = (id: string, updates: Partial<ContributionField>) => {
-    setContributionFields(fields =>
-      fields.map(field =>
-        field.id === id ? { ...field, ...updates } : field
-      )
-    );
+  const updateField = (id: string, updates: Partial<ContributionField>) => {
+    setContributionFields(f => f.map(field => field.id === id ? { ...field, ...updates } : field));
   };
 
-  const removeContributionField = (id: string) => {
-    setContributionFields(fields => fields.filter(field => field.id !== id));
+  const removeField = (id: string) => {
+    setContributionFields(f => f.filter(field => field.id !== id));
   };
 
+  // Per-field option helpers
+  const addOption = (fieldId: string) => {
+    setContributionFields(f => f.map(field =>
+      field.id === fieldId ? { ...field, options: [...(field.options || []), ''] } : field
+    ));
+  };
+
+  const updateOption = (fieldId: string, optIdx: number, value: string) => {
+    setContributionFields(f => f.map(field => {
+      if (field.id !== fieldId) return field;
+      const opts = [...(field.options || [])];
+      opts[optIdx] = value;
+      return { ...field, options: opts };
+    }));
+  };
+
+  const removeOption = (fieldId: string, optIdx: number) => {
+    setContributionFields(f => f.map(field => {
+      if (field.id !== fieldId) return field;
+      return { ...field, options: (field.options || []).filter((_, i) => i !== optIdx) };
+    }));
+  };
+
+  // ── Upload banner to Supabase Storage ────────────────────────────────────────
+  const uploadBanner = async (file: File): Promise<string> => {
+    const ext = file.name.split('.').pop();
+    const path = `${collectionId}/banner-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('campaign_assets').upload(path, file, { upsert: true });
+    if (error) throw new Error(error.message);
+    const { data } = supabase.storage.from('campaign_assets').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const uploadStoryImage = async (file: File): Promise<string> => {
+    const ext = file.name.split('.').pop();
+    const path = `${collectionId}/story-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from('campaign_assets').upload(path, file, { upsert: true });
+    if (error) throw new Error(error.message);
+    const { data } = supabase.storage.from('campaign_assets').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const handleStoryImageAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const MAX_TOTAL = 5;
+    const remaining = MAX_TOTAL - storyImageUrls.length - pendingStoryFiles.length;
+    files.slice(0, remaining).forEach(file => {
+      setPendingStoryFiles(prev => [...prev, { file, localUrl: URL.createObjectURL(file) }]);
+    });
+    if (storyImgInputRef.current) storyImgInputRef.current.value = '';
+  };
+
+  const removeStoryImageUrl = (idx: number) => {
+    setStoryImageUrls(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const removePendingStoryFile = (idx: number) => {
+    setPendingStoryFiles(prev => {
+      URL.revokeObjectURL(prev[idx].localUrl);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!title.trim()) {
-      toast.error('Collection title is required');
-      return;
-    }
-
-    // Validate contribution fields
-    const invalidFields = contributionFields.filter(field => !field.name.trim());
-    if (invalidFields.length > 0) {
-      toast.error('All contribution fields must have a name');
-      return;
-    }
+    if (!title.trim()) { toast.error('Collection title is required'); return; }
+    const badFields = contributionFields.filter(f => !f.name.trim());
+    if (badFields.length > 0) { toast.error('All form fields must have a name'); return; }
 
     setIsLoading(true);
-
     try {
-      // Convert deadline to ISO string if it exists
-      const deadlineISO = deadline ? deadline.toISOString() : null;
+      let resolvedBanner = bannerUrl;
+      if (bannerFile) {
+        try {
+          resolvedBanner = await uploadBanner(bannerFile);
+        } catch {
+          // Storage bucket may not be configured; keep current URL
+          toast('Banner upload failed — existing image kept.', { icon: '⚠️' });
+        }
+      }
 
       const updateData: any = {
         title,
-        description,
-        deadline: deadlineISO,
+        deadline: deadline ? deadline.toISOString() : null,
         collectionType,
-        // fee_bearer: feeBearerState,
-        max_contributions: collectionType === 'fixed' ? (maxContributions || null) : null,
-        // code_prefix: codePrefix || null,
-        contributions_fields: contributionFields.length > 0 ? contributionFields : null,
-        price_tiers: collectionType === 'tiered' ? priceTiers : null,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      console.log(updateData, 'updating collection with ID:', collectionId);
-
-
-      const res = updateCollection(collectionId, updateData)
-      console.log(res);
-
-      toast.success('Collection updated successfully');
-      onOpenChange(false);
-
-      if (onSuccess) {
-        onSuccess();
+      if (!isFundraising) {
+        updateData.description = description;
+        updateData.max_contributions = (collectionType === 'fixed' || collectionType === 'flat') ? (maxContributions || null) : null;
+        updateData.contributions_fields = (contributionFields.length > 0) ? contributionFields : null;
+        updateData.price_tiers = (collectionType === 'tiered' || isTicket) ? priceTiers : null;
       }
-    } catch (error: any) {
-      console.error('Error updating collection:', error);
-      toast.error(`Failed to update collection: ${error.message}`);
+
+      if (isFundraising) {
+        updateData.banner_url = resolvedBanner || null;
+        updateData.campaign_summary = description;
+        updateData.story = {
+          what: storyWhat || null,
+          why: storyWhy || null,
+          impact: storyImpact || null,
+        };
+        // Upload pending story images
+        const uploadedUrls: string[] = [];
+        for (const { file } of pendingStoryFiles) {
+          try {
+            const url = await uploadStoryImage(file);
+            uploadedUrls.push(url);
+          } catch {
+            toast('Some story images failed to upload.', { icon: '⚠️' });
+          }
+        }
+        updateData.story_images = [...storyImageUrls, ...uploadedUrls];
+      }
+      if (isTicket) {
+        updateData.banner_url = resolvedBanner || null;
+        updateData.event_date = eventDate ? eventDate.toISOString() : null;
+      }
+
+      await updateCollection(collectionId, updateData);
+      toast.success('Collection updated');
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err: any) {
+      toast.error(`Failed to update: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ── Tab config ────────────────────────────────────────────────────────────────
+  // Fundraising: Basic | Story | (no Form Fields)
+  // Ticket:      Basic | Settings
+  // Others:      Basic | Settings | Form Fields
+  const tabs = isFundraising
+    ? ['basic', 'story']
+    : ['basic', 'settings', 'fields'];
+
+  const tabLabels: Record<string, string> = {
+    basic: 'Basic Info', story: 'Story', settings: 'Settings', fields: 'Form Fields',
   };
 
   return (
@@ -191,7 +371,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Edit Collection</DialogTitle>
           <DialogDescription>
-            Make changes to your collection. Note that financial settings cannot be changed once contributions have been received.
+            Changes take effect immediately. Financial settings are locked once contributions are received.
           </DialogDescription>
         </DialogHeader>
 
@@ -199,266 +379,334 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              This collection has received {initialData.total_contributions} contributions.
-              Financial settings (amount, currency, tiers) cannot be modified to maintain data integrity.
+              {initialData.total_contributions} contribution(s) received — amounts and tiers are locked.
             </AlertDescription>
           </Alert>
         )}
 
-        <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Basic Info</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="fields">Form Fields</TabsTrigger>
+        <Tabs defaultValue="basic">
+          <TabsList className={`grid w-full grid-cols-${tabs.length}`}>
+            {tabs.map(t => <TabsTrigger key={t} value={t}>{tabLabels[t]}</TabsTrigger>)}
           </TabsList>
 
-          <TabsContent value="basic" className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Title*</Label>
+          {/* ── BASIC INFO ─────────────────────────────────────────── */}
+          <TabsContent value="basic" className="space-y-5 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-title">Title *</Label>
               <Input
-                id="title"
+                id="ed-title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter collection title"
-                required
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+                placeholder="Collection title"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ed-desc">{isFundraising ? 'Summary / Tagline' : 'Description'}</Label>
               <Textarea
-                id="description"
+                id="ed-desc"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Enter collection description"
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                placeholder={isFundraising ? 'Short summary shown on the campaign page' : 'Describe this collection'}
                 rows={3}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="deadline">Deadline</Label>
+
+            {/* Banner image — fundraising + ticket */}
+            {(isFundraising || isTicket) && (
+              <ImageUploader
+                label={isTicket ? 'Event Banner Image' : 'Campaign Banner Image'}
+                currentUrl={bannerUrl}
+                onUrlChange={setBannerUrl}
+                pendingFile={bannerFile}
+                onFileChange={handleBannerFileChange}
+                previewUrl={bannerPreview}
+                hint="Upload a wide image (16:9 recommended). Accepted: JPG, PNG, WEBP."
+              />
+            )}
+
+            {/* Event date — ticket only */}
+            {isTicket && (
+              <div className="space-y-1.5">
+                <Label>Event Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !eventDate && 'text-muted-foreground')}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {eventDate ? format(eventDate, 'PPP') : 'Select event date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={eventDate} onSelect={setEventDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label>
+                {isTicket ? 'Registration Deadline' : 'Deadline'}
+                <span className="ml-1.5 text-xs text-gray-400 font-normal">(can be extended)</span>
+              </Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !deadline && "text-muted-foreground"
-                    )}
-                  >
+                  <Button variant="outline" className={cn('w-full justify-start text-left font-normal', !deadline && 'text-muted-foreground')}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {deadline ? format(deadline, "PPP") : "Select deadline"}
+                    {deadline ? format(deadline, 'PPP') : 'No deadline set'}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={deadline}
-                    onSelect={setDeadline}
-                    initialFocus
-                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                  />
+                  <Calendar mode="single" selected={deadline} onSelect={setDeadline} initialFocus />
                 </PopoverContent>
               </Popover>
+              {deadline && (
+                <button type="button" className="text-xs text-gray-400 hover:text-red-500" onClick={() => setDeadline(undefined)}>
+                  Remove deadline
+                </button>
+              )}
             </div>
           </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4">
-            {/* <div className="grid gap-2">
-              <Label htmlFor="feeBearer">Fee Bearer</Label>
-              <Select value={feeBearerState} onValueChange={setFeeBearerState}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select who pays transaction fees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="contributor">Contributor pays fees</SelectItem>
-                  <SelectItem value="organizer">Organizer pays fees</SelectItem>
-                </SelectContent>
-              </Select>
-            </div> */}
-
-            {collectionType === 'fixed' && (
-              <div className="grid gap-2">
-                <Label htmlFor="maxContributions">Maximum Contributions</Label>
-                <Input
-                  id="maxContributions"
-                  type="number"
-                  value={maxContributions || ''}
-                  onChange={(e) => setMaxContributions(e.target.value ? parseInt(e.target.value) : undefined)}
-                  placeholder="Leave empty for unlimited"
-                  min="1"
+          {/* ── STORY (fundraising only) ───────────────────────────── */}
+          {isFundraising && (
+            <TabsContent value="story" className="space-y-5 pt-2">
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Campaigns with a clear story raise significantly more. All fields are optional but recommended.
+                </AlertDescription>
+              </Alert>
+              <div className="space-y-1.5">
+                <Label htmlFor="story-what">What are you doing?</Label>
+                <Textarea
+                  id="story-what"
+                  value={storyWhat}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStoryWhat(e.target.value)}
+                  placeholder="Describe the project or cause in clear, simple terms…"
+                  rows={3}
                 />
               </div>
-            )}
-
-            {collectionType === 'tiered' && priceTiers.length > 0 && (
-              <div className="space-y-4">
-                <Label>Price Tiers</Label>
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    Price amounts cannot be changed after contributions are received. You can only edit tier names, descriptions, and quantities.
-                  </AlertDescription>
-                </Alert>
-                {priceTiers.map((tier, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-sm">Tier Name</Label>
-                        <Input
-                          value={tier.name}
-                          onChange={(e) => updatePriceTier(index, { name: e.target.value })}
-                          placeholder="e.g., Standard, Premium"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-sm">Price</Label>
-                        <Input
-                          value={`₦${tier.price.toLocaleString()}`}
-                          disabled
-                          className="bg-gray-100 text-gray-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm">Description</Label>
-                      <Textarea
-                        value={tier.description || ''}
-                        onChange={(e) => updatePriceTier(index, { description: e.target.value })}
-                        placeholder="Optional description for this tier"
-                        rows={2}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-sm">Quantity Limit</Label>
-                      <Input
-                        type="number"
-                        value={tier.quantity || ''}
-                        onChange={(e) => updatePriceTier(index, {
-                          quantity: e.target.value ? parseInt(e.target.value) : undefined
-                        })}
-                        placeholder="Leave empty for unlimited"
-                        min="1"
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-1.5">
+                <Label htmlFor="story-why">Why does it matter?</Label>
+                <Textarea
+                  id="story-why"
+                  value={storyWhy}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStoryWhy(e.target.value)}
+                  placeholder="Explain the problem you're solving or why this cause is important…"
+                  rows={3}
+                />
               </div>
-            )}
-
-            {/* <div className="grid gap-2">
-              <Label htmlFor="codePrefix">Code Prefix</Label>
-              <Input
-                id="codePrefix"
-                value={codePrefix}
-                onChange={(e) => setCodePrefix(e.target.value)}
-                placeholder="Optional prefix for contributor codes (e.g., EVENT-)"
-                maxLength={10}
-              />
-            </div> */}
-          </TabsContent>
-
-          <TabsContent value="fields" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label>Contribution Form Fields</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addContributionField}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Field
-              </Button>
-            </div>
-
-            {contributionFields.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No custom fields added. Contributors will only need to provide basic payment information.
-              </p>
-            ) : (
-              <div className="space-y-3 max-h-60 overflow-y-auto">
-                {contributionFields.map((field) => (
-                  <div key={field.id} className="border rounded-lg p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Input
-                        value={field.name}
-                        onChange={(e) => updateContributionField(field.id, { name: e.target.value })}
-                        placeholder="Field name (e.g., Full Name, Phone)"
-                        className="flex-1 mr-2"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeContributionField(field.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <Select
-                        value={field.type}
-                        onValueChange={(value: any) => updateContributionField(field.id, { type: value })}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="text">Text</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="phone">Phone</SelectItem>
-                          <SelectItem value="number">Number</SelectItem>
-                          <SelectItem value="textarea">Long Text</SelectItem>
-                          <SelectItem value="select">Dropdown</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={field.required}
-                          onCheckedChange={(checked) => updateContributionField(field.id, { required: checked })}
-                        />
-                        <Label className="text-sm">Required</Label>
-                      </div>
-                    </div>
-
-                    {field.type === 'select' && (
-                      <div>
-                        <Label className="text-xs text-gray-600">Options (one per line)</Label>
-                        <Textarea
-                          value={field.options?.join('\n') || ''}
-                          onChange={(e) => updateContributionField(field.id, {
-                            options: e.target.value.split('\n').filter(opt => opt.trim())
-                          })}
-                          placeholder="Option 1&#10;Option 2&#10;Option 3"
-                          rows={3}
-                          className="text-sm"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="space-y-1.5">
+                <Label htmlFor="story-impact">What will the impact be?</Label>
+                <Textarea
+                  id="story-impact"
+                  value={storyImpact}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStoryImpact(e.target.value)}
+                  placeholder="Describe what will change as a result of this campaign…"
+                  rows={3}
+                />
               </div>
-            )}
-          </TabsContent>
+
+              {/* Supporting images */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="flex items-center gap-1.5"><Upload className="h-4 w-4" /> Supporting Images</Label>
+                    <p className="text-xs text-gray-400 mt-0.5">Up to 5 images shown in your campaign</p>
+                  </div>
+                  <span className="text-xs text-gray-400">{storyImageUrls.length + pendingStoryFiles.length}/5</span>
+                </div>
+
+                {/* Image grid — existing + pending */}
+                {(storyImageUrls.length > 0 || pendingStoryFiles.length > 0) && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {storyImageUrls.map((src, i) => (
+                      <div key={`existing-${i}`} className="relative aspect-square">
+                        <img src={src} alt={`Story image ${i + 1}`} className="w-full h-full object-cover rounded-lg border" onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.parentElement!.style.display = 'none'; }} />
+                        <button type="button" onClick={() => removeStoryImageUrl(i)} className="absolute top-0.5 right-0.5 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                          <X className="h-3 w-3 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                    {pendingStoryFiles.map(({ localUrl }, i) => (
+                      <div key={`pending-${i}`} className="relative aspect-square">
+                        <img src={localUrl} alt={`New image ${i + 1}`} className="w-full h-full object-cover rounded-lg border border-dashed border-kolekto" />
+                        <button type="button" onClick={() => removePendingStoryFile(i)} className="absolute top-0.5 right-0.5 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                          <X className="h-3 w-3 text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(storyImageUrls.length + pendingStoryFiles.length) < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => storyImgInputRef.current?.click()}
+                    className="flex items-center justify-center gap-2 w-full h-14 border-2 border-dashed border-gray-300 rounded-xl hover:border-kolekto hover:bg-kolekto/5 transition-colors text-gray-500 text-sm"
+                  >
+                    <Upload className="h-4 w-4" /> Add photos
+                  </button>
+                )}
+
+                <input ref={storyImgInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleStoryImageAdd} />
+              </div>
+            </TabsContent>
+          )}
+
+          {/* ── SETTINGS (non-fundraising) ─────────────────────────── */}
+          {!isFundraising && (
+            <TabsContent value="settings" className="space-y-5 pt-2">
+              {(collectionType === 'fixed' || collectionType === 'flat') && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ed-max">Maximum Contributors</Label>
+                  <Input
+                    id="ed-max"
+                    type="number"
+                    value={maxContributions || ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMaxContributions(e.target.value ? parseInt(e.target.value) : undefined)}
+                    placeholder="Leave empty for unlimited"
+                    min="1"
+                  />
+                </div>
+              )}
+
+              {(collectionType === 'tiered' || isTicket) && priceTiers.length > 0 && (
+                <div className="space-y-3">
+                  <Label>Price Tiers</Label>
+                  {hasContributions && (
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>Tier prices are locked after contributions are received.</AlertDescription>
+                    </Alert>
+                  )}
+                  {priceTiers.map((tier, index) => (
+                    <div key={index} className="border rounded-xl p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Tier Name</Label>
+                          <Input value={tier.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePriceTier(index, { name: e.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Price</Label>
+                          <Input value={`₦${tier.price.toLocaleString()}`} disabled className="bg-gray-50 text-gray-500" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Description</Label>
+                        <Textarea value={tier.description || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updatePriceTier(index, { description: e.target.value })} rows={2} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Quantity Limit</Label>
+                        <Input type="number" value={tier.quantity || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePriceTier(index, { quantity: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="Unlimited" min="1" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {/* ── FORM FIELDS (non-fundraising only) ─────────────────── */}
+          {!isFundraising && (
+            <TabsContent value="fields" className="space-y-4 pt-2">
+              <div className="flex items-center justify-between">
+                <Label>Contribution Form Fields</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addContributionField}>
+                  <Plus className="h-4 w-4 mr-1" /> Add Field
+                </Button>
+              </div>
+
+              {contributionFields.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">
+                  No custom fields. Contributors provide basic contact info only.
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {contributionFields.map(field => (
+                    <div key={field.id} className="border rounded-xl p-4 space-y-3">
+                      {/* Field name + delete */}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={field.name}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField(field.id, { name: e.target.value })}
+                          placeholder="Field name (e.g., Matric Number)"
+                          className="flex-1"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeField(field.id)}>
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </Button>
+                      </div>
+
+                      {/* Type + Required */}
+                      <div className="flex items-center gap-3">
+                        <Select value={field.type} onValueChange={(v: any) => updateField(field.id, { type: v })}>
+                          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">Text</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="phone">Phone</SelectItem>
+                            <SelectItem value="number">Number</SelectItem>
+                            <SelectItem value="textarea">Long Text</SelectItem>
+                            <SelectItem value="select">Dropdown</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2 ml-auto">
+                          <Switch
+                            checked={field.required}
+                            onCheckedChange={(c: boolean) => updateField(field.id, { required: c })}
+                          />
+                          <Label className="text-sm">Required</Label>
+                        </div>
+                      </div>
+
+                      {/* Dropdown options — individual inputs */}
+                      {field.type === 'select' && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-gray-500">Options</Label>
+                          {(field.options || []).map((opt, optIdx) => (
+                            <div key={optIdx} className="flex items-center gap-2">
+                              <Input
+                                value={opt}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateOption(field.id, optIdx, e.target.value)}
+                                placeholder={`Option ${optIdx + 1}`}
+                                className="flex-1 text-sm"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeOption(field.id, optIdx)}
+                              >
+                                <X className="h-3.5 w-3.5 text-gray-400" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addOption(field.id)}
+                            className="w-full text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Add Option
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )}
         </Tabs>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isLoading}
-          >
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isLoading}
-            className="bg-kolekto hover:bg-kolekto/90"
-          >
-            {isLoading ? 'Saving...' : 'Save Changes'}
+          <Button type="button" onClick={handleSave} disabled={isLoading} className="bg-kolekto hover:bg-kolekto/90">
+            {isLoading ? 'Saving…' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

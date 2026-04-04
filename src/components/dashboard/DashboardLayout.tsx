@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
+import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye, Lock, Layers, Waves, Ticket, Heart } from 'lucide-react';
 
 import DashboardNavbar from './DashboardNavbar';
 
@@ -64,19 +64,29 @@ const DashboardContent = () => {
               <WalletOverview />
               <div>
                 <h2 className='text-[24px] font-semibold mb-4'>Quick actions</h2>
-                <div className='flex gap-4 mb-6'>
-                  <Button asChild className="bg-green-700 text-[16px] hover:bg-green-800">
-                    <Link to="/dashboard/create-collection">
-                      <Plus className="mr-2 h-4 w-4 " />
-                      Create collection
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
+                  {[
+                    { label: 'Fixed', icon: Lock, desc: 'Fixed amount' },
+                    { label: 'Tiered', icon: Layers, desc: 'Multiple tiers' },
+                    { label: 'Open Pool', icon: Waves, desc: 'Any amount' },
+                    { label: 'Ticket', icon: Ticket, desc: 'Event tickets' },
+                    { label: 'Fundraising', icon: Heart, desc: 'Crowdfunding' },
+                  ].map(({ label, icon: Icon, desc }) => (
+                    <Link
+                      key={label}
+                      to="/dashboard/create-collection"
+                      className="flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-200 bg-white
+                        cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <div className="p-2 rounded-lg bg-gray-100 border border-gray-200">
+                        <Icon className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[11px] font-bold text-gray-800 leading-tight">{label}</p>
+                        <p className="text-[9px] text-gray-500 mt-0.5 hidden sm:block">{desc}</p>
+                      </div>
                     </Link>
-                  </Button>
-                  {/* <Button
-                    variant="secondary"
-                    className="bg-green-600 text-white px-10 hover:bg-kolekto/90"
-                  >
-                    Withdraw
-                  </Button> */}
+                  ))}
                 </div>
               </div>
               <CollectionsOverview />

@@ -1,166 +1,503 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
-import { formatCurrency } from '@/utils/formatters';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Lock, Layers, Waves, Ticket, Heart, Target,
+  TrendingUp, Wallet, BarChart3, Loader2, ChevronRight,
+  Plus, Share2, Users, CalendarDays,
+} from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
-import { useDashboard, useDashboardStore } from '@/store/useDashboardStore';
-import { useCollectionStore } from '@/store/useCollectionStore';
-import { useContributionStore } from '@/store/useContributionStore';
-import { useWithdrawalStore } from '@/store/useWithdrawalStore';
-import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
-import { useAuthStore } from '@/store';
-import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
-import { useSettings } from '@/store/useSettings';
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  return `₦${Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0 })}`;
+}
+
+function fmtDateTime(d: string) {
+  try {
+    return new Date(d).toLocaleString('en-NG', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d;
+  }
+}
+
+function fmtDate(d?: string) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function getStoredUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('kolekto-auth-token');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user?.id || parsed?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Collection-type visual config ────────────────────────────────────────────
+
+const TYPE_META: Record<string, {
+  label: string;
+  description: string;
+  IconEl: React.ElementType;
+  gradient: string;
+  accentBorder: string;
+  amountCls: string;
+  iconColor: string;
+  bgColor: string;
+  borderColor: string;
+}> = {
+  fixed: {
+    label: 'Fixed',
+    description: 'One fixed amount per contributor',
+    IconEl: Lock,
+    gradient: 'from-blue-500 to-blue-700',
+    accentBorder: 'border-l-blue-500',
+    amountCls: 'text-blue-700',
+    iconColor: 'text-blue-600',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+  },
+  tiered: {
+    label: 'Tiered',
+    description: 'Multiple pricing tiers',
+    IconEl: Layers,
+    gradient: 'from-purple-500 to-purple-700',
+    accentBorder: 'border-l-purple-500',
+    amountCls: 'text-purple-700',
+    iconColor: 'text-purple-600',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+  },
+  open_pool: {
+    label: 'Open Pool',
+    description: 'Contributors choose their amount',
+    IconEl: Waves,
+    gradient: 'from-cyan-500 to-cyan-700',
+    accentBorder: 'border-l-cyan-500',
+    amountCls: 'text-cyan-700',
+    iconColor: 'text-cyan-600',
+    bgColor: 'bg-cyan-50',
+    borderColor: 'border-cyan-200',
+  },
+  ticket: {
+    label: 'Ticket',
+    description: 'Event tickets with QR codes',
+    IconEl: Ticket,
+    gradient: 'from-orange-500 to-orange-600',
+    accentBorder: 'border-l-orange-500',
+    amountCls: 'text-orange-700',
+    iconColor: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+  },
+  fundraising: {
+    label: 'Fundraising',
+    description: 'Campaign-style crowdfunding',
+    IconEl: Heart,
+    gradient: 'from-rose-500 to-rose-700',
+    accentBorder: 'border-l-rose-500',
+    amountCls: 'text-rose-700',
+    iconColor: 'text-rose-600',
+    bgColor: 'bg-rose-50',
+    borderColor: 'border-rose-200',
+  },
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-100 text-green-700',
+  paused: 'bg-yellow-100 text-yellow-800',
+  expired: 'bg-red-100 text-red-700',
+  completed: 'bg-blue-100 text-blue-700',
+  closed: 'bg-gray-200 text-gray-600',
+  deleted: 'bg-gray-300 text-gray-600',
+  pending_review: 'bg-amber-100 text-amber-700',
+};
+
+// ── Interfaces ───────────────────────────────────────────────────────────────
+
+interface DashStats {
+  totalCollections: number;
+  activeCollections: number;
+  totalRaised: number;
+  availableBalance: number;
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  email: string;
+  amount: number;
+  created_at: string;
+  collection_title: string;
+}
+
+interface CollectionPreview {
+  id: string;
+  title: string;
+  status: string;
+  collection_type: string;
+  totalRaised: number;
+  participants: number;
+  deadline?: string;
+  created_at: string;
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
-  const { user, isLoading: authloading } = useAuthStore();
-  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
-  const { contributions, fetchContributions } = useContributionStore();
-  const { withdrawals, fetchWithdrawals } = useWithdrawalStore();
-
-  const { stats, recentPayments, isLoading } = useDashboard(collections, contributions, user?.id);
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<DashStats>({
+    totalCollections: 0, activeCollections: 0, totalRaised: 0, availableBalance: 0,
+  });
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [recentCollections, setRecentCollections] = useState<CollectionPreview[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchCollections(user.id);
-      fetchWithdrawals(user.id);
-    }
-  }, [user?.id, fetchCollections, fetchWithdrawals]);
+    const userId = getStoredUserId();
+    if (!userId) { setLoading(false); return; }
 
-  // Show loader if any relevant data is loading
-  if (authloading || collectionsLoading || isLoading) {
+    const load = async () => {
+      try {
+        /* ── 1. Fetch user collections (light query) ─────────────────────── */
+        const { data: collectionsRaw, error: colErr } = await supabase
+          .from('collections')
+          .select('id, title, status, collection_type, deadline, created_at')
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
+
+        if (colErr) console.error('Collections fetch error:', colErr.message);
+
+        const cols: any[] = collectionsRaw || [];
+        const totalCollections = cols.length;
+        const activeCollections = cols.filter((c: any) => c.status === 'active').length;
+        const collectionIds: string[] = cols.map((c: any) => c.id);
+        const titleMap: Record<string, string> = {};
+        for (const c of cols) titleMap[c.id] = c.title;
+
+        let totalRaised = 0;
+        let availableBalance = 0;
+
+        if (collectionIds.length > 0) {
+          /* ── 2. Authoritative Total Raised from paid contributions ─────── */
+          const { data: paidContribs } = await supabase
+            .from('contributions')
+            .select('amount, collection_id')
+            .in('collection_id', collectionIds)
+            .eq('status', 'paid');
+
+          totalRaised = (paidContribs || []).reduce(
+            (s: number, c: any) => s + Number(c.amount || 0), 0,
+          );
+
+          /* ── 3. Available Balance = raised − withdrawals ──────────────── */
+          /* Filter withdrawals by collection_id (same approach as            */
+          /* useTransactionStore.fetchFinancialSummary for consistency).       */
+          const { data: withdrawals } = await supabase
+            .from('withdrawals')
+            .select('amount, status')
+            .in('collection_id', collectionIds);
+
+          const totalWithdrawn = (withdrawals || [])
+            .filter((w: any) => w.status === 'completed')
+            .reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
+
+          const pendingWd = (withdrawals || [])
+            .filter((w: any) => w.status === 'pending')
+            .reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
+
+          availableBalance = Math.max(0, totalRaised - totalWithdrawn - pendingWd);
+
+          /* ── 4. Build per-collection preview data ─────────────────────── */
+          const contribsByCol: Record<string, any[]> = {};
+          for (const c of (paidContribs || [])) {
+            if (!contribsByCol[c.collection_id]) contribsByCol[c.collection_id] = [];
+            contribsByCol[c.collection_id].push(c);
+          }
+
+          setRecentCollections(
+            cols.slice(0, 6).map((c: any) => {
+              const cList = contribsByCol[c.id] || [];
+              return {
+                id: c.id,
+                title: c.title,
+                status: c.status,
+                collection_type: c.collection_type || 'fixed',
+                totalRaised: cList.reduce((s: number, x: any) => s + Number(x.amount || 0), 0),
+                participants: cList.length,
+                deadline: c.deadline,
+                created_at: c.created_at,
+              };
+            }),
+          );
+
+          /* ── 5. Recent activity feed ──────────────────────────────────── */
+          const { data: contribs } = await supabase
+            .from('contributions')
+            .select('id, name, email, amount, created_at, collection_id')
+            .in('collection_id', collectionIds)
+            .eq('status', 'paid')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          setActivities(
+            (contribs || []).map((cn: any) => ({
+              id: cn.id,
+              name: cn.name || '',
+              email: cn.email || '',
+              amount: Number(cn.amount) || 0,
+              created_at: cn.created_at,
+              collection_title: titleMap[cn.collection_id] || 'Unknown',
+            })),
+          );
+        }
+
+        setStats({ totalCollections, activeCollections, totalRaised, availableBalance });
+      } catch (err) {
+        console.error('Dashboard load error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  /* ── Loading state ────────────────────────────────────────────────────────── */
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
-  // Sort collections by created_at ascending (oldest first)
-  const sortedCollections = [...collections].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return dateB - dateA; // Newest first
-  });
+  /* ── Render ───────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button asChild className="bg-kolekto hover:bg-kolekto/90">
-          <Link to="/dashboard/create-collection">
-            <Plus className="mr-2 h-4 w-4" />
-            New Collection
-          </Link>
+    <div className="space-y-8 pb-8">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <Button
+          size="sm"
+          className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5"
+          onClick={() => navigate('/dashboard/create-collection')}
+        >
+          <Plus className="w-4 h-4" /> New Collection
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Collections</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+      {/* ── Stats Cards ──────────────────────────────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <Card className="border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500">Total Collections</CardTitle>
+            <div className="p-1.5 bg-gray-100 rounded-lg"><Target className="h-4 w-4 text-gray-500" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_collections || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-2xl font-bold text-gray-900">{stats.totalCollections}</div>
+            <p className="text-xs text-gray-400 mt-0.5">{stats.activeCollections} active</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Collections</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-green-200 bg-green-50/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-green-700">Active</CardTitle>
+            <div className="p-1.5 bg-green-100 rounded-lg"><TrendingUp className="h-4 w-4 text-green-600" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.active_collections || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-2xl font-bold text-green-700">{stats.activeCollections}</div>
+            <p className="text-xs text-green-600/70 mt-0.5">receiving payments</p>
           </CardContent>
         </Card>
 
-        {/* <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Contributions</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-gray-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500">Total Raised</CardTitle>
+            <div className="p-1.5 bg-gray-100 rounded-lg"><BarChart3 className="h-4 w-4 text-gray-500" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_contributions || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-gray-900">{fmt(stats.totalRaised)}</div>
+            <p className="text-xs text-gray-400 mt-0.5">from all contributions</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-blue-700">Available Balance</CardTitle>
+            <div className="p-1.5 bg-blue-100 rounded-lg"><Wallet className="h-4 w-4 text-blue-600" /></div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats?.total_amount || 0)}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-blue-700">{fmt(stats.availableBalance)}</div>
+            <p className="text-xs text-blue-600/70 mt-0.5">ready to withdraw</p>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Collections</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {collections.length > 0 ? (
-              <div className="space-y-4">
-                {sortedCollections.slice(0, 5).map(collection => (
-                  <div key={collection.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{collection.title}</p>
-                      <p className="text-sm text-gray-500">{collection.formattedAmount}</p>
+      {/* ── Quick Actions — Create a Collection ──────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Create a Collection</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Choose a collection type to get started</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {Object.entries(TYPE_META).map(([key, m]) => {
+            const Icon = m.IconEl;
+            return (
+              <Link
+                key={key}
+                to="/dashboard/create-collection"
+                className={`group flex flex-col items-center gap-2.5 p-4 rounded-xl border
+                  ${m.borderColor} ${m.bgColor} cursor-pointer transition-all
+                  hover:shadow-md hover:scale-[1.02] active:scale-[0.98]`}
+              >
+                <div className={`p-2.5 rounded-xl bg-white shadow-sm border ${m.borderColor}`}>
+                  <Icon className={`h-5 w-5 ${m.iconColor}`} />
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs font-bold ${m.iconColor} leading-tight`}>{m.label}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5 leading-snug hidden sm:block">
+                    {m.description}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── My Collections ────────────────────────────────────────────────────── */}
+      {recentCollections.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">My Collections</h2>
+            <Link
+              to="/dashboard/collections"
+              className="text-xs font-medium text-kolekto hover:underline flex items-center gap-1"
+            >
+              View all <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {recentCollections.map(col => {
+              const m = TYPE_META[col.collection_type] ?? TYPE_META.fixed;
+              const Icon = m.IconEl;
+              const sCls = STATUS_COLORS[col.status] ?? 'bg-gray-100 text-gray-700';
+              const sLabel = col.status
+                ? col.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                : '—';
+
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => navigate(`/dashboard/collections/${col.id}`)}
+                  className={`bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md
+                    transition-all cursor-pointer flex flex-col overflow-hidden
+                    border-l-4 ${m.accentBorder}`}
+                >
+                  {/* Coloured header */}
+                  <div className={`bg-gradient-to-r ${m.gradient} px-4 py-2.5 flex items-center justify-between`}>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide">{m.label}</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{collection.total_contributions || 0} Contributions</p>
-                      <p className="text-xs text-gray-500">
-                        {collection.status === "completed"
-                          ? "completed"
-                          : collection.deadline && new Date(collection.deadline) > new Date()
-                            ? "active"
-                            : "expired"}
-                      </p>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${sCls}`}>
+                      {sLabel}
+                    </span>
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-4 py-3 flex-1">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-1 mb-2">
+                      {col.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span className={`font-bold ${m.amountCls}`}>{fmt(col.totalRaised)}</span>
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" />{col.participants}</span>
+                    </div>
+                    {col.deadline && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-1.5">
+                        <CalendarDays className="w-3 h-3" />{fmtDate(col.deadline)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div
+                    className="px-4 pb-3 pt-1.5 flex items-center justify-between border-t border-gray-50"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <span className="text-[11px] text-gray-400">{fmtDate(col.created_at)}</span>
+                    <button
+                      className={`text-[11px] font-medium flex items-center gap-1 ${m.amountCls} hover:opacity-80`}
+                      onClick={e => {
+                        e.stopPropagation();
+                        navigate(`/dashboard/collections/${col.id}?share=true`);
+                      }}
+                    >
+                      <Share2 className="w-3 h-3" /> Share
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Recent Activity ───────────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Recent Activity</h2>
+        <Card className="border-gray-200">
+          <CardContent className="p-0">
+            {activities.length === 0 ? (
+              <div className="py-12 text-center">
+                <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400 font-medium">No contributions yet</p>
+                <p className="text-xs text-gray-400 mt-1">Share your collection link to receive payments</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {activities.map(a => (
+                  <div key={a.id} className="flex items-center justify-between px-4 py-3.5 gap-3 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-green-700 font-semibold text-xs">
+                          {(a.name || a.email || 'A')[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {a.name || a.email || 'Anonymous'}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate">{a.collection_title}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-green-600">{fmt(a.amount)}</p>
+                      <p className="text-[11px] text-gray-400">{fmtDateTime(a.created_at)}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-gray-500">No collections yet</p>
             )}
           </CardContent>
         </Card>
-
-        {/* <Card>
-          <CardHeader>
-            <CardTitle>Recent Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentPayments.length > 0 ? (
-              <div className="space-y-4">
-                {recentPayments.map(payment => (
-                  <div key={payment.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{payment.description}</p>
-                      <p className="text-sm text-gray-500">{payment.collections?.title}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatCurrency(payment.amount)}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(payment.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No payments yet</p>
-            )}
-          </CardContent>
-        </Card> */}
-        {/* <ContributionTransactions /> */}
       </div>
     </div>
   );

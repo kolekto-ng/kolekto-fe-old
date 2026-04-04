@@ -186,7 +186,7 @@ serve(async (req) => {
     }
 
     // Validate request data
-    const { email, amount, metadata } = requestData;
+    const { email, amount, metadata, callback_url } = requestData;
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return new Response(
@@ -227,7 +227,7 @@ serve(async (req) => {
       email,
       amount, // Already in kobo from frontend
       reference,
-      callback_url: `${Deno.env.get('PUBLIC_CALLBACK_URL') || 'https://kolekto.vercel.app'}/payment-callback`,
+      callback_url: callback_url || `${Deno.env.get('PUBLIC_CALLBACK_URL') || 'https://kolekto.vercel.app'}/payment-callback`,
       metadata: typeof metadata === 'string' ? JSON.parse(metadata) : metadata,
     };
 

@@ -41,21 +41,41 @@ export interface PriceTier {
 export interface Collection {
   id: string;
   organizer_id: string;
+  user_id?: string;
   title: string;
   description?: string;
   amount: number;
   deadline?: string;
   max_participants?: number | null;
+  max_contributions?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
   total_amount?: number | null;
+  total_contributions?: number;
   form_fields: FormField[];
   pricing_tiers: PriceTier[];
+  price_tiers?: PriceTier[];
+  contributions_fields?: FormField[];
   status: string;
+  type?: string;
+  collection_type?: string;
+  slug?: string;
   participants_count?: number;
+  fee_bearer?: string;
+  target_amount?: number | null;
+  min_contribution?: number | null;
+  banner_url?: string;
+  campaign_summary?: string;
+  event_date?: string;
+  code_prefix?: string;
+  wallets?: any[];
+  contributions?: any[];
+  story?: { what?: string; why?: string; impact?: string };
+  story_images?: string[];
   formattedAmount?: string;
   formattedDate?: string;
+  [key: string]: any;
 }
 
 export interface Contribution {

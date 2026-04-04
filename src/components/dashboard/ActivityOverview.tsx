@@ -1,54 +1,49 @@
 import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useActivities } from '@/store/useDashboard';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowDownLeft } from 'lucide-react';
 
-interface Activity {
-  id: string;
-  userName: string;
-  action: string;
-  amount: number;
-  timestamp: string;
-  avatar?: string;
+function relativeTime(dateStr: string): string {
+  try {
+    const now = Date.now();
+    const then = new Date(dateStr).getTime();
+    const diffMs = now - then;
+    if (diffMs < 0) return 'just now';
+
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return 'just now';
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+
+    const weeks = Math.floor(days / 7);
+    if (weeks <= 57) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+
+    return '57 weeks ago';
+  } catch {
+    return '';
+  }
 }
 
-interface ActivityFeedProps {
-  activities?: Activity[];
+function formatCurrency(amount: number) {
+  return `₦${amount.toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
-const ActivityFeed: React.FC<ActivityFeedProps> = ({
-  activitiess = [
-    { id: '1', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '2', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '3', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '4', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '5', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '6', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '7', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-    { id: '8', userName: 'Lana Steiner', action: 'Paid', amount: 9000000, timestamp: '3 mins ago' },
-  ]
-}) => {
-  const formatCurrency = (amount: number) => {
-    return amount.toLocaleString('en-NG', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
+const ActivityFeed: React.FC = () => {
+  const { activities, isLoading, getActivities } = useActivities();
 
-  const { activities, isLoading, getActivities } = useActivities()
   useEffect(() => {
-    // Fetch activities from an API or data source if needed
     getActivities();
   }, []);
-
-  // const getInitials = (name: string) => {
-  //   return name.split(' ').map(n => n[0]).join('').toUpperCase();
-  // };
-
-  console.log(activities, 'activite');
-
 
   if (isLoading) {
     return (
@@ -71,27 +66,31 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         {activities.length === 0 && (
           <p className="text-sm text-muted-foreground">No recent activity.</p>
         )}
-        {activities.map((activity) => (
-          <div key={activity.id} className="flex items-center bg-white py-4 px-4 rounded-xl justify-between ">
-            <div className="flex items-center gap-3">
+        {activities.map((activity: any) => {
+          const collectionName = activity.collection_title || activity.collection?.title || '';
 
-              <div className='bg-gray-200 p-1 rounded-[50px]  text-gray-700 text-sm'>
-                <svg class="w-6 h-6 text-green-600 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-                  <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 14-4-4m4 4 4-4" />
-                </svg>
-
+          return (
+            <div key={activity.id} className="flex items-center bg-white py-4 px-4 rounded-xl justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="bg-gray-200 p-1 rounded-full text-gray-700 text-sm shrink-0">
+                  <ArrowDownLeft className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{activity.name || 'Unknown'}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    paid {formatCurrency(activity.amount)}
+                    {collectionName && (
+                      <span className="text-gray-500"> · {collectionName}</span>
+                    )}
+                  </p>
+                </div>
               </div>
-
-              <div>
-                <p className="font-medium text-sm">{activity.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {activity.status} {formatCurrency(activity.amount)}
-                </p>
-              </div>
+              <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                {activity.created_at ? relativeTime(activity.created_at) : ''}
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground">{''}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import NavBar from '@/components/NavBar';
-import Footer from '@/components/Footer';
-import ContributionWrapper from '@/components/contribute/ContributionWrapper';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from "react-icons/fa";
+import { axiosInstance } from '@/utils/axios';
+import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
-import { useCollectionStore, useContributionStore } from '@/store';
-import Maintenance from '@/components/Maintenance';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Loader2, Lock, AlertTriangle, Clock, XCircle } from 'lucide-react';
+import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from 'react-icons/fa';
+import ContributeFlow from '@/components/contribute/ContributeFlow';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const ContributePage: React.FC = () => {
   const { collectionId } = useParams<{ collectionId: string }>();
@@ -19,197 +19,194 @@ const ContributePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { fetchCollectionById } = useContributionStore()
-
   useEffect(() => {
     const fetchCollection = async () => {
       if (!collectionId) {
-        setError('Collection ID is missing');
+        setError('Invalid collection link.');
         setLoading(false);
         return;
       }
 
       try {
-        const data = await fetchCollectionById(collectionId);
-        console.log(data, 'Fetched collection data');
+        let collectionData: any;
 
-        if (!data) {
-          throw new Error('Collection not found');
+        if (UUID_RE.test(collectionId)) {
+          // Direct Supabase lookup by UUID
+          const { data, error: fetchError } = await supabase
+            .from('collections')
+            .select('*')
+            .eq('id', collectionId)
+            .is('deleted_at', null)
+            .single();
+
+          if (fetchError || !data) throw new Error('Collection not found.');
+          collectionData = data;
+        } else {
+          // Slug-based lookup via backend API
+          const res = await axiosInstance.get('/collection', { params: { collectionId } });
+          if (!res.data?.data) throw new Error('Collection not found.');
+          const raw = res.data.data;
+          // Normalize field names: backend uses contributions_fields / price_tiers
+          collectionData = {
+            ...raw,
+            form_fields: raw.contributions_fields ?? raw.form_fields ?? [],
+            pricing_tiers: raw.price_tiers ?? raw.pricing_tiers ?? [],
+          };
         }
 
-        // Check if collection is still active
-        if (data.status !== 'active') {
-          throw new Error('This collection is no longer accepting contributions');
-        }
+        // Count paid contributions
+        const { count } = await supabase
+          .from('contributions')
+          .select('id', { count: 'exact', head: true })
+          .eq('collection_id', collectionData.id)
+          .eq('status', 'paid');
 
-        // Check if deadline has passed
-        if (data.deadline && new Date(data.deadline) < new Date()) {
-          throw new Error('The deadline for this collection has passed');
-        }
-
-        setCollection(data);
+        setCollection({ ...collectionData, participants_count: count ?? 0 });
       } catch (err: any) {
-        console.error('Error fetching collection:', err);
-        setError(err.message || 'Failed to fetch collection details');
-        toast.error(err.message || 'Failed to fetch collection details');
+        setError(err.message || 'Failed to load collection.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchCollection();
-  }, [collectionId, fetchCollectionById]);
+  }, [collectionId]);
 
-  // Process form fields from collection
-  const getFormFields = () => {
-    if (!collection) return [];
-    console.log(collection, 'loooking for conyribution fields');
-
-    // Use the form_fields or contributions_fields from the collection if available
-    const formFields = collection.contributions_fields || collection.form_fields;
-    if (formFields && Array.isArray(formFields)) {
-      return formFields.map((field: any) => ({
-        name: field.name,
-        type: field.type,
-        required: field.required,
-        options: field.options
-      }));
-    }
-
-    // Fallback to default fields
-    return [
-      { name: 'Full Name', type: 'text', required: true },
-      { name: 'Email', type: 'email', required: true },
-      { name: 'Phone Number', type: 'tel', required: false },
-    ];
-  };
-
-  // Check if collection has price tiers
-  const hasPriceTiers = () => {
-    return collection &&
-      collection.price_tiers &&
-      Array.isArray(collection.price_tiers) &&
-      collection.price_tiers.length > 0;
-  };
-
-  // Custom navigation component for contribution page
   const ContributionNavBar = () => (
     <nav className="border-b py-3 bg-white">
       <div className="container mx-auto px-4 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <Link to="/" className="flex items-center">
-            <Logo size="md" />
-          </Link>
-          <div className="flex items-center space-x-3">
-            <a
-              href="https://x.com/kolektng"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Twitter"
-            >
-              <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
-            </a>
-            <a
-              href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Facebook"
-            >
-              <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
-            </a>
-            <a
-              href="https://www.instagram.com/kolekto.ng"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram"
-            >
-              <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
-            </a>
-            <a
-              href="https://wa.me/+2349019840377"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="WhatsApp"
-            >
-              <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
-            </a>
-          </div>
+        <Link to="/" className="flex items-center">
+          <Logo size="md" />
+        </Link>
+        <div className="flex items-center space-x-3">
+          <a href="https://x.com/kolektng" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+            <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
+          </a>
+          <a href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+            <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
+          </a>
+          <a href="https://www.instagram.com/kolekto.ng" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+            <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
+          </a>
+          <a href="https://wa.me/+2349019840377" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+            <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
+          </a>
         </div>
       </div>
     </nav>
   );
 
-  // If still loading
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
         <ContributionNavBar />
-        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-          <div className="text-center">
-            <p>Loading collection details...</p>
-          </div>
+        <main className="flex-grow flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
         </main>
         <Footer />
       </div>
     );
   }
 
-  // If there was an error or collection not found
   if (error || !collection) {
     return (
       <div className="min-h-screen flex flex-col">
         <ContributionNavBar />
-        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
+        <main className="flex-grow flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
-            <CardContent className="pt-6 text-center">
-              <h2 className="text-xl font-bold mb-4">Collection Not Available</h2>
-              <p className="mb-6 text-gray-600">
-                {error || 'The requested collection could not be found'}
-              </p>
+            <CardContent className="pt-6 text-center space-y-4">
+              <XCircle className="h-12 w-12 text-red-400 mx-auto" />
+              <h2 className="text-xl font-bold">Collection Not Found</h2>
+              <p className="text-gray-600">{error || 'The requested collection does not exist.'}</p>
               <Button onClick={() => navigate('/')}>Return to Home</Button>
             </CardContent>
           </Card>
         </main>
-        <div className="mt-12 text-center">
-          <h2 className="text-2xl font-bold mb-4">Ready to Start Collecting?</h2>
-          <p className="text-gray-600 mb-6">
-            Join thousands of organizers across Africa who use Kolekto to
-            simplify group payments.
-          </p>
-          <Button asChild>
-            <Link to="/register">Create Your Account</Link>
-          </Button>
-        </div>
         <Footer />
       </div>
     );
   }
+
+  // Status gates
+  const status = collection.status;
+  const isExpired = collection.deadline && new Date(collection.deadline) < new Date();
+
+  const renderStatusGate = () => {
+    if (isExpired) {
+      return (
+        <Card className="w-full max-w-md border-red-200 bg-red-50">
+          <CardContent className="pt-6 text-center space-y-3">
+            <Clock className="h-12 w-12 text-red-400 mx-auto" />
+            <h2 className="text-xl font-bold text-red-700">Collection Expired</h2>
+            <p className="text-red-600">
+              The deadline for <strong>{collection.title}</strong> has passed.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (status === 'paused') {
+      return (
+        <Card className="w-full max-w-md border-yellow-200 bg-yellow-50">
+          <CardContent className="pt-6 text-center space-y-3">
+            <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto" />
+            <h2 className="text-xl font-bold text-yellow-800">Collection Paused</h2>
+            <p className="text-yellow-700">
+              <strong>{collection.title}</strong> is temporarily paused by the organizer. Please check back later.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (status === 'pending_review') {
+      return (
+        <Card className="w-full max-w-md border-amber-200 bg-amber-50">
+          <CardContent className="pt-6 text-center space-y-3">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto" />
+            <h2 className="text-xl font-bold text-amber-800">Under Review</h2>
+            <p className="text-amber-700">
+              This collection is pending review and will be available soon.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (status === 'closed' || status === 'completed') {
+      return (
+        <Card className="w-full max-w-md border-gray-200 bg-gray-50">
+          <CardContent className="pt-6 text-center space-y-3">
+            <Lock className="h-12 w-12 text-gray-400 mx-auto" />
+            <h2 className="text-xl font-bold text-gray-700">Collection Closed</h2>
+            <p className="text-gray-600">
+              <strong>{collection.title}</strong> is no longer accepting contributions.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    return null;
+  };
+
+  const gate = renderStatusGate();
 
   return (
     <div className="min-h-screen flex flex-col">
       <ContributionNavBar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          <ContributionWrapper
-            collectionId={collection.id}
-            collection={collection}
-            collectionTitle={collection.title}
-            amount={collection.amount}
-            fee_bearer={collection.fee_bearer}
-            amountBreakdown={collection.wallets?.[0]?.fee_breakdown}
-            wallet={collection.wallets?.[0]}
-            fields={getFormFields()}
-            description={collection.description}
-            deadline={collection.deadline}
-            max_contributions={collection.max_contributions}
-            total_contributions={collection.total_contributions}
-            priceTiers={hasPriceTiers() ? collection.price_tiers : undefined}
-          />
+          {gate ? (
+            <div className="flex justify-center">{gate}</div>
+          ) : (
+            <ContributeFlow collection={collection} />
+          )}
           <div className="mt-12 text-center">
             <h2 className="text-2xl font-bold mb-4">Ready to Start Collecting?</h2>
             <p className="text-gray-600 mb-6">
-              Join thousands of organizers across Africa who use Kolekto to
-              simplify group payments.
+              Join thousands of organizers across Africa who use Kolekto to simplify group payments.
             </p>
             <Button asChild>
               <Link to="/register">Create Your Account</Link>

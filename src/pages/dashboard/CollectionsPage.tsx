@@ -23,8 +23,8 @@ const CollectionsPage: React.FC = () => {
     }
   }, [user, fetchCollections]);
 
-  const handleShare = (id: string) => {
-    console.log('Navigating to share collection with id:', id);
+  const handleShare = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (id) {
       navigate(`/dashboard/collections/${id}?share=true`);
     } else {
@@ -76,32 +76,17 @@ const CollectionsPage: React.FC = () => {
                 key={collection.id}
                 id={collection.id}
                 title={collection.title}
-                description={collection.description || undefined}
                 amount={collection.amount}
-                deadline={collection.deadline || new Date().toISOString()}
-                status={collection.status as 'active' | "paused" | 'expired' | 'completed'}
-                type={collection.type as 'flat' | 'tier'}
-                participantsCount={collection.total_contributions || 0}
+                deadline={collection.deadline || undefined}
+                status={collection.status}
+                type={collection.collection_type || collection.type || 'fixed'}
+                participantsCount={collection.total_contributions || collection.participants_count || 0}
                 maxParticipants={collection.max_contributions || undefined}
                 dateCreated={collection.created_at}
-                tiers={(() => {
-                  console.log("collection.price_tiers:", collection.price_tiers);
-                  console.log("typeof price_tiers:", typeof collection.price_tiers);
-                  console.log("Array.isArray(price_tiers):", Array.isArray(collection.price_tiers));
-
-                  if (collection.price_tiers) {
-                    const transformedTiers = collection.price_tiers.map((tier: any) => ({
-                      amount: tier.price,
-                      name: tier.name
-                    }));
-                    console.log("Transformed tiers:", transformedTiers);
-                    return transformedTiers;
-                  } else {
-                    console.log("price_tiers is falsy:", collection.price_tiers);
-                    return undefined;
-                  }
-                })()}
-                onShare={() => handleShare(collection.id)}
+                tiers={collection.price_tiers?.map((tier: any) => ({ amount: tier.price, name: tier.name }))}
+                totalRaised={collection.total_amount || 0}
+                goalAmount={collection.amount || undefined}
+                onShare={(e) => handleShare(collection.id, e)}
                 onViewDetails={() => handleViewDetails(collection.id)}
               />
             );

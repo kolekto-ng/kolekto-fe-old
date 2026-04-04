@@ -8,17 +8,13 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get request body
     const reqData = await req.json();
     const { reference } = reqData;
-
-    console.log("Processing payment verification for reference:", reference);
 
     if (!reference) {
       return new Response(
@@ -30,7 +26,6 @@ serve(async (req) => {
       );
     }
 
-    // Get Paystack secret key
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
     if (!paystackSecretKey) {
       return new Response(
@@ -42,9 +37,6 @@ serve(async (req) => {
       );
     }
 
-    console.log("Verifying transaction with Paystack API");
-
-    // Verify the transaction with Paystack
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
       {
@@ -58,7 +50,6 @@ serve(async (req) => {
     const data = await response.json();
 
     if (!response.ok || !data.status) {
-      console.error("Paystack verification error:", data);
       return new Response(
         JSON.stringify({
           error: data.message || "Payment verification failed",
@@ -70,104 +61,168 @@ serve(async (req) => {
       );
     }
 
-    // Get the transaction details
     const transaction = data.data;
+    let processedContributions: any[] = [];
 
-    console.log("Paystack verification successful:", {
-      status: transaction.status,
-      amount: transaction.amount,
-      reference: transaction.reference,
-    });
-
-    // If the payment is successful, update the database
     if (transaction.status === "success") {
       const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
       const supabaseServiceKey =
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      const collectionId = transaction.metadata?.collectionId;
-      const participants = transaction.metadata?.participants || [];
-      const collectionTitle =
-        transaction.metadata?.collectionTitle || "Untitled Collection";
+      const metadata = transaction.metadata || {};
+      const collectionId = metadata.collectionId || metadata.collection_id;
+      const contact = metadata.contact || {};
+      const formData =
+        metadata.formData && typeof metadata.formData === "object"
+          ? metadata.formData
+          : {};
+      const quantity = Math.max(
+        1,
+        Number(metadata.quantity || metadata.participants?.length || 1)
+      );
+      const selectedTier = metadata.selectedTier || metadata.selected_tier || null;
+      const rawParticipants = Array.isArray(metadata.participants)
+        ? metadata.participants
+        : [];
 
-      console.log("Payment metadata:", {
-        collectionId,
-        collectionTitle,
-        participantsCount: participants.length,
-      });
+      const syntheticParticipants =
+        rawParticipants.length > 0
+          ? rawParticipants
+          : Array.from({ length: quantity }, () => ({
+              data: {
+                ...formData,
+                ...(selectedTier ? { Tier: selectedTier } : {}),
+                ...(contact.name
+                  ? { Name: contact.name, "Full Name": contact.name }
+                  : {}),
+                ...(contact.email ? { Email: contact.email } : {}),
+                ...(contact.phone
+                  ? { Phone: contact.phone, "Phone Number": contact.phone }
+                  : {}),
+              },
+            }));
 
-      if (collectionId && participants.length > 0) {
-        // First get the collection details to know the total amount
-        const { data: collection, error: collectionError } = await supabase
-          .from("collections")
-          .select("*")
-          .eq("id", collectionId)
-          .single();
+      if (collectionId) {
+        const { data: existingContributions, error: existingError } =
+          await supabase
+            .from("contributions")
+            .select(
+              "id, amount, created_at, contributor_name, contributor_email, payment_reference, contributor_unique_code, receipt_details"
+            )
+            .eq("payment_reference", transaction.reference);
 
-        if (collectionError) {
-          console.error("Error fetching collection:", collectionError);
-          return new Response(
-            JSON.stringify({ error: "Error fetching collection details" }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
+        if (existingError) {
+          console.error(
+            "Error checking existing contributions:",
+            existingError.message
           );
         }
 
-        console.log("Retrieved collection details:", {
-          title: collection.title,
-          amount: collection.amount,
-          organizer_id: collection.organizer_id,
-        });
-
-        // Calculate total amount and fees
-        const totalAmount = transaction.amount / 100; // Convert from kobo to naira
-        const amountPerPerson = collection.amount; // Amount per participant
-
-        console.log(
-          "Processing contribution records for participants:",
-          participants.length
-        );
-
-        let totalContributionAmount = 0;
-        let contributionIds = [];
-
-        // Create a contribution record for each participant
-        for (const participant of participants) {
-          try {
-            // Generate a unique code for this contribution
-            const uniqueCode = `${collection.id.slice(0, 6)}-${Math.random()
-              .toString(36)
-              .substring(2, 8)
-              .toUpperCase()}`;
-
-            console.log(
-              "Processing participant with data:",
-              JSON.stringify(participant.data)
-            );
-
-            // Extract only the requested fields from the participant data
-            // This ensures we're only storing what was requested by the collection creator
-            const contributorData = {
-              collection_id: collectionId,
-              contributor_name:
-                participant.data?.["Full Name"] ||
-                participant.data?.["Name"] ||
-                transaction.customer.email.split("@")[0] ||
+        if ((existingContributions || []).length > 0) {
+          processedContributions = (existingContributions || []).map(
+            (contribution: any) => ({
+              id: contribution.id,
+              name:
+                contribution.contributor_name ||
+                contribution.receipt_details?.name ||
                 "Anonymous",
-              contributor_email:
-                participant.data?.["Email"] || transaction.customer.email,
-              contributor_phone:
-                participant.data?.["Phone Number"] ||
-                participant.data?.["Phone"] ||
+              amount: Number(contribution.amount || 0),
+              uniqueCode:
+                contribution.contributor_unique_code ||
+                contribution.receipt_details?.unique_code ||
                 null,
-              contributor_id: transaction.customer.id || "anonymous",
-              amount: amountPerPerson,
+              created_at: contribution.created_at,
+              email: contribution.contributor_email || "",
+            })
+          );
+        } else {
+          const { data: collection, error: collectionError } = await supabase
+            .from("collections")
+            .select("*")
+            .eq("id", collectionId)
+            .single();
+
+          if (collectionError) {
+            return new Response(
+              JSON.stringify({ error: "Error fetching collection details" }),
+              {
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              }
+            );
+          }
+
+          const defaultAmount =
+            Number(metadata.amount || metadata.netContributionAmount || 0) ||
+            Number(transaction.amount || 0) / 100;
+          const fallbackPerParticipant =
+            syntheticParticipants.length > 0
+              ? defaultAmount / syntheticParticipants.length
+              : defaultAmount;
+
+          for (const participant of syntheticParticipants) {
+            const uniqueCode = generateUniqueCode(
+              metadata.codePrefix || collection.code_prefix || collection.id.slice(0, 6)
+            );
+            const participantData =
+              participant?.data && typeof participant.data === "object"
+                ? participant.data
+                : {};
+            const contactInfo = stripStandardFields(participantData);
+
+            const participantAmount =
+              Number(
+                participant.amount ||
+                  participantData.TierAmount ||
+                  participantData.amount ||
+                  fallbackPerParticipant
+              ) || fallbackPerParticipant;
+
+            const contributorName =
+              participantData["Full Name"] ||
+              participantData.Name ||
+              contact.name ||
+              transaction.customer?.email?.split("@")[0] ||
+              "Anonymous";
+
+            const contributorEmail =
+              participantData.Email ||
+              contact.email ||
+              transaction.customer?.email ||
+              "";
+
+            const contributorPhone =
+              participantData["Phone Number"] ||
+              participantData.Phone ||
+              contact.phone ||
+              null;
+
+            const contributorPayload: Record<string, any> = {
+              collection_id: collectionId,
+              contributor_name: contributorName,
+              contributor_email: contributorEmail,
+              contributor_phone: contributorPhone,
+              contributor_id: transaction.customer?.id || "anonymous",
+              amount: participantAmount,
               status: "paid",
               payment_method: "paystack",
               payment_reference: transaction.reference,
+              contributor_unique_code: uniqueCode,
+              contributor_information: [
+                {
+                  ...contactInfo,
+                  ...(selectedTier ? { Tier: selectedTier } : {}),
+                  collectionType:
+                    metadata.collectionType ||
+                    metadata.collection_type ||
+                    collection.collection_type ||
+                    null,
+                  channel: transaction.channel,
+                  paidAt: transaction.paid_at,
+                },
+              ],
+              contact_info,
               receipt_details: {
                 transaction_id: transaction.id,
                 reference: transaction.reference,
@@ -175,142 +230,84 @@ serve(async (req) => {
                 payment_channel: transaction.channel,
                 collection_title: collection.title || null,
                 unique_code: uniqueCode,
+                name: contributorName,
               },
-              // Store only the requested fields from the form
-              contact_info: Object.keys(participant.data || {}).reduce(
-                (acc: any, key: string) => {
-                  // Don't store standard contact fields in the contact_info JSON as they're already in dedicated columns
-                  if (
-                    ![
-                      "Full Name",
-                      "Name",
-                      "Email",
-                      "Phone Number",
-                      "Phone",
-                    ].includes(key)
-                  ) {
-                    acc[key] = participant.data[key];
-                  }
-                  return acc;
-                },
-                {}
-              ),
             };
 
-            console.log("Inserting contribution record:", {
-              name: contributorData.contributor_name,
-              email: contributorData.contributor_email,
-              amount: contributorData.amount,
-              uniqueCode,
-              contact_info: contributorData.contact_info,
-            });
+            if (
+              (metadata.collectionType || collection.collection_type) === "ticket"
+            ) {
+              contributorPayload.check_in_status = "not_checked_in";
+            }
 
             const { data: contribution, error: contribError } = await supabase
               .from("contributions")
-              .insert(contributorData)
-              .select("id")
+              .insert(contributorPayload)
+              .select("id, amount, created_at, contributor_name, contributor_email, contributor_unique_code")
               .single();
 
             if (contribError) {
               console.error("Error recording contribution:", contribError);
-              // Continue with the next participant instead of failing completely
               continue;
             }
 
-            console.log(
-              "Successfully inserted contribution with ID:",
-              contribution?.id
-            );
-            if (contribution?.id) {
-              contributionIds.push(contribution.id);
-            }
-            totalContributionAmount += amountPerPerson;
+            processedContributions.push({
+              id: contribution.id,
+              name: contribution.contributor_name || contributorName,
+              amount: Number(contribution.amount || participantAmount),
+              uniqueCode:
+                contribution.contributor_unique_code || uniqueCode || null,
+              created_at: contribution.created_at,
+              email: contribution.contributor_email || contributorEmail,
+            });
 
-            // Always record a transaction in the transactions table
-            if (contribution && contribution.id) {
-              // Calculate platform charges based on the tier system
-              const platformChargePercent =
-                calculatePlatformChargePercentage(amountPerPerson);
-              const platformCharge = amountPerPerson * platformChargePercent;
-              const gatewayFee = Math.min(amountPerPerson * 0.015, 2000); // 1.5% with cap at ₦2,000
-
-              console.log("Recording transaction with fees:", {
-                platformChargePercent,
-                platformCharge,
-                gatewayFee,
-                contributionId: contribution.id,
+            const { error: transError } = await supabase
+              .from("transactions")
+              .insert({
+                collection_id: collectionId,
+                contribution_id: contribution.id,
+                user_id: collection.organizer_id,
+                type: "contribution",
+                status: "successful",
+                amount: participantAmount,
+                description: `Payment for ${collection.title || "collection"}`,
               });
 
-              const { data: trans, error: transError } = await supabase
-                .from("transactions")
-                .insert({
-                  collection_id: collectionId,
-                  contribution_id: contribution.id,
-                  user_id: collection.organizer_id, // The organizer of the collection
-                  type: "contribution",
-                  status: "successful",
-                  amount: amountPerPerson,
-                  description: `Payment for ${
-                    collection.title || "collection"
-                  }`,
-                })
-                .select("id");
-
-              if (transError) {
-                console.error("Error recording transaction:", transError);
-              } else {
-                console.log(
-                  "Transaction record created successfully with ID:",
-                  trans?.id
-                );
-              }
+            if (transError) {
+              console.error("Error recording transaction:", transError);
             }
-          } catch (err) {
-            console.error("Error processing participant contribution:", err);
           }
         }
 
-        // Update the collection's total amount raised
-        try {
-          // Calculate the total contributed amount from this transaction
-          const currentTotal = collection.total_amount || 0;
-          const newTotal = currentTotal + totalContributionAmount;
+        const { data: paidRows, error: totalError } = await supabase
+          .from("contributions")
+          .select("amount")
+          .eq("collection_id", collectionId)
+          .eq("status", "paid");
 
-          console.log("Updating collection total amount:", {
-            currentTotal,
-            contributedAmount: totalContributionAmount,
-            newTotal,
-          });
+        if (!totalError) {
+          const totalPaid = (paidRows || []).reduce(
+            (sum: number, row: any) => sum + Number(row.amount || 0),
+            0
+          );
 
-          const { data: updateResult, error: updateError } = await supabase
+          const { error: updateError } = await supabase
             .from("collections")
             .update({
-              total_amount: newTotal,
+              total_amount: totalPaid,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", collectionId)
-            .select();
+            .eq("id", collectionId);
 
           if (updateError) {
             console.error(
               "Error updating collection total amount:",
               updateError
             );
-          } else {
-            console.log(
-              "Collection total amount updated successfully to:",
-              newTotal,
-              "Result:",
-              updateResult
-            );
           }
-        } catch (err) {
-          console.error("Error updating collection:", err);
+        } else {
+          console.error("Error recalculating collection total:", totalError);
         }
-      } else {
-        console.warn(
-          "Missing collection ID or participants in payment metadata"
-        );
       }
     }
 
@@ -318,8 +315,12 @@ serve(async (req) => {
       JSON.stringify({
         status: transaction.status,
         reference: transaction.reference,
-        amount: transaction.amount / 100, // Convert from kobo to naira
+        amount: transaction.amount / 100,
         paidAt: transaction.paid_at,
+        channel: transaction.channel,
+        currency: transaction.currency,
+        customer: transaction.customer,
+        contributions: processedContributions,
       }),
       {
         status: 200,
@@ -338,15 +339,24 @@ serve(async (req) => {
   }
 });
 
-// Helper function to calculate platform charge percentage based on amount
-function calculatePlatformChargePercentage(amount: number): number {
-  if (amount < 1000) {
-    return 0.03; // 3%
-  } else if (amount < 5000) {
-    return 0.025; // 2.5%
-  } else if (amount < 20000) {
-    return 0.02; // 2%
-  } else {
-    return 0.015; // 1.5%
-  }
+function stripStandardFields(data: Record<string, any>) {
+  const blocked = new Set([
+    "Full Name",
+    "Name",
+    "Email",
+    "Phone Number",
+    "Phone",
+    "TierAmount",
+  ]);
+
+  return Object.keys(data || {}).reduce<Record<string, any>>((acc, key) => {
+    if (!blocked.has(key)) {
+      acc[key] = data[key];
+    }
+    return acc;
+  }, {});
+}
+
+function generateUniqueCode(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 }

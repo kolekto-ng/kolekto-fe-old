@@ -159,7 +159,8 @@ const PwaCollectionDetails: React.FC = () => {
         toast.success('Collection updated successfully');
     };
 
-    const availableTiers = currentCollection?.price_tiers || [];
+    const colType: string = (currentCollection as any)?.collection_type || currentCollection?.type || 'fixed';
+    const availableTiers = currentCollection?.price_tiers || (currentCollection as any)?.pricing_tiers || [];
 
     const getTierNameFromAmount = (amount: number) => {
         const tier = availableTiers.find(t => t.price === amount);
@@ -238,7 +239,7 @@ const PwaCollectionDetails: React.FC = () => {
 
         const headers = [
             ...allDynamicFields,
-            ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
+            ...(colType === 'tiered' ? ['Tier'] : []),
             ...(hasUniqueCode ? ['Unique Code'] : []),
         ];
 
@@ -249,7 +250,7 @@ const PwaCollectionDetails: React.FC = () => {
                 ...allDynamicFields.map(field =>
                     (contribution.contributor_information || [])[0]?.[field] || ''
                 ),
-                ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
+                ...(colType === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
                 ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
             ];
             csvContent += row.map(val =>
@@ -349,11 +350,11 @@ const PwaCollectionDetails: React.FC = () => {
     }, 0) || 0;
 
     const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-    const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
+    const withdrawableAmount = currentCollection?.wallets?.[0]?.available_balance || 0;
 
     const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
     const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
-    const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
+    const targetAmount = (currentCollection?.amount || 0) * (currentCollection?.max_participants || 0);
 
     const computedStatus: Status = computeStatus({
         statusFlag: currentCollection?.status as Status,
@@ -422,7 +423,7 @@ const PwaCollectionDetails: React.FC = () => {
 
                 <TabsContent value="overview" className="mt-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {currentCollection.type === "fixed" && (
+                        {colType === "fixed" && (
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium">Amount</CardTitle>
@@ -434,7 +435,7 @@ const PwaCollectionDetails: React.FC = () => {
                             </Card>
                         )}
 
-                        {currentCollection.type === "tiered" && (
+                        {colType === "tiered" && (
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium">Tiers</CardTitle>
@@ -522,7 +523,7 @@ const PwaCollectionDetails: React.FC = () => {
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full sm:w-48"
                                     />
-                                    {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
+                                    {colType === 'tiered' && availableTiers.length > 0 && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="outline" size="sm">
@@ -681,7 +682,7 @@ const PwaCollectionDetails: React.FC = () => {
                     title: currentCollection.title,
                     description: currentCollection.description || '',
                     deadline: currentCollection.deadline,
-                    type: currentCollection.type,
+                    type: colType,
                     max_contributions: currentCollection.max_contributions,
                     price_tiers: currentCollection.price_tiers,
                     code_prefix: currentCollection.code_prefix || '',
