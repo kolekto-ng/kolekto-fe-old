@@ -56,10 +56,20 @@ const PwaDashboard: React.FC = () => {
                 Hi, {user?.user_metadata?.full_name?.split(' ')[1] || user?.user_metadata?.firstName || 'User'}
               </p>
             </div>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button 
+                onClick={() => navigate('/create-collection')} 
+                className="bg-[#16a34a] hover:bg-green-700 text-white rounded-full font-medium h-9 px-4 shadow-sm"
+              >
+                <Plus className="w-4 h-4 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">Create Collection</span>
+                <span className="sm:hidden">Create</span>
+              </Button>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-5 w-5" />
+                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+              </Button>
+            </div>
           </div>
 
           {/* ── Wallet Balance ──────────────────────────────────────── */}
@@ -86,6 +96,22 @@ const PwaDashboard: React.FC = () => {
                 </Link>
               ))}
             </div>
+          </div>
+
+          {/* ── Prominent Create Collection CTA ────────────────────── */}
+          <div className="bg-white rounded-2xl border border-green-100 p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-green-50/50 transform origin-left transition-transform group-hover:scale-x-100"></div>
+            <div className="relative z-10 flex text-center sm:text-left flex-col items-center sm:items-start gap-1">
+              <h3 className="font-bold text-gray-900 text-lg">Start a New Collection</h3>
+              <p className="text-sm text-gray-500">Pick a template or start from scratch and gather funds effortlessly.</p>
+            </div>
+            <Button 
+              onClick={() => navigate('/create-collection')}
+              className="relative z-10 bg-[#16a34a] hover:bg-green-700 text-white rounded-xl px-6 py-5 shadow-md w-full sm:w-auto font-semibold flex items-center gap-2 transition-transform hover:scale-105"
+            >
+              <Plus className="w-5 h-5" />
+              Create Collection
+            </Button>
           </div>
 
           {/* ── Collections ────────────────────────────────────────── */}

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useActivities } from '@/store/useDashboard';
+import { useNavigate } from 'react-router-dom';
+import { useCollectionStore } from '@/store';
 import { Loader2, ArrowDownLeft } from 'lucide-react';
 
 function relativeTime(dateStr: string): string {
@@ -40,6 +42,8 @@ function formatCurrency(amount: number) {
 
 const ActivityFeed: React.FC = () => {
   const { activities, isLoading, getActivities } = useActivities();
+  const { collections } = useCollectionStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     getActivities();
@@ -57,7 +61,7 @@ const ActivityFeed: React.FC = () => {
     <div className="p-0 md:p-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-[18px] md:text-[24px] font-semibold">Activities</h3>
-        <Button variant="link" className="text-[16px]">
+        <Button variant="link" className="text-[16px]" onClick={() => navigate('/dashboard/activities')}>
           see more
         </Button>
       </div>
@@ -67,7 +71,8 @@ const ActivityFeed: React.FC = () => {
           <p className="text-sm text-muted-foreground">No recent activity.</p>
         )}
         {activities.map((activity: any) => {
-          const collectionName = activity.collection_title || activity.collection?.title || '';
+          const matchedCollection = collections.find((c: any) => c.id === activity.collection_id);
+          const collectionName = activity.collection_title || activity.collection?.title || matchedCollection?.title || '';
 
           return (
             <div key={activity.id} className="flex items-center bg-white py-4 px-4 rounded-xl justify-between gap-3">
@@ -80,7 +85,9 @@ const ActivityFeed: React.FC = () => {
                   <p className="text-xs text-muted-foreground truncate">
                     paid {formatCurrency(activity.amount)}
                     {collectionName && (
-                      <span className="text-gray-500"> · {collectionName}</span>
+                      <span className="text-green-600 font-medium ml-1">
+                        · ✅ {collectionName}
+                      </span>
                     )}
                   </p>
                 </div>

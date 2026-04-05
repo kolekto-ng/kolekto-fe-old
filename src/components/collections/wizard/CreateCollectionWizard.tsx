@@ -98,7 +98,7 @@ const validateStep = (stepId: StepId, data: WizardData): string | null => {
       const hasInvalidOptions = data.form_fields.some(
         (f) =>
           (f.type === 'select' || f.type === 'radio') &&
-          (!f.options || f.options.length < 2 || f.options.some((o) => !o.trim()))
+          (!f.options || f.options.length < 2 || f.options.some((o: string) => !o.trim()))
       );
       if (hasInvalidOptions)
         return 'Dropdown and radio fields must have at least 2 non-empty options.';
@@ -218,10 +218,34 @@ const CreateCollectionWizard: React.FC = () => {
   const [data, setData] = useState<WizardData>({ ...initialWizardData });
   const [stepIndex, setStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initDone, setInitDone] = useState(false);
 
   // File state managed separately (not serialised in WizardData for cleanliness)
   const [storyImages, setStoryImages] = useState<string[]>([]);
   const [verificationDocs, setVerificationDocs] = useState<string[]>([]);
+
+  const location = window.location;
+
+  React.useEffect(() => {
+    if (!initDone) {
+      const params = new URLSearchParams(location.search);
+      const typeParam = params.get('type') as CollectionType;
+      
+      let initialType = data.collection_type;
+      if (typeParam && STEP_FLOWS[typeParam]) {
+        initialType = typeParam;
+        setData(d => ({ ...d, collection_type: typeParam }));
+      }
+      
+      const historyState = window.history.state as any;
+      const skipToBasicInfo = historyState?.usr?.skipToBasicInfo;
+      
+      if (skipToBasicInfo) {
+        setStepIndex(1); // skip to basic-info
+      }
+      setInitDone(true);
+    }
+  }, [location.search, initDone]);
 
   const update = (updates: Partial<WizardData>) => setData((d) => ({ ...d, ...updates }));
 

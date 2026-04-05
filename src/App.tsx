@@ -13,6 +13,7 @@ import CreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
 import CollectionsPage from "./pages/dashboard/CollectionsPage";
 // import ProfilePage from "./pages/dashboard/ProfilePage";
 import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
+import ActivitiesPage from "./pages/dashboard/ActivitiesPage";
 import ContributePage from "./pages/contribute/ContributePage";
 import NotFound from "./pages/NotFound";
 import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
@@ -81,6 +82,7 @@ const AuthenticatedApp = () => {
         <Route path="create-collection" element={<CreateCollectionPage />} />
         <Route path="settings" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
+        <Route path="activities" element={<ActivitiesPage />} />
       </Route>
 
       {/* Catch-all for 404 */}

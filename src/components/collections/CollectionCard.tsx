@@ -144,18 +144,28 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
           </div>
         </div>
 
-        {goalAmount && goalAmount > 0 && (isFundraising || isOpenPool) && (
+        {(isFundraising || isOpenPool) && (
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
             <div className="mb-2 flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5 text-slate-500">
                 <TrendingUp className="h-3.5 w-3.5" />
                 <span>Progress</span>
               </div>
-              <span className="font-semibold text-green-700">{progress.toFixed(1)}%</span>
+              {goalAmount && goalAmount > 0 ? (
+                <span className="font-semibold text-green-700">{progress.toFixed(1)}%</span>
+              ) : (
+                <span className="font-semibold text-green-700">{fmt(totalRaised)} raised</span>
+              )}
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-green-600" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full rounded-full bg-green-600"
+                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? '100%' : '0%' }}
+              />
             </div>
+            {goalAmount && goalAmount > 0 && (
+              <p className="mt-1.5 text-[11px] text-slate-400 text-right">of {fmt(goalAmount)} target</p>
+            )}
           </div>
         )}
 

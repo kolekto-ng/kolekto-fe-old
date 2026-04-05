@@ -146,8 +146,10 @@ const CollectionDetailsPage: React.FC = () => {
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
   const formFields: any[] = col?.form_fields || [];
   const priceTiers: any[] = col?.pricing_tiers || [];
-  const wallet = col?.wallets?.[0];
+  const wallet = Array.isArray(col?.wallets) ? col?.wallets[0] : (col?.wallets || {});
+  const ledgerBalance = wallet?.ledger_balance ?? 0;
   const availableBalance = wallet?.available_balance ?? 0;
+  const pendingBalance = wallet?.pending_withdrawals ?? 0;
   const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
 
   // ── Fetch data (always fresh — bypass store cache) ──────────────────────────
@@ -620,20 +622,30 @@ const CollectionDetailsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Available balance */}
-              <div className="bg-white border border-green-200 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Available to Withdraw</p>
-                  <p className="text-xl font-bold text-green-700">{fmtCurrency(availableBalance)}</p>
+              {/* Wallet Summary Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Total Balance</p>
+                  <p className="text-xl font-bold text-gray-900">{fmtCurrency(ledgerBalance)}</p>
                 </div>
-                <Button
-                  size="sm"
-                  disabled={availableBalance <= 0}
-                  onClick={() => setIsWithdrawOpen(true)}
-                  className="bg-green-700 hover:bg-green-800 text-white"
-                >
-                  <Wallet className="w-4 h-4 mr-1.5" /> Withdraw
-                </Button>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-green-700 mb-1">Available to Withdraw</p>
+                    <p className="text-xl font-bold text-green-700">{fmtCurrency(availableBalance)}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={availableBalance <= 0}
+                    onClick={() => setIsWithdrawOpen(true)}
+                    className="bg-green-700 hover:bg-green-800 text-white"
+                  >
+                    <Wallet className="w-4 h-4 mr-1.5" /> Withdraw
+                  </Button>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Balance</p>
+                  <p className="text-xl font-bold text-yellow-700">{fmtCurrency(pendingBalance)}</p>
+                </div>
               </div>
             </>
           )}

@@ -1,5 +1,14 @@
 import React from 'react';
 import { CollectionType, TYPE_META } from '../wizardTypes';
+import { Lock, Layers, Waves, Ticket, Heart } from 'lucide-react';
+
+const ICON_MAP: Record<CollectionType, React.ElementType> = {
+  fixed: Lock,
+  tiered: Layers,
+  open_pool: Waves,
+  ticket: Ticket,
+  fundraising: Heart,
+};
 
 interface Props {
   value: CollectionType;
@@ -79,7 +88,9 @@ const Step1TypeSelection: React.FC<Props> = ({ value, onChange }) => {
               className={`text-left p-4 border-2 rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 ${colorClass} ${isSelected ? `ring-2` : ''}`}
             >
               <div className="flex items-start gap-3 mb-3">
-                <span className="text-2xl">{meta.icon}</span>
+                <div className={`p-2 rounded-xl flex-shrink-0 ${isSelected ? DOT_MAP[meta.color] + ' text-white' : 'bg-gray-100 text-gray-500'}`}>
+                  {React.createElement(ICON_MAP[type], { className: "w-5 h-5" })}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-gray-900 text-sm">{meta.label}</h3>

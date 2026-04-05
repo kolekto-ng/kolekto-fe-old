@@ -85,7 +85,7 @@ const CollectionsPage: React.FC = () => {
                 dateCreated={collection.created_at}
                 tiers={collection.price_tiers?.map((tier: any) => ({ amount: tier.price, name: tier.name }))}
                 totalRaised={collection.total_amount || 0}
-                goalAmount={collection.amount || undefined}
+                goalAmount={collection.target_amount || collection.amount || undefined}
                 onShare={(e) => handleShare(collection.id, e)}
                 onViewDetails={() => handleViewDetails(collection.id)}
               />

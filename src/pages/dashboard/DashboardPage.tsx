@@ -5,9 +5,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Lock, Layers, Waves, Ticket, Heart, Target,
   TrendingUp, Wallet, BarChart3, Loader2, ChevronRight,
-  Plus, Share2, Users, CalendarDays,
+  Plus, Share2, Users, CalendarDays, WalletCards, History, Banknote
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDistanceToNow } from 'date-fns';
+import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -126,8 +128,9 @@ const STATUS_COLORS: Record<string, string> = {
 interface DashStats {
   totalCollections: number;
   activeCollections: number;
-  totalRaised: number;
+  totalBalance: number;
   availableBalance: number;
+  pendingBalance: number;
 }
 
 interface Activity {
@@ -155,11 +158,12 @@ interface CollectionPreview {
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashStats>({
-    totalCollections: 0, activeCollections: 0, totalRaised: 0, availableBalance: 0,
+    totalCollections: 0, activeCollections: 0, totalBalance: 0, availableBalance: 0, pendingBalance: 0,
   });
   const [activities, setActivities] = useState<Activity[]>([]);
   const [recentCollections, setRecentCollections] = useState<CollectionPreview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
 
   useEffect(() => {
     const userId = getStoredUserId();
@@ -170,7 +174,7 @@ const DashboardPage: React.FC = () => {
         /* ── 1. Fetch user collections (light query) ─────────────────────── */
         const { data: collectionsRaw, error: colErr } = await supabase
           .from('collections')
-          .select('id, title, status, collection_type, deadline, created_at')
+          .select('id, title, status, collection_type, deadline, created_at, wallets(ledger_balance, available_balance, pending_withdrawals)')
           .eq('user_id', userId)
           .is('deleted_at', null)
           .order('created_at', { ascending: false });
@@ -184,38 +188,23 @@ const DashboardPage: React.FC = () => {
         const titleMap: Record<string, string> = {};
         for (const c of cols) titleMap[c.id] = c.title;
 
-        let totalRaised = 0;
+        let totalBalance = 0;
         let availableBalance = 0;
+        let pendingBalance = 0;
 
-        if (collectionIds.length > 0) {
+        for (const c of cols) {
+          const w = (Array.isArray(c.wallets) ? c.wallets[0] : c.wallets) || {};
+          totalBalance += Number(w.ledger_balance || 0);
+          availableBalance += Number(w.available_balance || 0);
+          pendingBalance += Number(w.pending_withdrawals || 0);
+        }
+
           /* ── 2. Authoritative Total Raised from paid contributions ─────── */
           const { data: paidContribs } = await supabase
             .from('contributions')
             .select('amount, collection_id')
             .in('collection_id', collectionIds)
             .eq('status', 'paid');
-
-          totalRaised = (paidContribs || []).reduce(
-            (s: number, c: any) => s + Number(c.amount || 0), 0,
-          );
-
-          /* ── 3. Available Balance = raised − withdrawals ──────────────── */
-          /* Filter withdrawals by collection_id (same approach as            */
-          /* useTransactionStore.fetchFinancialSummary for consistency).       */
-          const { data: withdrawals } = await supabase
-            .from('withdrawals')
-            .select('amount, status')
-            .in('collection_id', collectionIds);
-
-          const totalWithdrawn = (withdrawals || [])
-            .filter((w: any) => w.status === 'completed')
-            .reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
-
-          const pendingWd = (withdrawals || [])
-            .filter((w: any) => w.status === 'pending')
-            .reduce((s: number, w: any) => s + Number(w.amount || 0), 0);
-
-          availableBalance = Math.max(0, totalRaised - totalWithdrawn - pendingWd);
 
           /* ── 4. Build per-collection preview data ─────────────────────── */
           const contribsByCol: Record<string, any[]> = {};
@@ -261,7 +250,7 @@ const DashboardPage: React.FC = () => {
           );
         }
 
-        setStats({ totalCollections, activeCollections, totalRaised, availableBalance });
+        setStats({ totalCollections, activeCollections, totalBalance, availableBalance, pendingBalance });
       } catch (err) {
         console.error('Dashboard load error:', err);
       } finally {
@@ -289,59 +278,75 @@ const DashboardPage: React.FC = () => {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <Button
-          size="sm"
-          className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5"
-          onClick={() => navigate('/dashboard/create-collection')}
-        >
-          <Plus className="w-4 h-4" /> New Collection
-        </Button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Overview of your wallet and collections</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            onClick={() => setIsGlobalWithdrawOpen(true)}
+            className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
+          >
+            <Banknote className="w-4 h-4" /> Withdraw
+          </Button>
+          <Button
+            size="sm"
+            className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm"
+            onClick={() => navigate('/dashboard/create-collection')}
+          >
+            <Plus className="w-4 h-4" /> Create Collection
+          </Button>
+        </div>
       </div>
 
-      {/* ── Stats Cards ──────────────────────────────────────────────────────── */}
+      {/* ── Wallet Summary ──────────────────────────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <Card className="border-gray-200">
+        <Card className="border-gray-200 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-gray-500">Total Collections</CardTitle>
-            <div className="p-1.5 bg-gray-100 rounded-lg"><Target className="h-4 w-4 text-gray-500" /></div>
+            <CardTitle className="text-xs font-medium text-gray-500">Total Balance</CardTitle>
+            <div className="p-1.5 bg-gray-100 rounded-lg"><WalletCards className="h-4 w-4 text-gray-500" /></div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-gray-900">{fmt(stats.totalBalance)}</div>
+            <p className="text-xs text-gray-400 mt-0.5">across all collections</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-green-200 bg-green-50/40 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-green-700">Available Balance</CardTitle>
+            <div className="p-1.5 bg-green-100 rounded-lg"><Wallet className="h-4 w-4 text-green-600" /></div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-green-700">{fmt(stats.availableBalance)}</div>
+            <p className="text-xs text-green-600/70 mt-0.5">ready to withdraw</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-yellow-200 bg-yellow-50/40 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-yellow-700">Pending Balance</CardTitle>
+            <div className="p-1.5 bg-yellow-100 rounded-lg"><History className="h-4 w-4 text-yellow-600" /></div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-yellow-700">{fmt(stats.pendingBalance)}</div>
+            <p className="text-xs text-yellow-600/70 mt-0.5">awaiting settlement</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between group cursor-pointer" onClick={() => navigate('/dashboard/collections')}>
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Target className="w-16 h-16 text-kolekto" />
+          </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4 relative z-10">
+            <CardTitle className="text-xs font-medium text-gray-500">Your Collections</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 relative z-10">
             <div className="text-2xl font-bold text-gray-900">{stats.totalCollections}</div>
-            <p className="text-xs text-gray-400 mt-0.5">{stats.activeCollections} active</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-green-200 bg-green-50/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-green-700">Active</CardTitle>
-            <div className="p-1.5 bg-green-100 rounded-lg"><TrendingUp className="h-4 w-4 text-green-600" /></div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-2xl font-bold text-green-700">{stats.activeCollections}</div>
-            <p className="text-xs text-green-600/70 mt-0.5">receiving payments</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-gray-500">Total Raised</CardTitle>
-            <div className="p-1.5 bg-gray-100 rounded-lg"><BarChart3 className="h-4 w-4 text-gray-500" /></div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-xl font-bold text-gray-900">{fmt(stats.totalRaised)}</div>
-            <p className="text-xs text-gray-400 mt-0.5">from all contributions</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 bg-blue-50/40">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-blue-700">Available Balance</CardTitle>
-            <div className="p-1.5 bg-blue-100 rounded-lg"><Wallet className="h-4 w-4 text-blue-600" /></div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="text-xl font-bold text-blue-700">{fmt(stats.availableBalance)}</div>
-            <p className="text-xs text-blue-600/70 mt-0.5">ready to withdraw</p>
+            <p className="text-xs text-kolekto font-medium mt-0.5 flex items-center gap-1 hover:underline">
+              {stats.activeCollections} active <ChevronRight className="w-3 h-3" />
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -360,7 +365,8 @@ const DashboardPage: React.FC = () => {
             return (
               <Link
                 key={key}
-                to="/dashboard/create-collection"
+                to={`/dashboard/create-collection?type=${key}`}
+                state={{ skipToBasicInfo: true }}
                 className={`group flex flex-col items-center gap-2.5 p-4 rounded-xl border
                   ${m.borderColor} ${m.bgColor} cursor-pointer transition-all
                   hover:shadow-md hover:scale-[1.02] active:scale-[0.98]`}
@@ -485,12 +491,22 @@ const DashboardPage: React.FC = () => {
                         <p className="text-sm font-medium text-gray-800 truncate">
                           {a.name || a.email || 'Anonymous'}
                         </p>
-                        <p className="text-xs text-gray-400 truncate">{a.collection_title}</p>
+                        <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                          ✅ <span className="font-medium text-gray-600">{a.collection_title}</span>
+                        </p>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-green-600">{fmt(a.amount)}</p>
-                      <p className="text-[11px] text-gray-400">{fmtDateTime(a.created_at)}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {(() => {
+                          try {
+                            return formatDistanceToNow(new Date(a.created_at), { addSuffix: true });
+                          } catch {
+                            return fmtDateTime(a.created_at);
+                          }
+                        })()}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -499,6 +515,15 @@ const DashboardPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      <WithdrawFundsDialog
+        open={isGlobalWithdrawOpen}
+        onOpenChange={setIsGlobalWithdrawOpen}
+        availableBalance={0} // Not used for global since we'll require collection selection
+        onComplete={() => {
+          // Could refresh dashboard state here
+          setTimeout(() => window.location.reload(), 1500);
+        }}
+      />
     </div>
   );
 };

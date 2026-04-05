@@ -25,6 +25,7 @@ import {
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuthStore } from '@/store';
+import { useProfileStore } from '@/store/useProfileStore';
 import { Layers3 } from 'lucide-react';
 
 const DashboardSidebar = () => {
@@ -57,9 +58,16 @@ const DashboardSidebar = () => {
   console.log(user);
 
 
+  const { setActiveSection } = useProfileStore();
+
+  const handleKycNavigation = () => {
+    setActiveSection('kyc');
+    handleNavigation('/dashboard/settings');
+  };
+
   return (
     <Sidebar>
-      <SidebarHeader className="py-4 px-3">
+      <SidebarHeader className="py-4 px-3 bg-white border-b border-gray-100">
         <Logo size="md" />
       </SidebarHeader>
 
@@ -89,6 +97,19 @@ const DashboardSidebar = () => {
           >
             <BarChart2 className="mr-2 h-4 w-4" />
             Collections
+          </Button>
+
+          <Button
+            variant={isActive('/dashboard/activities') ? 'default' : 'ghost'}
+            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/activities')
+              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
+              : 'hover:bg-kolekto/80 hover:text-white'
+              }`}
+            size="sm"
+            onClick={() => handleNavigation('/dashboard/activities')}
+          >
+            <History className="mr-2 h-4 w-4" />
+            Activities
           </Button>
 
           <Button
@@ -149,14 +170,15 @@ const DashboardSidebar = () => {
       <SidebarFooter className="px-3 py-6">
         <div className='space-y-2'>
           <a
-            className="w-full flex gap-3 p-2 items-center font-semibold text-[14px] justify-start hover:bg-kolekto/80 hover:text-white"
-            size="sm"
-            href='mailto:team@kolekto.com.ng'
+            className="w-full flex gap-3 p-2 items-center font-semibold text-[14px] justify-start hover:bg-kolekto/80 hover:text-white rounded-md"
+            href='https://wa.me/+2349019840377'
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={() => {
               if (isMobile) setOpenMobile(false);
             }}
           >
-            <BarChart2 className="mr-2 h-4 w-4" />
+            <BarChart2 className="mr-2 h-4 w-4 hidden" />
             Support
           </a>
 
@@ -164,7 +186,7 @@ const DashboardSidebar = () => {
             variant="ghost"
             className="w-full justify-start hover:bg-kolekto/80 hover:text-white"
             size="sm"
-            onClick={() => handleNavigation('/dashboard/settings')}
+            onClick={handleKycNavigation}
           >
             <Settings className="mr-2 h-4 w-4" />
             Kyc Verification

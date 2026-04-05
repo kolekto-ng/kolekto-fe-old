@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore, useCollectionStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
+import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
 
 const WalletOverview: React.FC = () => {
   const { collections } = useCollectionStore();
@@ -10,6 +13,7 @@ const WalletOverview: React.FC = () => {
   const [totalBalance, setTotalBalance] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(0);
   const [pendingBalance, setPendingBalance] = useState(0);
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
 
   const formatCurrency = (amount: number) => {
     return `₦${amount.toLocaleString('en-NG', {
@@ -94,21 +98,37 @@ const WalletOverview: React.FC = () => {
           </svg>
         </div>
 
-        <div className="flex justify-between items-center gap-8 px-6 py-4 bg-green-800 rounded-b-[24px]">
-          <div className="flex justify-between items-center gap-1 md:gap-4">
-            <p className="text-[14px] text-white">Available</p>
-            <p className="text-[16px] md:text-xl text-white font-semibold">
-              {formatCurrency(availableBalance)}
-            </p>
+        <div className="flex justify-between items-center gap-4 px-6 py-4 bg-green-800 rounded-b-[24px]">
+          <div className="flex gap-4 md:gap-8 overflow-x-auto">
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-1 md:gap-2">
+              <p className="text-[12px] md:text-[14px] text-white">Available</p>
+              <p className="text-[14px] md:text-xl text-white font-semibold">
+                {formatCurrency(availableBalance)}
+              </p>
+            </div>
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-1 md:gap-2">
+              <p className="text-[12px] md:text-[14px] text-white">Pending</p>
+              <p className="text-[14px] md:text-xl text-white font-semibold">
+                {formatCurrency(pendingBalance)}
+              </p>
+            </div>
           </div>
-          <div className="flex justify-between items-center gap-1 md:gap-4">
-            <p className="text-[14px] text-white">Pending</p>
-            <p className="text-[16px] md:text-xl text-white font-semibold">
-              {formatCurrency(pendingBalance)}
-            </p>
-          </div>
+          
+          <Button 
+            onClick={(e) => { e.stopPropagation(); setIsWithdrawOpen(true); }} 
+            className="bg-white text-green-900 hover:bg-gray-100 rounded-full font-bold shadow-sm whitespace-nowrap shrink-0 ml-auto h-9 px-4 md:h-10 md:px-6"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Withdraw
+          </Button>
         </div>
       </div>
+
+      <WithdrawFundsDialog 
+        open={isWithdrawOpen} 
+        onOpenChange={setIsWithdrawOpen} 
+        onComplete={() => setIsWithdrawOpen(false)} 
+      />
     </div>
   );
 };

@@ -89,6 +89,22 @@ const DashboardContent = () => {
                   ))}
                 </div>
               </div>
+
+              {/* ── Prominent Create Collection CTA ────────────────────── */}
+              <div className="bg-white rounded-2xl border border-green-100 p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-green-50/50 transform origin-left transition-transform group-hover:scale-x-100"></div>
+                <div className="relative z-10 flex text-center sm:text-left flex-col justify-center">
+                  <h3 className="font-bold text-gray-900 text-[18px] md:text-[22px]">Start a New Collection</h3>
+                </div>
+                <Link 
+                  to="/dashboard/create-collection"
+                  className="relative z-10 bg-[#16a34a] hover:bg-green-700 text-white rounded-xl px-6 py-3.5 shadow-md w-full sm:w-auto font-semibold flex items-center justify-center gap-2 transition-transform hover:scale-105"
+                >
+                  <Plus className="w-5 h-5" />
+                  Create Collection
+                </Link>
+              </div>
+
               <CollectionsOverview />
             </div>
 
