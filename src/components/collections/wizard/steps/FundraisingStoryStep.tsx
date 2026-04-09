@@ -4,25 +4,47 @@ import { Textarea } from '@/components/ui/textarea';
 import { Upload, X } from 'lucide-react';
 import { WizardData } from '../wizardTypes';
 
+export interface StoryImageFile {
+  name: string;
+  dataUrl: string;
+}
+
 interface Props {
   data: WizardData;
   onChange: (updates: Partial<WizardData>) => void;
   storyImages: string[];
+  storyImageFiles?: StoryImageFile[];
   onImagesChange: (images: string[]) => void;
+  onImageFilesChange?: (files: StoryImageFile[]) => void;
 }
 
 const MAX_IMAGES = 5;
 
-const FundraisingStoryStep: React.FC<Props> = ({ data, onChange, storyImages, onImagesChange }) => {
+const FundraisingStoryStep: React.FC<Props> = ({
+  data,
+  onChange,
+  storyImages,
+  storyImageFiles = [],
+  onImagesChange,
+  onImageFilesChange,
+}) => {
   const imgRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const fileList = Array.from(e.target.files || []);
     const remaining = MAX_IMAGES - storyImages.length;
-    files.slice(0, remaining).forEach((file) => {
+    const filesToProcess = fileList.slice(0, remaining);
+    const newImages = [...storyImages];
+    const newImageFiles: StoryImageFile[] = [...storyImageFiles];
+
+    filesToProcess.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        onImagesChange([...storyImages, ev.target?.result as string]);
+        const dataUrl = ev.target?.result as string;
+        newImages.push(dataUrl);
+        newImageFiles.push({ name: file.name, dataUrl });
+        onImagesChange([...newImages]);
+        if (onImageFilesChange) onImageFilesChange([...newImageFiles]);
       };
       reader.readAsDataURL(file);
     });
@@ -32,6 +54,9 @@ const FundraisingStoryStep: React.FC<Props> = ({ data, onChange, storyImages, on
 
   const removeImage = (i: number) => {
     onImagesChange(storyImages.filter((_, idx) => idx !== i));
+    if (onImageFilesChange) {
+      onImageFilesChange(storyImageFiles.filter((_, idx) => idx !== i));
+    }
   };
 
   return (

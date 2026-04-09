@@ -32,6 +32,7 @@ interface PriceTier {
   price: number;
   quantity?: number;
   description?: string;
+  sold_quantity?: number;
 }
 
 interface EditCollectionDialogProps {
@@ -314,7 +315,10 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         updateData.description = description;
         updateData.max_contributions = (collectionType === 'fixed' || collectionType === 'flat') ? (maxContributions || null) : null;
         updateData.contributions_fields = (contributionFields.length > 0) ? contributionFields : null;
-        updateData.price_tiers = (collectionType === 'tiered' || isTicket) ? priceTiers : null;
+        // Strip derived sold_quantity before saving — that field is computed at runtime, not persisted
+        updateData.price_tiers = (collectionType === 'tiered' || isTicket)
+          ? priceTiers.map(({ sold_quantity: _sq, ...tier }: any) => tier)
+          : null;
       }
 
       if (isFundraising) {
@@ -597,8 +601,31 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
                         <Textarea value={tier.description || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updatePriceTier(index, { description: e.target.value })} rows={2} />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Quantity Limit</Label>
-                        <Input type="number" value={tier.quantity || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updatePriceTier(index, { quantity: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="Unlimited" min="1" />
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Quantity Limit</Label>
+                          {(tier.sold_quantity || 0) > 0 && (
+                            <span className="text-xs text-amber-600 font-medium">
+                              {tier.sold_quantity} sold
+                            </span>
+                          )}
+                        </div>
+                        <Input
+                          type="number"
+                          value={tier.quantity || ''}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                            const val = e.target.value ? parseInt(e.target.value) : undefined;
+                            const minAllowed = tier.sold_quantity || 0;
+                            if (val !== undefined && val < minAllowed) return;
+                            updatePriceTier(index, { quantity: val });
+                          }}
+                          placeholder="Unlimited"
+                          min={tier.sold_quantity || 1}
+                        />
+                        {(tier.sold_quantity || 0) > 0 && (
+                          <p className="text-xs text-gray-400">
+                            Minimum {tier.sold_quantity} (tickets already sold). You can only increase capacity.
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}

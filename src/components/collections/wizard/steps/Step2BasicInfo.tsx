@@ -224,25 +224,14 @@ const TicketBasicInfo: React.FC<Props> = ({ data, onChange }) => (
       </div>
     </div>
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <ImageUpload
-        label="Ticket Banner"
-        hint="Shown on the ticket purchase page (16:9 recommended)"
-        preview={data.ticket_banner_preview}
-        onFile={(preview) => onChange({ ticket_banner_preview: preview })}
-        onClear={() => onChange({ ticket_banner_preview: '' })}
-        required
-      />
-      <ImageUpload
-        label="Ticket Template"
-        hint="PDF or image used as the ticket design sent to buyers"
-        preview={data.ticket_template_preview}
-        accept=".pdf,image/*"
-        onFile={(preview) => onChange({ ticket_template_preview: preview })}
-        onClear={() => onChange({ ticket_template_preview: '' })}
-        required
-      />
-    </div>
+    <ImageUpload
+      label="Ticket Banner"
+      hint="Shown on the ticket purchase page (16:9 recommended)"
+      preview={data.ticket_banner_preview}
+      onFile={(preview) => onChange({ ticket_banner_preview: preview })}
+      onClear={() => onChange({ ticket_banner_preview: '' })}
+      required
+    />
 
     <PhoneInput
       value={data.support_phone}

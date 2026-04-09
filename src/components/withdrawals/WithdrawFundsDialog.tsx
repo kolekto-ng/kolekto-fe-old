@@ -89,6 +89,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     accountName: string;
     accountNumber: string;
     bankName: string;
+    bankCode?: string;
   }) => {
     if (!user) {
       toast.error('You must be logged in to withdraw funds');
@@ -104,6 +105,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
         account_name: data.accountName,
         account_number: data.accountNumber,
         bank_name: data.bankName,
+        bank_code: data.bankCode,
         organizer_id: user.id
       });
 

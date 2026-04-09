@@ -19,6 +19,7 @@ interface WithdrawFormProps {
     accountName: string;
     accountNumber: string;
     bankName: string;
+    bankCode?: string;
   }) => void;
   isLoading: boolean;
 }
@@ -259,7 +260,8 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
           amount: parseFloat(amount),
           accountName: selectedAccount.account_name,
           accountNumber: selectedAccount.account_number,
-          bankName: selectedAccount.bank_name
+          bankName: selectedAccount.bank_name,
+          bankCode: selectedAccount.bank_code,
         });
       }
     }

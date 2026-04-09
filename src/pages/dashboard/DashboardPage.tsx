@@ -174,9 +174,8 @@ const DashboardPage: React.FC = () => {
         /* ── 1. Fetch user collections (light query) ─────────────────────── */
         const { data: collectionsRaw, error: colErr } = await supabase
           .from('collections')
-          .select('id, title, status, collection_type, deadline, created_at, wallets(ledger_balance, available_balance, pending_withdrawals)')
+          .select('id, title, status, collection_type, deadline, created_at')
           .eq('user_id', userId)
-          .is('deleted_at', null)
           .order('created_at', { ascending: false });
 
         if (colErr) console.error('Collections fetch error:', colErr.message);
@@ -188,23 +187,44 @@ const DashboardPage: React.FC = () => {
         const titleMap: Record<string, string> = {};
         for (const c of cols) titleMap[c.id] = c.title;
 
-        let totalBalance = 0;
+        /* ── 2. Authoritative figures from paid contributions ───────────────
+           Total balance = sum of net amounts received (same source as
+           individual collection pages — wallet.ledger_balance can be stale
+           if the wallet upsert fails after a payment, so contributions.amount
+           is the ground truth). ─────────────────────────────────────────── */
+        const { data: paidContribs } = await supabase
+          .from('contributions')
+          .select('amount, collection_id')
+          .in('collection_id', collectionIds.length > 0 ? collectionIds : ['_none_'])
+          .eq('status', 'paid');
+
+        // Total received = authoritative sum of contribution net amounts
+        const totalBalance = (paidContribs || []).reduce(
+          (s: number, c: any) => s + Number(c.amount || 0), 0
+        );
+
+        /* ── Fetch wallets for settlement-state balances (available / pending).
+           These depend on T+1 cutoff logic computed server-side so they must
+           come from the wallet rows, not contributions. ─────────────────── */
         let availableBalance = 0;
         let pendingBalance = 0;
 
-        for (const c of cols) {
-          const w = (Array.isArray(c.wallets) ? c.wallets[0] : c.wallets) || {};
-          totalBalance += Number(w.ledger_balance || 0);
-          availableBalance += Number(w.available_balance || 0);
-          pendingBalance += Number(w.pending_withdrawals || 0);
-        }
-
-          /* ── 2. Authoritative Total Raised from paid contributions ─────── */
-          const { data: paidContribs } = await supabase
-            .from('contributions')
-            .select('amount, collection_id')
+        if (collectionIds.length > 0) {
+          const { data: walletRows } = await supabase
+            .from('wallets')
+            .select('collection_id, available_balance, pending_balance, updated_at')
             .in('collection_id', collectionIds)
-            .eq('status', 'paid');
+            .order('updated_at', { ascending: false });
+
+          const latestWalletByCol: Record<string, any> = {};
+          for (const w of walletRows || []) {
+            if (!latestWalletByCol[w.collection_id]) latestWalletByCol[w.collection_id] = w;
+          }
+          for (const w of Object.values(latestWalletByCol) as any[]) {
+            availableBalance += Number(w.available_balance || 0);
+            pendingBalance += Number(w.pending_balance || 0);
+          }
+        }
 
           /* ── 4. Build per-collection preview data ─────────────────────── */
           const contribsByCol: Record<string, any[]> = {};
@@ -216,12 +236,15 @@ const DashboardPage: React.FC = () => {
           setRecentCollections(
             cols.slice(0, 6).map((c: any) => {
               const cList = contribsByCol[c.id] || [];
+              // totalRaised: sum contributions.amount (authoritative net figure, no fees).
+              // Do NOT use wallet.net_payment — wallet may be zero if upsert failed.
+              const totalRaised = cList.reduce((s: number, contrib: any) => s + Number(contrib.amount || 0), 0);
               return {
                 id: c.id,
                 title: c.title,
                 status: c.status,
                 collection_type: c.collection_type || 'fixed',
-                totalRaised: cList.reduce((s: number, x: any) => s + Number(x.amount || 0), 0),
+                totalRaised,
                 participants: cList.length,
                 deadline: c.deadline,
                 created_at: c.created_at,
@@ -232,7 +255,7 @@ const DashboardPage: React.FC = () => {
           /* ── 5. Recent activity feed ──────────────────────────────────── */
           const { data: contribs } = await supabase
             .from('contributions')
-            .select('id, name, email, amount, created_at, collection_id')
+            .select('id, name, email, amount, gross_amount, created_at, collection_id')
             .in('collection_id', collectionIds)
             .eq('status', 'paid')
             .order('created_at', { ascending: false })
@@ -243,12 +266,13 @@ const DashboardPage: React.FC = () => {
               id: cn.id,
               name: cn.name || '',
               email: cn.email || '',
-              amount: Number(cn.amount) || 0,
+              // Activity section shows full checkout amount (including fees) per spec.
+              // gross_amount = totalPayable; fallback to amount for legacy rows.
+              amount: Number(cn.gross_amount || cn.amount) || 0,
               created_at: cn.created_at,
               collection_title: titleMap[cn.collection_id] || 'Unknown',
             })),
           );
-        }
 
         setStats({ totalCollections, activeCollections, totalBalance, availableBalance, pendingBalance });
       } catch (err) {

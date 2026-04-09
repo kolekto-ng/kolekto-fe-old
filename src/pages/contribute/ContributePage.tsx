@@ -12,6 +12,47 @@ import ContributeFlow from '@/components/contribute/ContributeFlow';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const annotateTierAvailability = (collectionData: any, paidContributions: any[]) => {
+  const tiers = Array.isArray(collectionData.pricing_tiers)
+    ? collectionData.pricing_tiers
+    : Array.isArray(collectionData.price_tiers)
+    ? collectionData.price_tiers
+    : [];
+
+  const soldByTier = new Map<string, number>();
+  for (const contribution of paidContributions) {
+    const info = Array.isArray(contribution.contributor_information)
+      ? contribution.contributor_information[0] || {}
+      : {};
+    const tierId = info?.TierId ? String(info.TierId) : '';
+    const tierName = info?.Tier ? String(info.Tier) : '';
+    const key = tierId || tierName;
+    if (!key) continue;
+    soldByTier.set(key, (soldByTier.get(key) || 0) + 1);
+  }
+
+  const pricing_tiers = tiers.map((tier: any, index: number) => {
+    const tierId = String(tier.id || '');
+    const tierName = String(tier.name || `Tier ${index + 1}`);
+    const sold = soldByTier.get(tierId) || soldByTier.get(tierName) || 0;
+    const capacity =
+      tier.quantity === null || tier.quantity === undefined ? null : Number(tier.quantity);
+
+    return {
+      ...tier,
+      sold_quantity: sold,
+      remaining_quantity: capacity === null ? null : Math.max(0, capacity - sold),
+    };
+  });
+
+  return {
+    ...collectionData,
+    pricing_tiers,
+    price_tiers: pricing_tiers,
+    participants_count: paidContributions.length,
+  };
+};
+
 const ContributePage: React.FC = () => {
   const { collectionId } = useParams<{ collectionId: string }>();
   const navigate = useNavigate();
@@ -36,7 +77,6 @@ const ContributePage: React.FC = () => {
             .from('collections')
             .select('*')
             .eq('id', collectionId)
-            .is('deleted_at', null)
             .single();
 
           if (fetchError || !data) throw new Error('Collection not found.');
@@ -54,14 +94,15 @@ const ContributePage: React.FC = () => {
           };
         }
 
-        // Count paid contributions
-        const { count } = await supabase
+        const { data: paidContributions, error: contributionsError } = await supabase
           .from('contributions')
-          .select('id', { count: 'exact', head: true })
+          .select('id, contributor_information')
           .eq('collection_id', collectionData.id)
           .eq('status', 'paid');
 
-        setCollection({ ...collectionData, participants_count: count ?? 0 });
+        if (contributionsError) throw new Error(contributionsError.message);
+
+        setCollection(annotateTierAvailability(collectionData, paidContributions || []));
       } catch (err: any) {
         setError(err.message || 'Failed to load collection.');
       } finally {
@@ -71,6 +112,31 @@ const ContributePage: React.FC = () => {
 
     fetchCollection();
   }, [collectionId]);
+
+  useEffect(() => {
+    if (!collection?.id) return;
+
+    const channel = supabase
+      .channel(`collection-live-${collection.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${collection.id}` },
+        async () => {
+          const { data: paidContributions } = await supabase
+            .from('contributions')
+            .select('id, contributor_information')
+            .eq('collection_id', collection.id)
+            .eq('status', 'paid');
+
+          setCollection((prev: any) => annotateTierAvailability(prev, paidContributions || []));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [collection?.id]);
 
   const ContributionNavBar = () => (
     <nav className="border-b py-3 bg-white">
@@ -131,6 +197,26 @@ const ContributePage: React.FC = () => {
   const status = collection.status;
   const isExpired = collection.deadline && new Date(collection.deadline) < new Date();
 
+  const supportPhone: string | undefined =
+    collection.support_phone || collection.support_phone_number || collection.support || undefined;
+
+  // Renders a "contact the host" block for statuses where the host should be reached directly.
+  // Not shown for pending/under-review collections (fundraising approval flow).
+  const ContactHostBlock = () => {
+    if (!supportPhone) return null;
+    const wa = `https://wa.me/${supportPhone.replace(/^\+?0?/, '234')}`;
+    return (
+      <div className="mt-4 pt-4 border-t border-current/20 space-y-2 text-sm">
+        <p className="font-semibold">Need help? Contact the organizer:</p>
+        <div className="flex items-center justify-center gap-3">
+          <a href={`tel:${supportPhone}`} className="underline font-medium">{supportPhone}</a>
+          <span className="opacity-40">·</span>
+          <a href={wa} target="_blank" rel="noopener noreferrer" className="text-green-600 font-medium underline">WhatsApp</a>
+        </div>
+      </div>
+    );
+  };
+
   const renderStatusGate = () => {
     if (isExpired) {
       return (
@@ -141,6 +227,7 @@ const ContributePage: React.FC = () => {
             <p className="text-red-600">
               The deadline for <strong>{collection.title}</strong> has passed.
             </p>
+            <ContactHostBlock />
             <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
@@ -155,11 +242,13 @@ const ContributePage: React.FC = () => {
             <p className="text-yellow-700">
               <strong>{collection.title}</strong> is temporarily paused by the organizer. Please check back later.
             </p>
+            <ContactHostBlock />
             <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
     }
+    // pending_review = fundraising awaiting admin approval — do NOT show contact prompt
     if (status === 'pending_review') {
       return (
         <Card className="w-full max-w-md border-amber-200 bg-amber-50">
@@ -183,6 +272,23 @@ const ContributePage: React.FC = () => {
             <p className="text-gray-600">
               <strong>{collection.title}</strong> is no longer accepting contributions.
             </p>
+            <ContactHostBlock />
+            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    const maxContributions = collection.max_contributions ?? collection.max_participants ?? 0;
+    if (maxContributions > 0 && (collection.participants_count ?? 0) >= maxContributions) {
+      return (
+        <Card className="w-full max-w-md border-red-200 bg-red-50">
+          <CardContent className="pt-6 text-center space-y-3">
+            <Lock className="h-12 w-12 text-red-400 mx-auto" />
+            <h2 className="text-xl font-bold text-red-700">Collection Full</h2>
+            <p className="text-red-600">
+              <strong>{collection.title}</strong> has reached its maximum number of contributors.
+            </p>
+            <ContactHostBlock />
             <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>

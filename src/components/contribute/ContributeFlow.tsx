@@ -24,14 +24,30 @@ interface ContributeFlowProps {
 
 type Step = 'details' | 'contact' | 'summary';
 
+type TicketTierSelection = {
+  tierId: string | null;
+  tierName: string;
+  pricePerUnit: number;
+  quantity: number;
+  subtotal: number;
+  description?: string;
+  remainingCapacity?: number | null;
+  prefix?: string | null;
+};
+
 const FUNDRAISING_PRESETS = [5000, 10000, 20000, 50000];
+const MAX_TICKETS_PER_ORDER = 10;
 
 function calcFees(amount: number, feeBearer: string, collectionType: string) {
+  // Fundraising: fee is invisible to donor — backend embeds 2.5% in stored amount
   if (feeBearer !== 'contributor') return { gatewayFee: 0, platformFee: 0, total: amount };
   const gatewayFee = Math.min(amount * 0.015, 2000);
-  const platformRate = collectionType === 'fundraising' ? 0.01 : 0.005;
-  const platformFee = Math.min(amount * platformRate, 2000);
+  const platformFee = Math.min(amount * (collectionType === 'fundraising' ? 0.01 : 0.005), 2000);
   return { gatewayFee, platformFee, total: amount + gatewayFee + platformFee };
+}
+
+function roundCurrency(value: number) {
+  return Number((value || 0).toFixed(2));
 }
 
 function fmt(n: number) {
@@ -152,9 +168,9 @@ const FundraisingContributors: React.FC<{ collectionId: string }> = ({ collectio
 
   const topContributors = [...contributors]
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+    .slice(0, 3);
 
-  const totalRaised = contributors.reduce((s: number, c: any) => s + c.amount, 0);
+  const totalRaised = contributors.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
 
   return (
     <div className="mt-8 space-y-5">
@@ -275,6 +291,22 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
   const feeBearer: string = collection.fee_bearer || 'organizer';
 
   const tiers: any[] = Array.isArray(collection.pricing_tiers) ? collection.pricing_tiers : [];
+  const normalizedTiers = tiers.map((tier: any, index: number) => ({
+    ...tier,
+    tierId: tier.id || `${tier.name || 'tier'}-${index}`,
+    tierName: tier.name || `Tier ${index + 1}`,
+    price: Number(tier.price || 0),
+    totalCapacity:
+      tier.quantity === null || tier.quantity === undefined
+        ? null
+        : Number(tier.quantity),
+    remainingCapacity:
+      tier.remaining_quantity === null || tier.remaining_quantity === undefined
+        ? tier.quantity === null || tier.quantity === undefined
+          ? null
+          : Number(tier.quantity)
+        : Number(tier.remaining_quantity),
+  }));
   const formFields: any[] = Array.isArray(collection.form_fields) ? collection.form_fields : [];
 
   // Build poster slideshow images: banner first, then story images
@@ -290,11 +322,16 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
   const [step, setStep] = useState<Step>('details');
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [contact, setContact] = useState({ name: '', email: '', phone: '' });
-  const [selectedTier, setSelectedTier] = useState<any>(tiers[0] || null);
+  const [selectedTier, setSelectedTier] = useState<any>(
+    !isTicket && isTiered ? normalizedTiers[0] || null : null
+  );
   const [customAmount, setCustomAmount] = useState('');
   const [presetAmount, setPresetAmount] = useState<number | null>(null);
   const [openPoolAmount, setOpenPoolAmount] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [ticketSelections, setTicketSelections] = useState<Record<string, number>>(() =>
+    Object.fromEntries(normalizedTiers.map((tier: any) => [String(tier.tierId), 0]))
+  );
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -306,13 +343,47 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
     if (isOpenPool) {
       return openPoolAmount ? parseFloat(openPoolAmount) : 0;
     }
+    if (isTicket && isTiered) {
+      return roundCurrency(
+        normalizedTiers.reduce((sum: number, tier: any) => {
+          const tierQuantity = ticketSelections[String(tier.tierId)] || 0;
+          return sum + tier.price * tierQuantity;
+        }, 0)
+      );
+    }
     if (isTiered && selectedTier) {
-      return selectedTier.price * (isTicket ? quantity : 1);
+      return selectedTier.price;
     }
     return (collection.amount || 0) * (isTicket ? quantity : 1);
   };
 
   const amount = getAmount();
+  const selectedTicketSelections: TicketTierSelection[] = isTicket && isTiered
+    ? normalizedTiers
+        .map((tier: any) => {
+          const selectedQuantity = ticketSelections[String(tier.tierId)] || 0;
+          if (selectedQuantity < 1) return null;
+          return {
+            tierId: tier.tierId ? String(tier.tierId) : null,
+            tierName: String(tier.tierName),
+            pricePerUnit: Number(tier.price || 0),
+            quantity: selectedQuantity,
+            subtotal: roundCurrency(Number(tier.price || 0) * selectedQuantity),
+            description: tier.description || undefined,
+            remainingCapacity:
+              tier.remainingCapacity === null || tier.remainingCapacity === undefined
+                ? null
+                : Number(tier.remainingCapacity),
+            prefix: tier.prefix || null,
+          };
+        })
+        .filter(Boolean) as TicketTierSelection[]
+    : [];
+  const totalTicketQuantity = isTicket
+    ? (isTiered
+        ? selectedTicketSelections.reduce((sum, selection) => sum + selection.quantity, 0)
+        : quantity)
+    : 0;
   const { gatewayFee, platformFee, total } = calcFees(amount, feeBearer, colType);
   const minAmount = collection.amount || 0;
   const showFees = feeBearer === 'contributor' && amount > 0;
@@ -321,6 +392,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
   const goalAmount: number = collection.goal_amount || 0;
   const openPoolRemaining: number | null =
     isOpenPool && goalAmount > 0 ? Math.max(0, goalAmount - totalContributed) : null;
+  const maxContributions: number = collection.max_contributions ?? collection.max_participants ?? 0;
+  const participantsPaid: number = collection.participants_count ?? 0;
+  const spotsRemaining: number | null = maxContributions > 0 ? Math.max(0, maxContributions - participantsPaid) : null;
 
   const supportPhone: string | undefined =
     collection.support_phone || collection.support_phone_number || collection.support || undefined;
@@ -341,7 +415,38 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         return false;
       }
     }
-    if (isTiered && !selectedTier) { toast.error('Please select a tier'); return false; }
+    if (isTicket && isTiered) {
+      if (selectedTicketSelections.length === 0) {
+        toast.error('Select at least one ticket tier before checkout');
+        return false;
+      }
+      if (totalTicketQuantity > MAX_TICKETS_PER_ORDER) {
+        toast.error(`You can only buy up to ${MAX_TICKETS_PER_ORDER} tickets per checkout`);
+        return false;
+      }
+      const soldOutTier = selectedTicketSelections.find(selection =>
+        selection.remainingCapacity !== null && selection.quantity > Number(selection.remainingCapacity)
+      );
+      if (soldOutTier) {
+        toast.error(`${soldOutTier.tierName} does not have enough tickets left`);
+        return false;
+      }
+    }
+    if (isTicket && !isTiered) {
+      if (quantity < 1) {
+        toast.error('Select at least one ticket');
+        return false;
+      }
+      if (quantity > MAX_TICKETS_PER_ORDER) {
+        toast.error(`You can only buy up to ${MAX_TICKETS_PER_ORDER} tickets per checkout`);
+        return false;
+      }
+      if (spotsRemaining !== null && quantity > spotsRemaining) {
+        toast.error('Not enough tickets remain for this order');
+        return false;
+      }
+    }
+    if (!isTicket && isTiered && !selectedTier) { toast.error('Please select a tier'); return false; }
     for (const field of formFields) {
       if (field.required && field.name.toLowerCase() !== 'unique code') {
         if (!formData[field.name]?.trim()) { toast.error(`Please fill in ${field.name}`); return false; }
@@ -387,54 +492,92 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           ? { name: 'Anonymous', email: contact.email, phone: contact.phone || '' }
           : contact,
         formData,
-        selectedTier: selectedTier?.name || null,
-        amount,
-        quantity: isTicket ? quantity : 1,
+        selectedTier: !isTicket && isTiered ? selectedTier?.tierName || selectedTier?.name || null : null,
+        selectedTierId: !isTicket && isTiered ? selectedTier?.tierId || selectedTier?.id || null : null,
+        contributionAmount: amount,
+        quantity: isTicket ? totalTicketQuantity : 1,
+        ticketSelections: selectedTicketSelections,
         isAnonymous: isFundraising && isAnonymous,
         codePrefix: collection.code_prefix || (isTicket ? 'TKT' : 'KLK'),
         feeBearer,
+        totalPayable: total,
+        feeBreakdown: {
+          contributionAmount: amount,
+          platformFee: roundCurrency(platformFee),
+          gatewayFee: roundCurrency(gatewayFee),
+          totalFees: roundCurrency(platformFee + gatewayFee),
+          totalPayable: roundCurrency(total),
+        },
       };
 
       localStorage.setItem('kolekto-pending-contribution', JSON.stringify(pending));
 
-      const { data: payRes, error: payErr } = await supabase.functions.invoke('initiate-paystack-payment', {
-        body: {
-          email: pending.contact.email,
-          amount: Math.round(total * 100),
-          callback_url: `${window.location.origin}/payment/verify`,
-          metadata: {
-            collectionId: collection.id,
-            collectionTitle: collection.title,
-            collectionType: colType,
-            amount,
-            quantity: isTicket ? quantity : 1,
-            selectedTier: pending.selectedTier,
-            codePrefix: pending.codePrefix,
-            isAnonymous: pending.isAnonymous,
-            contact: pending.contact,
-            formData: pending.formData,
-            participants: Array.from({ length: isTicket ? quantity : 1 }, () => ({
-              data: {
-                ...pending.formData,
-                ...(pending.selectedTier ? { Tier: pending.selectedTier } : {}),
-                ...(pending.contact.name ? { Name: pending.contact.name, 'Full Name': pending.contact.name } : {}),
-                ...(pending.contact.email ? { Email: pending.contact.email } : {}),
-                ...(pending.contact.phone ? { Phone: pending.contact.phone, 'Phone Number': pending.contact.phone } : {}),
+      const contactName = pending.contact.name;
+      const contactEmail = pending.contact.email;
+      const contactPhone = pending.contact.phone || '';
+
+      // Fix #4: Send only host-requested form fields as formData.
+      // Contact info (name/email/phone) is passed separately — NOT merged into formData.
+      // This ensures contributor_information only stores what the host asked for,
+      // while payer contact is used only for payment processing and the Activities tab.
+      const hostFormData = {
+        ...pending.formData,
+        ...(pending.selectedTier ? { Tier: pending.selectedTier } : {}),
+        ...(pending.selectedTierId ? { TierId: pending.selectedTierId } : {}),
+      };
+
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        'initiate-paystack-payment',
+        {
+          body: {
+            email: contactEmail,
+            callback_url: `${window.location.origin}/payment/verify`,
+            metadata: {
+              ...pending,
+              amount,
+              totalPayable: total,
+              contact: {
+                name: contactName,
+                email: contactEmail,
+                phone: contactPhone,
               },
-            })),
+              formData: hostFormData,
+            },
           },
-        },
-      });
+        }
+      );
 
-      if (payErr) throw new Error(payErr.message || 'Payment initiation failed');
-      if (payRes?.code === 'PAYSTACK_KEY_MISSING' || payRes?.code === 'PAYSTACK_KEY_INVALID') {
-        throw new Error('Payment is not yet configured on this platform. Please contact the organizer.');
+      // supabase-js wraps non-2xx responses in a FunctionsHttpError. The real
+      // server-side error message lives in the response body, which we have to
+      // read manually — otherwise we only see "Edge Function returned a non-2xx status code".
+      if (invokeError) {
+        let serverMessage = invokeError.message || 'Failed to initiate payment';
+        try {
+          const ctx = (invokeError as any)?.context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) serverMessage = body.error;
+            console.error('[initiate-paystack-payment] edge function error body:', body);
+          } else if (ctx && typeof ctx.text === 'function') {
+            const text = await ctx.text();
+            if (text) serverMessage = text;
+            console.error('[initiate-paystack-payment] edge function error text:', text);
+          }
+        } catch (readErr) {
+          console.error('[initiate-paystack-payment] failed to read error body:', readErr);
+        }
+        throw new Error(serverMessage);
       }
-      if (!payRes?.authorization_url) throw new Error(payRes?.error || 'No payment URL returned from gateway');
 
-      window.location.href = payRes.authorization_url;
+      const authorizationUrl = data?.authorization_url || data?.authorizationUrl;
+      if (!authorizationUrl) {
+        throw new Error(data?.error || 'No payment URL returned from gateway');
+      }
+
+      window.location.href = authorizationUrl;
     } catch (err: any) {
-      toast.error(err.message || 'Failed to initiate payment');
+      const msg = err?.message || 'Failed to initiate payment';
+      toast.error(msg);
       setIsSubmitting(false);
     }
   };
@@ -516,10 +659,10 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
             const storyWhy = collection.story?.why || collection.story_why;
             const storyImpact = collection.story?.impact || collection.story_impact;
             return (storyWhat || storyWhy || storyImpact) ? (
-              <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 space-y-3 text-sm text-rose-900">
-                {storyWhat && <div><p className="font-semibold">What we're doing</p><p className="text-rose-700 mt-0.5">{storyWhat}</p></div>}
-                {storyWhy && <div><p className="font-semibold mt-1">Why it matters</p><p className="text-rose-700 mt-0.5">{storyWhy}</p></div>}
-                {storyImpact && <div><p className="font-semibold mt-1">The impact</p><p className="text-rose-700 mt-0.5">{storyImpact}</p></div>}
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3 text-sm text-gray-800">
+                {storyWhat && <div><p className="font-semibold text-gray-900">What we're doing</p><p className="text-gray-600 mt-0.5">{storyWhat}</p></div>}
+                {storyWhy && <div><p className="font-semibold mt-2 text-gray-900">Why it matters</p><p className="text-gray-600 mt-0.5">{storyWhy}</p></div>}
+                {storyImpact && <div><p className="font-semibold mt-2 text-gray-900">The impact</p><p className="text-gray-600 mt-0.5">{storyImpact}</p></div>}
               </div>
             ) : null;
           })()}
@@ -599,30 +742,119 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {isTiered && tiers.length > 0 && (
         <>
           <div className="space-y-2">
-            <Label className="font-medium flex items-center gap-2"><Tag className="h-4 w-4" /> Select Tier</Label>
+            <Label className="font-medium flex items-center gap-2"><Tag className="h-4 w-4" /> {isTicket ? 'Select Ticket Mix' : 'Select Tier'}</Label>
             <div className="space-y-2">
-              {tiers.map((tier, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSelectedTier(tier)}
-                  className={`w-full text-left rounded-xl border p-4 transition-colors ${selectedTier?.name === tier.name ? 'border-kolekto bg-kolekto/5' : 'border-gray-200 hover:border-gray-300'}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedTier?.name === tier.name ? 'border-kolekto bg-kolekto' : 'border-gray-300'}`}>
-                          {selectedTier?.name === tier.name && <Check className="h-2.5 w-2.5 text-white" />}
+              {normalizedTiers.map((tier, i) => {
+                const isTierSoldOut = isTicket && tier.remainingCapacity !== null && tier.remainingCapacity !== undefined && Number(tier.remainingCapacity) <= 0;
+                const isTierFull = !isTicket && tier.remainingCapacity !== null && Number(tier.remainingCapacity) <= 0;
+
+                if (isTicket) {
+                  return (
+                    <div key={i} className={`rounded-xl border p-4 space-y-3 ${isTierSoldOut ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200'}`}>
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium ${isTierSoldOut ? 'text-gray-400' : ''}`}>{tier.tierName}</span>
+                            {isTierSoldOut
+                              ? <Badge variant="outline" className="text-xs text-red-500 border-red-200">Sold Out</Badge>
+                              : tier.remainingCapacity !== null && (
+                                  <Badge variant="outline" className="text-xs">{Math.max(0, Number(tier.remainingCapacity))} left</Badge>
+                                )
+                            }
+                          </div>
+                          {tier.description && <p className="text-sm text-gray-500 mt-1">{tier.description}</p>}
                         </div>
-                        <span className="font-medium">{tier.name}</span>
-                        {tier.quantity && <Badge variant="outline" className="text-xs">{tier.quantity} left</Badge>}
+                        <span className={`font-bold ${isTierSoldOut ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
                       </div>
-                      {tier.description && <p className="text-sm text-gray-500 mt-1 ml-6">{tier.description}</p>}
+                      {isTierSoldOut ? (
+                        <p className="text-xs text-red-400 text-center py-1">This tier is no longer available</p>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs text-gray-500">Add this tier to your ticket cart.</p>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTicketSelections(prev => ({
+                                  ...prev,
+                                  [String(tier.tierId)]: Math.max(0, (prev[String(tier.tierId)] || 0) - 1),
+                                }))
+                              }
+                              className="w-9 h-9 rounded-lg border border-gray-200 text-lg font-medium hover:bg-gray-50 flex items-center justify-center"
+                            >
+                              -
+                            </button>
+                            <span className="w-10 text-center text-lg font-semibold">
+                              {ticketSelections[String(tier.tierId)] || 0}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentTierQty = ticketSelections[String(tier.tierId)] || 0;
+                                const maxForTier =
+                                  tier.remainingCapacity === null || tier.remainingCapacity === undefined
+                                    ? MAX_TICKETS_PER_ORDER
+                                    : Math.max(0, Number(tier.remainingCapacity));
+                                if (totalTicketQuantity >= MAX_TICKETS_PER_ORDER || currentTierQty >= maxForTier) return;
+                                setTicketSelections(prev => ({
+                                  ...prev,
+                                  [String(tier.tierId)]: currentTierQty + 1,
+                                }));
+                              }}
+                              className="w-9 h-9 rounded-lg border border-gray-200 text-lg font-medium hover:bg-gray-50 flex items-center justify-center"
+                              disabled={
+                                totalTicketQuantity >= MAX_TICKETS_PER_ORDER ||
+                                (tier.remainingCapacity !== null && tier.remainingCapacity !== undefined &&
+                                  (ticketSelections[String(tier.tierId)] || 0) >= Number(tier.remainingCapacity))
+                              }
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <span className="font-bold text-kolekto">{formatCurrency(tier.price)}</span>
-                  </div>
-                </button>
-              ))}
+                  );
+                }
+
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { if (!isTierFull) setSelectedTier(tier); }}
+                    disabled={isTierFull}
+                    className={`w-full text-left rounded-xl border p-4 transition-colors ${
+                      isTierFull
+                        ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                        : selectedTier?.tierId === tier.tierId
+                        ? 'border-kolekto bg-kolekto/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            isTierFull ? 'border-gray-300 bg-gray-200'
+                            : selectedTier?.tierId === tier.tierId ? 'border-kolekto bg-kolekto' : 'border-gray-300'
+                          }`}>
+                            {!isTierFull && selectedTier?.tierId === tier.tierId && <Check className="h-2.5 w-2.5 text-white" />}
+                          </div>
+                          <span className={`font-medium ${isTierFull ? 'text-gray-400' : ''}`}>{tier.tierName}</span>
+                          {isTierFull
+                            ? <Badge variant="outline" className="text-xs text-red-500 border-red-200">Sold Out</Badge>
+                            : tier.remainingCapacity !== null && (
+                                <Badge variant="outline" className="text-xs">{Math.max(0, Number(tier.remainingCapacity))} left</Badge>
+                              )
+                          }
+                        </div>
+                        {tier.description && <p className="text-sm text-gray-500 mt-1 ml-6">{tier.description}</p>}
+                      </div>
+                      <span className={`font-bold ${isTierFull ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -652,14 +884,46 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {isTicket && (
         <div className="space-y-2">
           <Label className="font-medium flex items-center gap-2"><Ticket className="h-4 w-4" /> Number of Tickets</Label>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))}
-              className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center">−</button>
-            <span className="w-12 text-center text-lg font-semibold">{quantity}</span>
-            <button type="button" onClick={() => setQuantity(q => Math.min(10, q + 1))}
-              className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center">+</button>
-          </div>
-          <p className="text-xs text-gray-500">Max 10 tickets per order</p>
+          {isTiered ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
+              <span>Total tickets selected</span>
+              <span className="font-semibold text-gray-900">{totalTicketQuantity}</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center"
+                >
+                  −
+                </button>
+                <span className="w-12 text-center text-lg font-semibold">{quantity}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxQty = spotsRemaining !== null
+                      ? Math.min(MAX_TICKETS_PER_ORDER, spotsRemaining)
+                      : MAX_TICKETS_PER_ORDER;
+                    setQuantity(q => Math.min(maxQty, q + 1));
+                  }}
+                  disabled={
+                    quantity >= MAX_TICKETS_PER_ORDER ||
+                    (spotsRemaining !== null && quantity >= spotsRemaining)
+                  }
+                  className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                {spotsRemaining !== null && spotsRemaining < MAX_TICKETS_PER_ORDER
+                  ? `${spotsRemaining} ticket${spotsRemaining === 1 ? '' : 's'} remaining`
+                  : `Max ${MAX_TICKETS_PER_ORDER} tickets per order`}
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -728,20 +992,30 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
             <span className="text-gray-600">Collection</span>
             <span className="font-medium">{collection.title}</span>
           </div>
-          {selectedTier && (
+          {!isTicket && selectedTier && (
             <div className="flex justify-between">
               <span className="text-gray-600">Tier</span>
-              <span className="font-medium">{selectedTier.name}</span>
+              <span className="font-medium">{selectedTier.tierName || selectedTier.name}</span>
             </div>
           )}
           {isTicket && (
             <div className="flex justify-between">
               <span className="text-gray-600">Tickets</span>
-              <span className="font-medium">{quantity}</span>
+              <span className="font-medium">{totalTicketQuantity}</span>
+            </div>
+          )}
+          {isTicket && isTiered && selectedTicketSelections.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-blue-100 bg-white/70 p-3">
+              {selectedTicketSelections.map(selection => (
+                <div key={`${selection.tierId || selection.tierName}`} className="flex items-center justify-between">
+                  <span className="text-gray-600">{selection.quantity} x {selection.tierName}</span>
+                  <span className="font-medium">{formatCurrency(selection.subtotal)}</span>
+                </div>
+              ))}
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-gray-600">Amount</span>
+            <span className="text-gray-600">{isFundraising ? 'Contribution amount' : isTicket ? 'Ticket subtotal' : 'Contribution amount'}</span>
             <span className="font-medium">{formatCurrency(amount)}</span>
           </div>
           {feeBearer === 'contributor' && (
@@ -758,7 +1032,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           )}
           <Separator />
           <div className="flex justify-between font-bold text-blue-900 text-base">
-            <span>Total</span>
+            <span>Total paid</span>
             <span>{formatCurrency(total)}</span>
           </div>
         </div>
@@ -813,6 +1087,23 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           {(collection.campaign_summary || collection.description) && (
             <CardDescription className="mt-1">{collection.campaign_summary || collection.description}</CardDescription>
           )}
+          {/* Capacity bar */}
+          {maxContributions > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>{participantsPaid} of {maxContributions} spots filled</span>
+                <span className={spotsRemaining === 0 ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                  {spotsRemaining === 0 ? 'Full' : `${spotsRemaining} remaining`}
+                </span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${spotsRemaining === 0 ? 'bg-red-500' : 'bg-kolekto'}`}
+                  style={{ width: `${Math.min((participantsPaid / maxContributions) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -866,8 +1157,17 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                 Continue <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
-              <Button type="button" onClick={handlePay} disabled={isSubmitting} className="flex-1 bg-kolekto hover:bg-kolekto/90">
-                {isSubmitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</> : `Pay ${formatCurrency(total)}`}
+              <Button
+                type="button"
+                onClick={spotsRemaining === 0 ? undefined : handlePay}
+                disabled={isSubmitting || spotsRemaining === 0}
+                className="flex-1 bg-kolekto hover:bg-kolekto/90 disabled:bg-gray-400"
+              >
+                {isSubmitting
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
+                  : spotsRemaining === 0
+                  ? 'Collection Full'
+                  : `Pay ${formatCurrency(total)}`}
               </Button>
             )}
           </div>

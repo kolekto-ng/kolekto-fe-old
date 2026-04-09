@@ -56,7 +56,9 @@ const TierFeeBlock: React.FC<{
           </div>
           <div className="flex justify-between text-sm font-semibold">
             <span>You receive</span>
-            <span className="text-gray-800">{fmtCurrency(price)}</span>
+            <span className="text-gray-800">
+              {fmtCurrency(isContributor ? price : price - fees.totalFees)}
+            </span>
           </div>
         </div>
       </div>
@@ -213,7 +215,9 @@ const Step4Charges: React.FC<Props> = ({ data, onChange }) => {
               </div>
               <div className="flex justify-between text-sm font-semibold">
                 <span>You receive</span>
-                <span className="text-gray-800">{fmtCurrency(fixedAmount)}</span>
+                <span className="text-gray-800">
+                  {fmtCurrency(effectiveBearer === 'contributor' ? fixedAmount : fixedAmount - fixedFees.totalFees)}
+                </span>
               </div>
             </div>
           </div>

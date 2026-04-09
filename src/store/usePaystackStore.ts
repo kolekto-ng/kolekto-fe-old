@@ -27,7 +27,12 @@ export const usePaystackStore = create((set) => ({
     } catch (error: any) {
       console.error("Payment initialization failed:", error);
       set({ isInitiating: false });
-      toast.error(error.message || "Failed to initialize payment");
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to initialize payment";
+      toast.error(msg);
       return undefined;
     }
   },
@@ -63,21 +68,16 @@ export const usePaystackStore = create((set) => ({
   verifyPayment: async (reference) => {
     set({ isVerifying: true, error: null });
     try {
-      // Call edge function to verify payment
       const { data: response, error } = await supabase.functions.invoke(
         "verify-paystack-payment",
-        {
-          body: { reference },
-        }
+        { body: { reference } }
       );
 
       if (error) throw new Error(error.message);
 
       set({ isVerifying: false });
-      return {
-        status: response?.status || "unknown",
-        data: response?.data || null,
-      };
+      // Edge function returns { status, receiptData, contributions, ... } at top level
+      return response || {};
     } catch (error: any) {
       set({ error: error.message, isVerifying: false });
       throw error;

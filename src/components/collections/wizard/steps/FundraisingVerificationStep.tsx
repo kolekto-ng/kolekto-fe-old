@@ -12,11 +12,18 @@ import {
 } from '@/components/ui/select';
 import { WizardData, SocialLink } from '../wizardTypes';
 
+export interface VerificationFile {
+  name: string;
+  dataUrl: string;
+}
+
 interface Props {
   data: WizardData;
   onChange: (updates: Partial<WizardData>) => void;
   verificationDocs: string[];
+  verificationFiles?: VerificationFile[];
   onDocsChange: (docs: string[]) => void;
+  onFilesChange?: (files: VerificationFile[]) => void;
 }
 
 const CATEGORIES = [
@@ -41,23 +48,37 @@ const FundraisingVerificationStep: React.FC<Props> = ({
   data,
   onChange,
   verificationDocs,
+  verificationFiles = [],
   onDocsChange,
+  onFilesChange,
 }) => {
   const docRef = useRef<HTMLInputElement>(null);
 
   const handleDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    files.forEach((file) => {
+    const fileList = Array.from(e.target.files || []);
+    const newDocs = [...verificationDocs];
+    const newFiles: VerificationFile[] = [...verificationFiles];
+
+    fileList.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        onDocsChange([...verificationDocs, ev.target?.result as string]);
+        const dataUrl = ev.target?.result as string;
+        newDocs.push(dataUrl);
+        newFiles.push({ name: file.name, dataUrl });
+        onDocsChange([...newDocs]);
+        if (onFilesChange) onFilesChange([...newFiles]);
       };
       reader.readAsDataURL(file);
     });
     e.target.value = '';
   };
 
-  const removeDoc = (i: number) => onDocsChange(verificationDocs.filter((_, idx) => idx !== i));
+  const removeDoc = (i: number) => {
+    onDocsChange(verificationDocs.filter((_, idx) => idx !== i));
+    if (onFilesChange) {
+      onFilesChange(verificationFiles.filter((_, idx) => idx !== i));
+    }
+  };
 
   const updateSocialLink = (i: number, key: keyof SocialLink, val: string) => {
     const updated = data.social_links.map((link, idx) =>
@@ -111,12 +132,14 @@ const FundraisingVerificationStep: React.FC<Props> = ({
               >
                 <div className="flex items-center gap-2 text-green-800">
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Document {i + 1}</span>
+                  <span className="truncate max-w-[220px]">
+                    {verificationFiles[i]?.name || `Document ${i + 1}`}
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeDoc(i)}
-                  className="text-red-400 hover:text-red-600"
+                  className="text-red-400 hover:text-red-600 flex-shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>

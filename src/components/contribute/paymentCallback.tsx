@@ -1,17 +1,8 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import PaymentSuccessful from "./PaymentSuccessful";
-import { Loader2 } from "lucide-react";
-
-const PENDING_KEY = "kolekto-pending-contribution";
-
-function generateUniqueCode(prefix?: string): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return prefix ? `${prefix}-${code}` : code;
-}
 
 const PaymentCallback = () => {
   const [searchParams] = useSearchParams();
@@ -22,6 +13,12 @@ const PaymentCallback = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
 
+  // Guard against React 18 StrictMode double-invocation AND component remounts.
+  // We use sessionStorage so the lock survives remounts within the same browser tab.
+  // Without this, verify fires twice simultaneously — the second call passes the
+  // idempotency check before the first insert completes, doubling contributions.
+  const processingRef = React.useRef(false);
+
   useEffect(() => {
     if (!transactionRef) {
       setErrorMsg("No payment reference found.");
@@ -29,94 +26,57 @@ const PaymentCallback = () => {
       return;
     }
 
+    // In-memory guard: catches React StrictMode's same-instance double-fire
+    if (processingRef.current) return;
+
+    // Session-level guard: catches remounts within the same tab session.
+    // Key includes the reference so different payments are not blocked.
+    const lockKey = `kolekto-verify-lock-${transactionRef}`;
+    if (sessionStorage.getItem(lockKey)) {
+      // Already processed — pull existing receipt from localStorage if present
+      setLoading(false);
+      return;
+    }
+    sessionStorage.setItem(lockKey, "1");
+    processingRef.current = true;
+
     const process = async () => {
       try {
-        // 1. Verify payment via Edge Function
-        const { data: verifyRes, error: verifyErr } = await supabase.functions.invoke(
+        const { data, error } = await supabase.functions.invoke(
           "verify-paystack-payment",
           { body: { reference: transactionRef } }
         );
 
-        if (verifyErr) throw new Error(verifyErr.message || "Payment verification failed");
-
-        const paymentStatus: string = verifyRes?.data?.status || verifyRes?.status || "unknown";
-        const paystackData = verifyRes?.data || verifyRes || {};
-        const verifiedContributions = Array.isArray(paystackData.contributions)
-          ? paystackData.contributions
-          : Array.isArray(verifyRes?.contributions)
-            ? verifyRes.contributions
-            : [];
-
-        if (paymentStatus !== "success" && paymentStatus !== "paid") {
-          throw new Error(`Payment not successful (status: ${paymentStatus})`);
+        if (error) {
+          let serverMessage = error.message || "Verification failed";
+          try {
+            const ctx = (error as any)?.context;
+            if (ctx && typeof ctx.json === "function") {
+              const body = await ctx.json();
+              if (body?.error) serverMessage = body.error;
+            }
+          } catch { /* ignore read errors */ }
+          throw new Error(serverMessage);
         }
 
-        // 2. Read pending contribution from localStorage
-        const pendingRaw = localStorage.getItem(PENDING_KEY);
-        if (!pendingRaw) {
-          // Payment succeeded but no pending data — show minimal receipt
-          setReceiptData({
-            collectionTitle: "Your Collection",
-            amountPaid: (paystackData.amount || 0) / 100,
-            participants: [],
-            transactionRef,
-            status: "success",
-            paidAt: paystackData.paid_at || new Date().toISOString(),
-            channel: paystackData.channel || "card",
-            currency: paystackData.currency || "NGN",
-            payer: paystackData.customer
-              ? { name: paystackData.customer.first_name || "", email: paystackData.customer.email, phone: paystackData.customer.phone || "" }
-              : undefined,
-          });
-          setLoading(false);
+        if (data?.receiptData) {
+          setReceiptData(data.receiptData);
+          localStorage.removeItem("kolekto-pending-contribution");
           return;
         }
 
-        const pending = JSON.parse(pendingRaw);
-        const { collectionTitle, contact, formData, selectedTier, amount, quantity, isAnonymous, codePrefix } = pending;
-
-        // 3. Clear pending data after verification succeeds
-        localStorage.removeItem(PENDING_KEY);
-
-        // 4. Build receipt participants array from authoritative verification output
-        const participants = (verifiedContributions.length > 0
-          ? verifiedContributions
-          : Array.from({ length: quantity || 1 }, (_, idx) => ({
-              id: `fallback-${idx + 1}`,
-              name: isAnonymous ? "Anonymous" : contact.name,
-              amount: amount / Math.max(1, quantity || 1),
-              uniqueCode: generateUniqueCode(codePrefix),
-            }))
-        ).map((participant: any, idx: number) => ({
-          id: participant.id || `p-${idx + 1}`,
-          details: [
-            { label: "Name", value: participant.name || (isAnonymous ? "Anonymous" : contact.name) },
-            ...Object.entries(formData || {}).map(([key, val]) => ({ label: key, value: String(val) })),
-            ...(selectedTier ? [{ label: "Tier", value: selectedTier }] : []),
-          ],
-          uniqueCode: participant.uniqueCode || "",
-        }));
-
-        setReceiptData({
-          collectionTitle: collectionTitle || "Collection",
-          amountPaid: amount,
-          participants,
-          transactionRef,
-          status: "success",
-          paidAt: paystackData.paidAt || paystackData.paid_at || new Date().toISOString(),
-          channel: paystackData.channel || "card",
-          currency: paystackData.currency || "NGN",
-          payer: { name: isAnonymous ? "Anonymous" : contact.name, email: contact.email, phone: contact.phone || "" },
-        });
+        throw new Error(data?.error || "Unable to load payment receipt");
       } catch (err: any) {
         console.error("Payment callback error:", err);
-        setErrorMsg(err.message || "Failed to verify payment");
+        const msg = err?.message || "Failed to verify payment";
+        setErrorMsg(msg);
       } finally {
         setLoading(false);
       }
     };
 
     process();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactionRef]);
 
   if (loading) {
@@ -133,7 +93,8 @@ const PaymentCallback = () => {
       <div className="flex flex-col justify-center items-center h-screen gap-3 px-4 text-center">
         <p className="text-red-500 font-medium">{errorMsg}</p>
         <p className="text-sm text-gray-500">
-          If you were charged, please contact support with reference: <strong>{transactionRef}</strong>
+          If you were charged, please contact support with reference:{" "}
+          <strong>{transactionRef}</strong>
         </p>
       </div>
     );
@@ -152,8 +113,13 @@ const PaymentCallback = () => {
       open={open}
       onOpenChange={setOpen}
       collectionTitle={receiptData.collectionTitle}
-      amountPaid={receiptData.amountPaid}
+      contributionAmount={receiptData.contributionAmount}
+      platformFee={receiptData.platformFee}
+      gatewayFee={receiptData.gatewayFee}
+      totalFees={receiptData.totalFees}
+      totalPaid={receiptData.totalPaid}
       participants={receiptData.participants}
+      ticketSelections={receiptData.ticketSelections}
       transactionRef={receiptData.transactionRef}
       status={receiptData.status}
       paidAt={receiptData.paidAt}

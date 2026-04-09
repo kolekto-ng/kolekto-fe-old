@@ -21,6 +21,8 @@ import {
 import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 import { DocumentUploadForm } from './forms/DocumentUploadForm';
+import { axiosInstance } from '@/utils/axios';
+import { toast } from 'sonner';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
@@ -68,12 +70,35 @@ const KYCSection: React.FC = () => {
   const [showIdentityUpload, setShowIdentityUpload] = useState(false);
   const [showAddressUpload, setShowAddressUpload] = useState(false);
   const [ninInput, setNinInput] = useState('');
+  const [ninSaving, setNinSaving] = useState(false);
+  const [ninSaved, setNinSaved] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       fetchKYCStatus(user.id);
     }
   }, [user?.id]);
+
+  const handleSaveNIN = async () => {
+    if (ninInput.length !== 11) return;
+    setNinSaving(true);
+    try {
+      await axiosInstance.post('/settings/kyc/save-nin', { nin: ninInput });
+      setNinSaved(true);
+      setNinInput('');
+      toast.success('NIN submitted successfully — pending admin review');
+    } catch (err: any) {
+      console.error('Failed to save NIN:', err);
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to save NIN. Please try again.';
+      toast.error(msg);
+    } finally {
+      setNinSaving(false);
+    }
+  };
 
   const identityStatus = kycData?.identityVerification?.status || 'notStarted';
   const addressStatus = kycData?.addressVerification?.status || 'notStarted';
@@ -165,19 +190,35 @@ const KYCSection: React.FC = () => {
             <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
               National Identification Number (NIN)
             </Label>
-            <div className="flex gap-2">
-              <Input
-                value={ninInput}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 11);
-                  setNinInput(val);
-                }}
-                placeholder="Enter your 11-digit NIN"
-                className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
-                maxLength={11}
-              />
-            </div>
-            <p className="text-xs text-gray-400">Dial *346# on your registered phone to retrieve your NIN</p>
+            {ninSaved ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-sm text-emerald-700">
+                <Check className="w-4 h-4" /> NIN submitted successfully — pending admin review
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Input
+                    value={ninInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      setNinInput(val);
+                    }}
+                    placeholder="Enter your 11-digit NIN"
+                    className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
+                    maxLength={11}
+                  />
+                  <Button
+                    onClick={handleSaveNIN}
+                    disabled={ninInput.length !== 11 || ninSaving}
+                    className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white shrink-0"
+                    size="sm"
+                  >
+                    {ninSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400">Dial *346# on your registered phone to retrieve your NIN</p>
+              </>
+            )}
           </div>
 
           {/* Uploaded Documents */}

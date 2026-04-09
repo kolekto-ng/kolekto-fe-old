@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import html2pdf from 'html2pdf.js';
 import { CheckIcon, Download, Copy, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,12 +20,24 @@ interface ParticipantInfo {
   uniqueCode: string;
 }
 
+interface TicketSelection {
+  tierName: string;
+  quantity: number;
+  pricePerUnit: number;
+  subtotal: number;
+}
+
 interface PaymentSuccessfulProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   collectionTitle: string;
-  amountPaid: number;
+  contributionAmount: number;
+  platformFee?: number;
+  gatewayFee?: number;
+  totalFees?: number;
+  totalPaid: number;
   participants: ParticipantInfo[];
+  ticketSelections?: TicketSelection[];
   transactionRef?: string;
   status?: string;
   paidAt?: string;
@@ -38,8 +50,13 @@ const PaymentSuccessful = ({
   open,
   onOpenChange,
   collectionTitle,
-  amountPaid,
+  contributionAmount,
+  platformFee = 0,
+  gatewayFee = 0,
+  totalFees = 0,
+  totalPaid,
   participants,
+  ticketSelections = [],
   transactionRef,
   status = 'success',
   paidAt,
@@ -52,20 +69,30 @@ const PaymentSuccessful = ({
   const handleCopyToClipboard = () => {
     const url = window.location.href;
     const message = [
-      "🎉 This is my receipt from Kolekto!",
-      "",
-      `Collection: ${collectionTitle}`, ` Amount Paid: ${formatCurrency(amountPaid)}`,
-      transactionRef ? `Transaction Ref: ${transactionRef}` : "", paidAt ? ` Paid At: ${new Date(paidAt).toLocaleString('en-NG')}` : "",
-      channel ? `Channel: ${channel}` : "", currency ? `Currency: ${currency}` : "",
-      "",
+      'This is my receipt from Kolekto!',
+      '',
+      `Collection: ${collectionTitle}`,
+      `Contribution Amount: ${formatCurrency(contributionAmount)}`,
+      `Fees: ${formatCurrency(totalFees)}`,
+      `Total Paid: ${formatCurrency(totalPaid)}`,
+      transactionRef ? `Transaction Ref: ${transactionRef}` : '',
+      paidAt ? `Paid At: ${new Date(paidAt).toLocaleString('en-NG')}` : '',
+      channel ? `Channel: ${channel}` : '',
+      currency ? `Currency: ${currency}` : '',
+      ticketSelections.length > 0
+        ? `Ticket Breakdown: ${ticketSelections
+            .map((selection) => `${selection.quantity} x ${selection.tierName}`)
+            .join(', ')}`
+        : '',
+      '',
       participants && participants.length > 0
-        ? "Contributor Details:\n" + participants.map((p, idx) =>
-          `  ${participants.length > 1 ? `(${idx + 1}) ` : ""}${p.details.map(d => `${d.label}: ${d.value}`).join(", ")}${p.uniqueCode ? `, Unique Code: ${p.uniqueCode}` : ""}`
-        ).join("\n")
-        : "",
-      "",
+        ? 'Contributor Details:\n' + participants.map((p, idx) =>
+            `  ${participants.length > 1 ? `(${idx + 1}) ` : ''}${p.details.map(d => `${d.label}: ${d.value}`).join(', ')}${p.uniqueCode ? `, Unique Code: ${p.uniqueCode}` : ''}`
+          ).join('\n')
+        : '',
+      '',
       `View your receipt online: ${url}`,
-    ].filter(Boolean).join("\n");
+    ].filter(Boolean).join('\n');
 
     navigator.clipboard.writeText(message)
       .then(() => toast.success('Receipt details copied!'))
@@ -81,11 +108,9 @@ const PaymentSuccessful = ({
 
   const handleDownloadPDF = () => {
     if (receiptRef.current) {
-      // Save original styles
       const originalMaxHeight = receiptRef.current.style.maxHeight;
       const originalOverflowY = receiptRef.current.style.overflowY;
 
-      // Remove scroll/max-height for PDF rendering
       receiptRef.current.style.maxHeight = 'none';
       receiptRef.current.style.overflowY = 'visible';
 
@@ -99,14 +124,13 @@ const PaymentSuccessful = ({
         .from(receiptRef.current)
         .save()
         .then(() => {
-          // Restore original styles
-          receiptRef.current.style.maxHeight = originalMaxHeight;
-          receiptRef.current.style.overflowY = originalOverflowY;
+          receiptRef.current!.style.maxHeight = originalMaxHeight;
+          receiptRef.current!.style.overflowY = originalOverflowY;
           toast.success('PDF receipt downloaded');
         })
         .catch(() => {
-          receiptRef.current.style.maxHeight = originalMaxHeight;
-          receiptRef.current.style.overflowY = originalOverflowY;
+          receiptRef.current!.style.maxHeight = originalMaxHeight;
+          receiptRef.current!.style.overflowY = originalOverflowY;
           toast.error('Failed to download PDF');
         });
     }
@@ -132,16 +156,14 @@ const PaymentSuccessful = ({
           <DialogTitle className="text-center">Payment Successful!</DialogTitle>
         </DialogHeader>
 
-        {/* Scrollable receipt area */}
         <div
           ref={receiptRef}
           className="space-y-6 overflow-x-auto overflow-y-auto min-w-[320px] max-h-[50vh] sm:max-h-[60vh] pr-2"
-          style={{ scrollbarGutter: "stable" }}
+          style={{ scrollbarGutter: 'stable' }}
         >
           <Card className="border border-gray-200 shadow-sm min-w-[340px]">
             <div className="bg-primary px-6 py-4">
               <div className="flex justify-between items-center">
-                {/* Logo and Receipt title */}
                 <div className="flex items-center gap-2">
                   <img src="../../../public/favicon.ico" alt="Kolekto Logo" className="h-8 w-8 rounded bg-white p-1" />
                   <h2 className="text-white font-bold text-xl">Receipt</h2>
@@ -154,7 +176,7 @@ const PaymentSuccessful = ({
               <div className="space-y-4">
                 <div className="text-center">
                   <h3 className="text-lg font-medium">{collectionTitle}</h3>
-                  <p className="text-2xl font-bold">{formatCurrency(amountPaid)}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(totalPaid)}</p>
                   <p className="text-sm text-gray-500 mt-1">{formatDate()}</p>
                 </div>
 
@@ -178,22 +200,57 @@ const PaymentSuccessful = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 text-sm text-gray-700">
                   <div>
-                    <span className="font-medium">Status:</span>{" "}
-                    <span className={status === "success" ? "text-green-600" : "text-red-600"}>
+                    <span className="font-medium">Status:</span>{' '}
+                    <span className={status === 'success' ? 'text-green-600' : 'text-red-600'}>
                       {status?.toUpperCase()}
                     </span>
                   </div>
                   <div>
-                    <span className="font-medium">Paid At:</span>{" "}
-                    {paidAt ? new Date(paidAt).toLocaleString() : "N/A"}
+                    <span className="font-medium">Paid At:</span>{' '}
+                    {paidAt ? new Date(paidAt).toLocaleString() : 'N/A'}
                   </div>
                   <div>
-                    <span className="font-medium">Channel:</span> {channel || "N/A"}
+                    <span className="font-medium">Channel:</span> {channel || 'N/A'}
                   </div>
                   <div>
-                    <span className="font-medium">Currency:</span> {currency || "NGN"}
+                    <span className="font-medium">Currency:</span> {currency || 'NGN'}
                   </div>
                 </div>
+
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Contribution amount</span>
+                    <span className="font-medium">{formatCurrency(contributionAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Platform fee</span>
+                    <span className="font-medium">{formatCurrency(platformFee)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Gateway fee</span>
+                    <span className="font-medium">{formatCurrency(gatewayFee)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Total fees</span>
+                    <span className="font-medium">{formatCurrency(totalFees)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold border-t border-gray-200 pt-2">
+                    <span>Total paid</span>
+                    <span>{formatCurrency(totalPaid)}</span>
+                  </div>
+                </div>
+
+                {ticketSelections.length > 0 && (
+                  <div className="rounded-md border border-gray-200 bg-white p-4 space-y-2">
+                    <p className="text-sm font-medium text-gray-700">Ticket Breakdown</p>
+                    {ticketSelections.map((selection, index) => (
+                      <div key={`${selection.tierName}-${index}`} className="flex justify-between text-sm">
+                        <span className="text-gray-500">{selection.quantity} x {selection.tierName}</span>
+                        <span className="font-medium">{formatCurrency(selection.subtotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   {participants?.map((participant, index) => (
@@ -224,7 +281,6 @@ const PaymentSuccessful = ({
           </Card>
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-3 sm:justify-between">
           <Button
             onClick={handleCopyToClipboard}

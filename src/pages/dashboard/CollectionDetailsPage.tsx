@@ -146,24 +146,56 @@ const CollectionDetailsPage: React.FC = () => {
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
   const formFields: any[] = col?.form_fields || [];
   const priceTiers: any[] = col?.pricing_tiers || [];
-  const wallet = Array.isArray(col?.wallets) ? col?.wallets[0] : (col?.wallets || {});
-  const ledgerBalance = wallet?.ledger_balance ?? 0;
-  const availableBalance = wallet?.available_balance ?? 0;
-  const pendingBalance = wallet?.pending_withdrawals ?? 0;
+  // Pick the most-recently-updated wallet row (guards against duplicate rows)
+  const walletRows: any[] = Array.isArray(col?.wallets) ? col.wallets : (col?.wallets ? [col.wallets] : []);
+  const wallet = walletRows.slice().sort((a: any, b: any) =>
+    new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime()
+  )[0] || {};
+  const ledgerBalance = Number(wallet?.ledger_balance ?? 0);
+  const availableBalance = Number(wallet?.available_balance ?? 0);
+  const pendingBalance = Number(wallet?.pending_balance ?? 0);
   const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
+
+  // ── Fetch helpers ───────────────────────────────────────────────────────────
+
+  const loadWallet = async () => {
+    if (!id) return;
+    const { data: walletData } = await supabase
+      .from('wallets')
+      .select('*')
+      .eq('collection_id', id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setCol((prev: any) => prev ? { ...prev, wallets: walletData ? [walletData] : [] } : prev);
+  };
+
+  const loadContributions = async () => {
+    if (!id) return;
+    const { data } = await supabase
+      .from('contributions')
+      .select('*')
+      .eq('collection_id', id)
+      .order('created_at', { ascending: false });
+    setContributions(data || []);
+    setLoadingContribs(false);
+  };
 
   // ── Fetch data (always fresh — bypass store cache) ──────────────────────────
 
   const loadCollection = async () => {
     if (!id) return;
-    const { data, error } = await supabase
-      .from('collections')
-      .select('*, contributions(*), wallets(*)')
-      .eq('id', id)
-      .single();
+    // Load collection WITHOUT contributions join (loaded separately below)
+    // Load wallet separately to get the latest row (sorted by updated_at)
+    const [{ data, error }, { data: walletData }] = await Promise.all([
+      supabase.from('collections').select('*').eq('id', id).single(),
+      supabase.from('wallets').select('*').eq('collection_id', id)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
     if (error) { toast.error('Failed to load collection'); setLoading(false); return; }
     setCol({
       ...data,
+      wallets: walletData ? [walletData] : [],
       form_fields: Array.isArray(data.contributions_fields) ? data.contributions_fields : [],
       pricing_tiers: Array.isArray(data.price_tiers) ? data.price_tiers : [],
     });
@@ -173,30 +205,49 @@ const CollectionDetailsPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     loadCollection();
-
-    supabase
-      .from('contributions')
-      .select('*')
-      .eq('collection_id', id)
-      .order('created_at', { ascending: false })
-      .then(({ data }: { data: any[] | null }) => {
-        setContributions(data || []);
-        setLoadingContribs(false);
-      });
+    loadContributions();
 
     const params = new URLSearchParams(location.search);
     if (params.get('share') === 'true') setIsShareOpen(true);
   }, [id]);
 
+  // ── Real-time: refresh contributions + wallet on any change ─────────────────
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`col-details-${id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${id}` },
+        () => { loadContributions(); }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets', filter: `collection_id=eq.${id}` },
+        () => { loadWallet(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
   // ── Computed values ─────────────────────────────────────────────────────────
 
   const paidContributions = contributions.filter(c => c.status === 'paid');
-  const totalRaised = paidContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  // Authoritative: sum contributions.amount (net, no fees) from paid rows.
+  // This is correct even when wallet hasn't been created yet or upsert failed.
+  // Wallet balances (ledger/available/pending) still come from the wallet row
+  // since they incorporate the T+1 settlement cutoff which is computed server-side.
+  const totalRaised = paidContributions.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
   const targetAmount = col?.target_amount ? Number(col.target_amount) : null;
   const deadline = col?.deadline || null;
   const remaining = daysLeft(deadline);
 
-  // Tier matching
+  // Tier matching — prefer stored Tier name in contributor_information, fall back to amount
+  const getTierForContribution = (c: any): any => {
+    if (!priceTiers.length) return null;
+    const tierName = (c.contributor_information?.[0] as any)?.Tier;
+    if (tierName) return priceTiers.find(t => t.name === tierName) || null;
+    return priceTiers.find(t => Math.abs(Number(t.price) - Number(c.amount)) < 1) || null;
+  };
+  // Legacy helper used in CSV export
   const getTierForAmount = (amount: number): any => {
     if (!priceTiers.length) return null;
     return priceTiers.find(t => Math.abs(Number(t.price) - amount) < 1) || null;
@@ -260,7 +311,7 @@ const CollectionDetailsPage: React.FC = () => {
     let csv = headers.join(',') + '\n';
     filtered.forEach(c => {
       const info = (c.contributor_information || [])[0] || {};
-      const tierName = getTierForAmount(c.amount)?.name || '';
+      const tierName = getTierForContribution(c)?.name || '';
       const row = [
         ...dynamicFields.map(f => info[f] || ''),
         ...(tierCol ? [tierName] : []),
@@ -293,10 +344,7 @@ const CollectionDetailsPage: React.FC = () => {
       });
     }
     if (tierFilter !== 'all') {
-      data = data.filter(c => {
-        const tier = getTierForAmount(Number(c.amount));
-        return tier?.name === tierFilter;
-      });
+      data = data.filter(c => getTierForContribution(c)?.name === tierFilter);
     }
     return data;
   };
@@ -311,10 +359,7 @@ const CollectionDetailsPage: React.FC = () => {
       );
     }
     if (tierFilter !== 'all') {
-      data = data.filter(c => {
-        const tier = getTierForAmount(Number(c.amount));
-        return tier?.name === tierFilter;
-      });
+      data = data.filter(c => getTierForContribution(c)?.name === tierFilter);
     }
     return data;
   };
@@ -593,9 +638,8 @@ const CollectionDetailsPage: React.FC = () => {
                   </p>
                   <div className="space-y-3">
                     {priceTiers.map(tier => {
-                      const count = paidContributions.filter(c =>
-                        Math.abs(Number(c.amount) - Number(tier.price)) < 1
-                      ).length;
+                      const tierContribs = paidContributions.filter(c => getTierForContribution(c)?.name === tier.name);
+                      const count = tierContribs.length;
                       const revenue = count * Number(tier.price);
                       return (
                         <div key={tier.id || tier.name} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
@@ -721,7 +765,7 @@ const CollectionDetailsPage: React.FC = () => {
                     ) : (
                       getFilteredContributors().map(c => {
                         const info = (c.contributor_information || [])[0] || {};
-                        const tier = getTierForAmount(Number(c.amount));
+                        const tier = getTierForContribution(c);
                         return (
                           <TableRow key={c.id}>
                             {colType === 'tiered' && (
@@ -1039,6 +1083,9 @@ const CollectionDetailsPage: React.FC = () => {
                 const isAnon = colType === 'fundraising' && (!c.name || c.name.toLowerCase() === 'anonymous');
                 const displayName = isAnon ? 'Anonymous' : c.name;
                 const verb = colType === 'fundraising' ? 'donated' : colType === 'ticket' ? 'purchased a ticket for' : 'paid';
+                // Activities show the full checkout amount (gross_amount = totalPayable incl. fees).
+                // Fall back to amount for legacy rows that pre-date gross_amount column.
+                const displayAmount = Number(c.gross_amount || c.amount || 0);
 
                 return (
                   <div key={c.id} className="flex items-start gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
@@ -1051,20 +1098,20 @@ const CollectionDetailsPage: React.FC = () => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">{displayName}</p>
                         <span className="text-sm text-gray-500">{verb}</span>
-                        <span className="text-sm font-bold text-green-700">{fmtCurrency(Number(c.amount))}</span>
+                        <span className="text-sm font-bold text-green-700">{fmtCurrency(displayAmount)}</span>
                         {tier && (
                           <Badge variant="outline" className="text-xs">{tier.name}</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="text-xs text-gray-400">{fmtDateTime(c.created_at)}</span>
-                        {c.payment_id && (
-                          <span className="text-xs text-gray-400">Ref: {c.payment_id}</span>
+                        {c.payment_reference && (
+                          <span className="text-xs text-gray-400">Ref: {c.payment_reference}</span>
                         )}
                       </div>
                     </div>
                     <div className="flex-shrink-0 text-right">
-                      <span className="text-sm font-bold text-gray-900">{fmtCurrency(Number(c.amount))}</span>
+                      <span className="text-sm font-bold text-gray-900">{fmtCurrency(displayAmount)}</span>
                     </div>
                   </div>
                 );
@@ -1112,25 +1159,46 @@ const CollectionDetailsPage: React.FC = () => {
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         collectionId={id!}
-        initialData={{
-          title: col.title || '',
-          description: (colType === 'fundraising' ? col.campaign_summary : col.description) || '',
-          deadline: col.deadline || '',
-          fee_bearer: col.fee_bearer || 'contributor',
-          max_contributions: col.max_contributions || undefined,
-          code_prefix: col.code_prefix || '',
-          contributions_fields: col.form_fields || [],
-          total_contributions: col.total_contributions || 0,
-          type: col.collection_type === 'tiered' ? 'tiered' : 'fixed',
-          price_tiers: col.pricing_tiers || [],
-          collection_type: col.collection_type || col.type || 'fixed',
-          banner_image: col.banner_url || '',
-          story_what: col.story?.what || '',
-          story_why: col.story?.why || '',
-          story_impact: col.story?.impact || '',
-          story_images: Array.isArray(col.story_images) ? col.story_images : [],
-          event_date: col.event_date || '',
-        }}
+        initialData={(() => {
+          // Compute sold quantity per tier from paid contributions
+          const soldByTier = new Map<string, number>();
+          for (const c of paidContributions) {
+            const info = Array.isArray(c.contributor_information)
+              ? c.contributor_information[0] || {}
+              : (c.contributor_information || {});
+            const tierId = info?.TierId ? String(info.TierId) : '';
+            const tierName = info?.Tier ? String(info.Tier) : '';
+            const key = tierId || tierName;
+            if (!key) continue;
+            soldByTier.set(key, (soldByTier.get(key) || 0) + 1);
+          }
+          const enrichedTiers = (col.pricing_tiers || []).map((tier: any) => ({
+            ...tier,
+            sold_quantity:
+              soldByTier.get(String(tier.id || '')) ||
+              soldByTier.get(String(tier.name || '')) ||
+              0,
+          }));
+          return {
+            title: col.title || '',
+            description: (colType === 'fundraising' ? col.campaign_summary : col.description) || '',
+            deadline: col.deadline || '',
+            fee_bearer: col.fee_bearer || 'contributor',
+            max_contributions: col.max_contributions || undefined,
+            code_prefix: col.code_prefix || '',
+            contributions_fields: col.form_fields || [],
+            total_contributions: col.total_contributions || 0,
+            type: col.collection_type === 'tiered' ? 'tiered' : 'fixed',
+            price_tiers: enrichedTiers,
+            collection_type: col.collection_type || col.type || 'fixed',
+            banner_image: col.banner_url || '',
+            story_what: col.story?.what || '',
+            story_why: col.story?.why || '',
+            story_impact: col.story?.impact || '',
+            story_images: Array.isArray(col.story_images) ? col.story_images : [],
+            event_date: col.event_date || '',
+          };
+        })()}
         onSuccess={() => {
           setIsEditOpen(false);
           loadCollection();

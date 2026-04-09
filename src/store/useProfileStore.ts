@@ -87,45 +87,55 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   fetchKYCStatus: async (userId: string) => {
     set({ kycLoading: true });
     try {
-      const res = await axiosInstance.get(`/settings/kyc/${userId}`);
-      if (res.data) {
-        const documents = res.data.documents || [];
-        const identityDocs = documents
-          .filter((doc: any) => doc.document_type === "identity")
-          .map((doc: any) => ({
-            id: doc.id,
-            type: doc.verification_type,
-            status: doc.status,
-            rejectionReason: doc.rejection_reason,
-            uploadedAt: doc.uploaded_at,
-            files: doc.files || [],
-          }));
-        const addressDocs = documents
-          .filter((doc: any) => doc.document_type === "address")
-          .map((doc: any) => ({
-            id: doc.id,
-            type: doc.verification_type,
-            status: doc.status,
-            rejectionReason: doc.rejection_reason,
-            uploadedAt: doc.uploaded_at,
-            files: doc.files || [],
-          }));
+      const [res, kycVerificationRes] = await Promise.all([
+        axiosInstance.get(`/settings/kyc/${userId}`),
+        supabase
+          .from("kyc_verifications")
+          .select("status, nin_verified, identity_verified, address_verified")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ]);
 
-        set({
-          kycData: {
-            ...res.data.kycData,
-            identityVerification: {
-              status: identityDocs.length > 0 ? identityDocs[0].status : "notStarted",
-              documents: identityDocs,
-            },
-            addressVerification: {
-              status: addressDocs.length > 0 ? addressDocs[0].status : "notStarted",
-              documents: addressDocs,
-            },
+      const documents = res.data?.documents || [];
+      const identityDocs = documents
+        .filter((doc: any) => doc.document_type === "identity")
+        .map((doc: any) => ({
+          id: doc.id,
+          type: doc.verification_type,
+          status: doc.status,
+          rejectionReason: doc.rejection_reason,
+          uploadedAt: doc.uploaded_at,
+          files: doc.files || [],
+        }));
+      const addressDocs = documents
+        .filter((doc: any) => doc.document_type === "address")
+        .map((doc: any) => ({
+          id: doc.id,
+          type: doc.verification_type,
+          status: doc.status,
+          rejectionReason: doc.rejection_reason,
+          uploadedAt: doc.uploaded_at,
+          files: doc.files || [],
+        }));
+
+      const kycVerification = kycVerificationRes.data;
+
+      set({
+        kycData: {
+          ...res.data?.kycData,
+          overallStatus: kycVerification?.status || "not_started",
+          ninVerified: kycVerification?.nin_verified || false,
+          identityVerification: {
+            status: identityDocs.length > 0 ? identityDocs[0].status : "notStarted",
+            documents: identityDocs,
           },
-          kycLoading: false,
-        });
-      }
+          addressVerification: {
+            status: addressDocs.length > 0 ? addressDocs[0].status : "notStarted",
+            documents: addressDocs,
+          },
+        },
+        kycLoading: false,
+      });
     } catch (error) {
       console.error("Failed to fetch KYC data:", error);
       set({ kycLoading: false });

@@ -13,6 +13,9 @@ import {
   CollectionType,
 } from './wizardTypes';
 import WizardStepper from './WizardStepper';
+import { VerificationFile } from './steps/FundraisingVerificationStep';
+import { StoryImageFile } from './steps/FundraisingStoryStep';
+import { uploadVerificationDocuments, uploadStoryImages, uploadBannerImage } from '@/lib/storageUpload';
 
 import Step1TypeSelection from './steps/Step1TypeSelection';
 import Step2BasicInfo from './steps/Step2BasicInfo';
@@ -136,7 +139,14 @@ const validateStep = (stepId: StepId, data: WizardData): string | null => {
 // ─── Build API payload ────────────────────────────────────────────────────────
 // Matches the create-collection Edge Function's expected body shape.
 
-const buildPayload = (data: WizardData) => {
+export interface VerificationDocPayload { url: string; name: string; }
+
+const buildPayload = (
+  data: WizardData,
+  storyImages: string[],
+  verificationDocs: VerificationDocPayload[],
+  bannerUrl: string | null = null
+) => {
   const isTicket = data.collection_type === 'ticket';
   const isTiered = data.collection_type === 'tiered';
   const isOpenPool = data.collection_type === 'open_pool';
@@ -186,7 +196,7 @@ const buildPayload = (data: WizardData) => {
     max_contributions: data.max_contributors ? parseInt(data.max_contributors) : null,
     deadline: deadlineIso,
     fee_bearer: isFundraising || isOpenPool ? 'contributor' : data.fee_bearer,
-    contributions_fields: isFundraising ? [] : data.form_fields,
+    contributions_fields: isFundraising || isTicket ? [] : data.form_fields,
     code_prefix: (data.unique_id_enabled || isTicket) ? (data.unique_id_prefix || null) : null,
     unique_id_enabled: isTicket ? true : data.unique_id_enabled,
     ticket_mode: isTicket ? data.ticket_mode : null,
@@ -205,6 +215,12 @@ const buildPayload = (data: WizardData) => {
       ? data.social_links.filter((l) => l.url.trim())
       : null,
     support_phone: data.support_phone || null,
+    story_images: isFundraising ? storyImages : null,
+    banner_url: bannerUrl || null,
+    // Pass as [{url, name}] so the edge function can save proper document names
+    verification_documents: isFundraising
+      ? verificationDocs.map((d) => ({ url: d.url, name: d.name }))
+      : null,
   };
 };
 
@@ -222,7 +238,9 @@ const CreateCollectionWizard: React.FC = () => {
 
   // File state managed separately (not serialised in WizardData for cleanliness)
   const [storyImages, setStoryImages] = useState<string[]>([]);
+  const [storyImageFiles, setStoryImageFiles] = useState<StoryImageFile[]>([]);
   const [verificationDocs, setVerificationDocs] = useState<string[]>([]);
+  const [verificationFiles, setVerificationFiles] = useState<VerificationFile[]>([]);
 
   const location = window.location;
 
@@ -231,9 +249,7 @@ const CreateCollectionWizard: React.FC = () => {
       const params = new URLSearchParams(location.search);
       const typeParam = params.get('type') as CollectionType;
       
-      let initialType = data.collection_type;
       if (typeParam && STEP_FLOWS[typeParam]) {
-        initialType = typeParam;
         setData(d => ({ ...d, collection_type: typeParam }));
       }
       
@@ -259,7 +275,9 @@ const CreateCollectionWizard: React.FC = () => {
   const handleTypeChange = (type: CollectionType) => {
     setData({ ...initialWizardData, collection_type: type });
     setStoryImages([]);
+    setStoryImageFiles([]);
     setVerificationDocs([]);
+    setVerificationFiles([]);
     // Stay on step 1 (type selection), don't advance
   };
 
@@ -283,7 +301,49 @@ const CreateCollectionWizard: React.FC = () => {
     }
     setIsSubmitting(true);
     try {
-      const payload = buildPayload(data);
+      let finalStoryImageUrls: string[] = storyImages;
+      // Build VerificationDocPayload[] from existing files (name comes from verificationFiles metadata)
+      let finalVerificationDocs: VerificationDocPayload[] = verificationDocs.map(
+        (url, i) => ({ url, name: verificationFiles[i]?.name || `Document ${i + 1}` })
+      );
+
+      const tempCollectionId = `temp-${Date.now()}`;
+      let finalBannerUrl: string | null = null;
+
+      // Upload banner image (ticket or fundraising)
+      const isFundraisingType = data.collection_type === 'fundraising';
+      const isTicketType = data.collection_type === 'ticket';
+      const bannerPreview = isFundraisingType
+        ? data.campaign_banner_preview
+        : isTicketType
+        ? data.ticket_banner_preview
+        : '';
+
+      if (bannerPreview && bannerPreview.startsWith('data:')) {
+        try {
+          finalBannerUrl = await uploadBannerImage(bannerPreview, tempCollectionId);
+        } catch (err) {
+          console.warn('Banner upload failed, will use preview fallback:', err);
+          finalBannerUrl = bannerPreview; // store base64 as fallback
+        }
+      }
+
+      // For fundraising collections, upload story images & verification docs
+      if (isFundraisingType) {
+        if (verificationFiles.length > 0) {
+          const docResults = await uploadVerificationDocuments(verificationFiles, tempCollectionId);
+          finalVerificationDocs = docResults.map(
+            (r: { url: string; name: string }) => ({ url: r.url, name: r.name })
+          );
+        }
+
+        if (storyImageFiles.length > 0) {
+          const imageResults = await uploadStoryImages(storyImageFiles, tempCollectionId);
+          finalStoryImageUrls = imageResults.map((r: { url: string }) => r.url);
+        }
+      }
+
+      const payload = buildPayload(data, finalStoryImageUrls, finalVerificationDocs, finalBannerUrl);
       await createCollection(payload as any);
       toast.success(
         data.collection_type === 'fundraising'
@@ -331,7 +391,9 @@ const CreateCollectionWizard: React.FC = () => {
             data={data}
             onChange={update}
             storyImages={storyImages}
+            storyImageFiles={storyImageFiles}
             onImagesChange={setStoryImages}
+            onImageFilesChange={setStoryImageFiles}
           />
         );
       case 'fundraising-verification':
@@ -340,7 +402,9 @@ const CreateCollectionWizard: React.FC = () => {
             data={data}
             onChange={update}
             verificationDocs={verificationDocs}
+            verificationFiles={verificationFiles}
             onDocsChange={setVerificationDocs}
+            onFilesChange={setVerificationFiles}
           />
         );
       case 'review':

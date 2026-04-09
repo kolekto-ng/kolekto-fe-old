@@ -82,7 +82,7 @@ define(['./workbox-f001acab'], (function (workbox) { 'use strict';
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
     "url": "/pwa.html",
-    "revision": "0.1qih2ua7a6o"
+    "revision": "0.7vj3hpbol5o"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/pwa.html"), {

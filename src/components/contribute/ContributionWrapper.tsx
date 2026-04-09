@@ -205,7 +205,8 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           open={isModalOpen}
           onOpenChange={handleModalChange}
           collectionTitle={collectionTitle}
-          amountPaid={amountPaid}
+          contributionAmount={amountPaid}
+          totalPaid={amountPaid}
           participants={participantDetails}
           transactionRef={transactionRef}
         />

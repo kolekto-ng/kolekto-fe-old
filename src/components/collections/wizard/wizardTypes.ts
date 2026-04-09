@@ -31,7 +31,7 @@ export const STEP_FLOWS: Record<CollectionType, StepId[]> = {
   fixed: ['type-selection', 'basic-info', 'pricing', 'charges', 'contributor-fields', 'unique-id', 'review'],
   tiered: ['type-selection', 'basic-info', 'pricing', 'charges', 'contributor-fields', 'unique-id', 'review'],
   open_pool: ['type-selection', 'basic-info', 'pricing', 'contributor-fields', 'unique-id', 'review'],
-  ticket: ['type-selection', 'basic-info', 'pricing', 'charges', 'contributor-fields', 'unique-id', 'review'],
+  ticket: ['type-selection', 'basic-info', 'pricing', 'charges', 'unique-id', 'review'],
   fundraising: ['type-selection', 'basic-info', 'fundraising-goal', 'fundraising-story', 'fundraising-verification', 'review'],
 };
 
