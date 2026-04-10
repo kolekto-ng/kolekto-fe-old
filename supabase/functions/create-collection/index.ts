@@ -94,7 +94,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const status =
-      collection_type === "fundraising" ? "pending_verification" : "active";
+      collection_type === "fundraising" ? "pending_review" : "active";
 
     // legacyType drives the DB trigger validate_collection_amount():
     //   'flat'   → requires amount >= 100

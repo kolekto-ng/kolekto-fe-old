@@ -283,6 +283,28 @@ const DashboardPage: React.FC = () => {
     };
 
     load();
+
+    // ── Real-time: re-run load() whenever a contribution or wallet changes ──
+    // This ensures the host dashboard updates automatically after every payment
+    // without requiring a manual refresh.
+    const userId2 = userId; // capture for closure
+    const rtChannel = supabase
+      .channel(`dashboard-rt-${userId2}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'contributions' },
+        () => { load(); }
+      )
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'contributions' },
+        () => { load(); }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets' },
+        () => { load(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(rtChannel); };
   }, []);
 
   /* ── Loading state ────────────────────────────────────────────────────────── */

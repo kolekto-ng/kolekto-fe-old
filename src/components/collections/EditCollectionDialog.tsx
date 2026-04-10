@@ -28,11 +28,13 @@ interface ContributionField {
 }
 
 interface PriceTier {
+  id?: string;
   name: string;
   price: number;
   quantity?: number;
   description?: string;
   sold_quantity?: number;
+  prefix?: string | null;
 }
 
 interface EditCollectionDialogProps {
@@ -42,13 +44,14 @@ interface EditCollectionDialogProps {
   initialData: {
     title: string;
     description?: string;
+    amount?: number;
     deadline?: string;
     fee_bearer?: string;
     max_contributions?: number;
     code_prefix?: string;
     contributions_fields?: ContributionField[];
     total_contributions?: number;
-    type?: 'fixed' | 'tiered';
+    type?: 'fixed' | 'tiered' | 'ticket';
     price_tiers?: PriceTier[];
     collection_type?: string;
     banner_image?: string;
@@ -142,6 +145,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 }) => {
   const [title, setTitle] = useState(initialData.title || '');
   const [description, setDescription] = useState(initialData.description || '');
+  const [ticketAmount, setTicketAmount] = useState<number>(Number(initialData.amount || 0));
   const [deadline, setDeadline] = useState<Date | undefined>(
     initialData.deadline ? new Date(initialData.deadline) : undefined
   );
@@ -174,12 +178,14 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
   const collectionType = initialData.collection_type || (initialData.type === 'tiered' ? 'tiered' : 'fixed');
   const isFundraising = collectionType === 'fundraising';
   const isTicket = collectionType === 'ticket';
+  const isFixedTicket = isTicket && priceTiers.length === 0;
 
   // Reset when dialog opens
   useEffect(() => {
     if (!open) return;
     setTitle(initialData.title || '');
     setDescription(initialData.description || '');
+    setTicketAmount(Number(initialData.amount || 0));
     setDeadline(initialData.deadline ? new Date(initialData.deadline) : undefined);
     setMaxContributions(initialData.max_contributions || undefined);
     setContributionFields(initialData.contributions_fields || []);
@@ -289,6 +295,10 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
   // ── Save ─────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Collection title is required'); return; }
+    if (isFixedTicket && (!ticketAmount || ticketAmount <= 0)) {
+      toast.error('Ticket price must be greater than 0');
+      return;
+    }
     const badFields = contributionFields.filter(f => !f.name.trim());
     if (badFields.length > 0) { toast.error('All form fields must have a name'); return; }
 
@@ -313,8 +323,11 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 
       if (!isFundraising) {
         updateData.description = description;
-        updateData.max_contributions = (collectionType === 'fixed' || collectionType === 'flat') ? (maxContributions || null) : null;
+        updateData.max_contributions = (collectionType === 'fixed' || collectionType === 'flat' || (isTicket && priceTiers.length === 0)) ? (maxContributions || null) : null;
         updateData.contributions_fields = (contributionFields.length > 0) ? contributionFields : null;
+        if (isFixedTicket) {
+          updateData.amount = ticketAmount;
+        }
         // Strip derived sold_quantity before saving — that field is computed at runtime, not persisted
         updateData.price_tiers = (collectionType === 'tiered' || isTicket)
           ? priceTiers.map(({ sold_quantity: _sq, ...tier }: any) => tier)
@@ -561,17 +574,51 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
           {/* ── SETTINGS (non-fundraising) ─────────────────────────── */}
           {!isFundraising && (
             <TabsContent value="settings" className="space-y-5 pt-2">
-              {(collectionType === 'fixed' || collectionType === 'flat') && (
+              {isFixedTicket && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="ed-max">Maximum Contributors</Label>
+                  <Label htmlFor="ed-ticket-price">Ticket Price</Label>
+                  <Input
+                    id="ed-ticket-price"
+                    type="number"
+                    value={ticketAmount || ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = e.target.value ? parseFloat(e.target.value) : 0;
+                      setTicketAmount(Number.isFinite(val) ? val : 0);
+                    }}
+                    placeholder="Enter ticket price"
+                    min="1"
+                    step="0.01"
+                    disabled={hasContributions}
+                  />
+                  {hasContributions && (
+                    <p className="text-xs text-gray-400">
+                      Ticket price is locked after tickets have been sold.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {(collectionType === 'fixed' || collectionType === 'flat' || (isTicket && priceTiers.length === 0)) && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ed-max">{isTicket ? 'Total Ticket Capacity' : 'Maximum Contributors'}</Label>
                   <Input
                     id="ed-max"
                     type="number"
                     value={maxContributions || ''}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMaxContributions(e.target.value ? parseInt(e.target.value) : undefined)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const val = e.target.value ? parseInt(e.target.value) : undefined;
+                      const minAllowed = initialData.total_contributions || 0;
+                      if (val !== undefined && val < minAllowed) return;
+                      setMaxContributions(val);
+                    }}
                     placeholder="Leave empty for unlimited"
-                    min="1"
+                    min={initialData.total_contributions || 1}
                   />
+                  {(initialData.total_contributions || 0) > 0 && (
+                    <p className="text-xs text-gray-400">
+                      Minimum {initialData.total_contributions} (tickets already sold). You can only increase capacity.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -593,9 +640,25 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Price</Label>
-                          <Input value={`₦${tier.price.toLocaleString()}`} disabled className="bg-gray-50 text-gray-500" />
+                          <Input
+                            type="number"
+                            value={tier.price || ''}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const val = e.target.value ? parseFloat(e.target.value) : 0;
+                              updatePriceTier(index, { price: Number.isFinite(val) ? val : 0 });
+                            }}
+                            min="1"
+                            step="0.01"
+                            disabled={hasContributions}
+                            className={hasContributions ? 'bg-gray-50 text-gray-500' : ''}
+                          />
                         </div>
                       </div>
+                      {hasContributions && (
+                        <p className="text-xs text-gray-400">
+                          Tier prices are locked after tickets have been sold.
+                        </p>
+                      )}
                       <div className="space-y-1">
                         <Label className="text-xs">Description</Label>
                         <Textarea value={tier.description || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updatePriceTier(index, { description: e.target.value })} rows={2} />

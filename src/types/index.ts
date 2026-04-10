@@ -36,6 +36,7 @@ export interface PriceTier {
   price: number;
   description?: string;
   quantity?: number | null;
+  prefix?: string | null;
 }
 
 export interface Collection {

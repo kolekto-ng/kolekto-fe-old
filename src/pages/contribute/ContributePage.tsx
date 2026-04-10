@@ -94,15 +94,34 @@ const ContributePage: React.FC = () => {
           };
         }
 
-        const { data: paidContributions, error: contributionsError } = await supabase
-          .from('contributions')
-          .select('id, contributor_information')
-          .eq('collection_id', collectionData.id)
-          .eq('status', 'paid');
+        const [
+          { data: paidContributions, error: contributionsError },
+          { data: walletData },
+        ] = await Promise.all([
+          supabase
+            .from('contributions')
+            .select('id, contributor_information')
+            .eq('collection_id', collectionData.id)
+            .eq('status', 'paid'),
+          // Fetch wallet so the Open Pool progress bar has the real total raised
+          supabase
+            .from('wallets')
+            .select('net_payment')
+            .eq('collection_id', collectionData.id)
+            .maybeSingle(),
+        ]);
 
         if (contributionsError) throw new Error(contributionsError.message);
 
-        setCollection(annotateTierAvailability(collectionData, paidContributions || []));
+        // Inject total_amount (= net_payment from wallet) and goal_amount so
+        // ContributeFlow's Open Pool progress bar shows accurate figures.
+        const enrichedCollection = {
+          ...collectionData,
+          total_amount: walletData?.net_payment ?? 0,
+          goal_amount: collectionData.target_amount ?? collectionData.goal_amount ?? 0,
+        };
+
+        setCollection(annotateTierAvailability(enrichedCollection, paidContributions || []));
       } catch (err: any) {
         setError(err.message || 'Failed to load collection.');
       } finally {
@@ -122,13 +141,25 @@ const ContributePage: React.FC = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${collection.id}` },
         async () => {
-          const { data: paidContributions } = await supabase
-            .from('contributions')
-            .select('id, contributor_information')
-            .eq('collection_id', collection.id)
-            .eq('status', 'paid');
+          const [{ data: paidContributions }, { data: walletData }] = await Promise.all([
+            supabase
+              .from('contributions')
+              .select('id, contributor_information')
+              .eq('collection_id', collection.id)
+              .eq('status', 'paid'),
+            supabase
+              .from('wallets')
+              .select('net_payment')
+              .eq('collection_id', collection.id)
+              .maybeSingle(),
+          ]);
 
-          setCollection((prev: any) => annotateTierAvailability(prev, paidContributions || []));
+          setCollection((prev: any) =>
+            annotateTierAvailability(
+              { ...prev, total_amount: walletData?.net_payment ?? prev.total_amount ?? 0 },
+              paidContributions || []
+            )
+          );
         }
       )
       .subscribe();
@@ -248,8 +279,9 @@ const ContributePage: React.FC = () => {
         </Card>
       );
     }
-    // pending_review = fundraising awaiting admin approval — do NOT show contact prompt
-    if (status === 'pending_review') {
+    // pending_review / pending_verification = fundraising awaiting admin approval
+    // Do NOT show contact prompt for either — contributor should simply wait.
+    if (status === 'pending_review' || status === 'pending_verification') {
       return (
         <Card className="w-full max-w-md border-amber-200 bg-amber-50">
           <CardContent className="pt-6 text-center space-y-3">

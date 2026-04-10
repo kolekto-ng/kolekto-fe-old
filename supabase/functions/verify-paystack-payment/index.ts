@@ -114,6 +114,31 @@ function calculateFees(amount: number, collectionType: string, feeBearer: FeeBea
   return { platformFee, gatewayFee, totalFees, totalPayable };
 }
 
+/**
+ * Given the total a contributor actually paid (Paystack amount / 100),
+ * reverse-calculate the base contribution amount. Used as a fallback when
+ * metadata.contributionAmount is missing (e.g. due to Paystack metadata
+ * truncation on redirect).
+ */
+function reverseCalculateContribution(
+  totalPayable: number,
+  collectionType: string,
+  feeBearer: FeeBearer
+): number {
+  if (feeBearer === "organizer") return roundCurrency(totalPayable);
+  // Binary search: find C such that calculateFees(C, ...).totalPayable ≈ totalPayable
+  let lo = 0;
+  let hi = totalPayable;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const { totalPayable: tp } = calculateFees(mid, collectionType, feeBearer);
+    if (Math.abs(tp - totalPayable) < 0.005) return roundCurrency(mid);
+    if (tp < totalPayable) lo = mid;
+    else hi = mid;
+  }
+  return roundCurrency((lo + hi) / 2);
+}
+
 function allocateAmounts(total: number, weights: number[]) {
   const normalized = weights.map((w) => roundCurrency(Math.max(0, w)));
   const sum = normalized.reduce((a, w) => a + w, 0);
@@ -181,10 +206,12 @@ function normalizePaymentRequest(input: {
   collection: Record<string, unknown>;
   metadata: Record<string, unknown>;
   paidRows?: Array<Record<string, unknown>>;
+  paystackVerifiedTotal?: number;
 }) {
   const collection = input.collection;
   const metadata = input.metadata || {};
   const paidRows = input.paidRows || [];
+  const paystackVerifiedTotal = input.paystackVerifiedTotal ?? 0;
 
   const collectionId = String(metadata.collectionId || metadata.collection_id || collection.id || "").trim();
   if (!collectionId) throw new PaymentValidationError("A valid collection ID is required.", 400, "missing_collection_id");
@@ -252,22 +279,29 @@ function normalizePaymentRequest(input: {
   if (collectionType === "fundraising" || collectionType === "open_pool") {
     const requestedAmount = roundCurrency(asNumber(metadata.contributionAmount || metadata.amount));
     const minimumAmount = roundCurrency(asNumber(collection.min_contribution || collection.amount));
-    if (!requestedAmount || requestedAmount <= 0) {
+    // Fallback: if metadata.contributionAmount was lost (e.g. Paystack metadata truncation
+    // on redirect), reverse-calculate the base contribution from the verified Paystack total.
+    const derivedAmount =
+      (!requestedAmount || requestedAmount <= 0) && paystackVerifiedTotal > 0
+        ? reverseCalculateContribution(paystackVerifiedTotal, collectionType, feeBearer)
+        : 0;
+    const effectiveAmount = requestedAmount > 0 ? requestedAmount : derivedAmount;
+    if (!effectiveAmount || effectiveAmount <= 0) {
       throw new PaymentValidationError(
         collectionType === "fundraising" ? "Enter a valid donation amount." : "Enter a valid contribution amount.",
         400, "invalid_amount", { collectionId, collectionType, requestedAmount }
       );
     }
-    if (minimumAmount > 0 && requestedAmount < minimumAmount) {
+    if (minimumAmount > 0 && effectiveAmount < minimumAmount) {
       throw new PaymentValidationError(
         `${collectionType === "fundraising" ? "Minimum donation" : "Minimum contribution"} is NGN ${minimumAmount.toLocaleString("en-NG")}.`,
-        400, "amount_below_minimum", { collectionId, requestedAmount, minimumAmount }
+        400, "amount_below_minimum", { collectionId, effectiveAmount, minimumAmount }
       );
     }
     if (remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
       throw new PaymentValidationError("This collection has reached its contribution limit.", 400, "collection_full", { collectionId, paidCount, maxContributions });
     }
-    contributionAmount = requestedAmount;
+    contributionAmount = effectiveAmount;
 
   } else if (collectionType === "ticket") {
     if (String(collection.ticket_mode || "") === "tiered") {
@@ -506,11 +540,14 @@ serve(async (req: Request) => {
           });
         }
 
+        // verifiedTotal is computed right before the mismatch check below
+        const verifiedTotalEarly = roundCurrency(Number(transaction.amount || 0) / 100);
         try {
           normalizedPayment = normalizePaymentRequest({
             collection,
             metadata,
             paidRows: (paidRows || []) as Array<Record<string, unknown>>,
+            paystackVerifiedTotal: verifiedTotalEarly,
           });
         } catch (error: unknown) {
           if (error instanceof PaymentValidationError) {
@@ -521,9 +558,18 @@ serve(async (req: Request) => {
           throw error;
         }
 
-        // Verify amount matches: Paystack charged totalPayable, not contributionAmount
-        const verifiedTotal = roundCurrency(Number(transaction.amount || 0) / 100);
-        if (Math.abs(verifiedTotal - normalizedPayment.totalPayable) > 0.01) {
+        // Verify amount matches: Paystack charged totalPayable, not contributionAmount.
+        // For open_pool/fundraising where metadata.contributionAmount was missing and we
+        // reverse-calculated the amount from verifiedTotal, allow a slightly wider tolerance
+        // to absorb binary-search rounding (max ~₦0.10 off).
+        const verifiedTotal = verifiedTotalEarly;
+        const metadataHadAmount =
+          asNumber(metadata.contributionAmount || metadata.amount) > 0;
+        const isOpenAmount =
+          normalizedPayment.collectionType === "open_pool" ||
+          normalizedPayment.collectionType === "fundraising";
+        const mismatchTolerance = isOpenAmount && !metadataHadAmount ? 1.0 : 0.01;
+        if (Math.abs(verifiedTotal - normalizedPayment.totalPayable) > mismatchTolerance) {
           console.error("Amount mismatch:", { reference, collectionId, verifiedTotal, expectedTotal: normalizedPayment.totalPayable });
           return new Response(JSON.stringify({ error: "Payment amount validation failed. Contact support with your reference." }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

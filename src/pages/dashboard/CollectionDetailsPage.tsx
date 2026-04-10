@@ -1182,6 +1182,7 @@ const CollectionDetailsPage: React.FC = () => {
           return {
             title: col.title || '',
             description: (colType === 'fundraising' ? col.campaign_summary : col.description) || '',
+            amount: Number(col.amount || 0),
             deadline: col.deadline || '',
             fee_bearer: col.fee_bearer || 'contributor',
             max_contributions: col.max_contributions || undefined,

@@ -13,10 +13,12 @@ const PaymentCallback = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
 
-  // Guard against React 18 StrictMode double-invocation AND component remounts.
-  // We use sessionStorage so the lock survives remounts within the same browser tab.
-  // Without this, verify fires twice simultaneously — the second call passes the
-  // idempotency check before the first insert completes, doubling contributions.
+  // Guard against React 18 StrictMode double-invocation within the SAME render
+  // cycle. processingRef prevents the same component instance from firing twice.
+  // We intentionally do NOT use a sessionStorage lock for the full page — if the
+  // user lands on this page (e.g. after a Paystack redirect or page refresh) we
+  // always call verify. The edge function is idempotent: it returns existing
+  // contribution data without creating duplicates.
   const processingRef = React.useRef(false);
 
   useEffect(() => {
@@ -26,18 +28,9 @@ const PaymentCallback = () => {
       return;
     }
 
-    // In-memory guard: catches React StrictMode's same-instance double-fire
+    // In-memory guard only: prevents the same component instance from firing twice
+    // (React 18 StrictMode double-invocation in development).
     if (processingRef.current) return;
-
-    // Session-level guard: catches remounts within the same tab session.
-    // Key includes the reference so different payments are not blocked.
-    const lockKey = `kolekto-verify-lock-${transactionRef}`;
-    if (sessionStorage.getItem(lockKey)) {
-      // Already processed — pull existing receipt from localStorage if present
-      setLoading(false);
-      return;
-    }
-    sessionStorage.setItem(lockKey, "1");
     processingRef.current = true;
 
     const process = async () => {
@@ -61,7 +54,6 @@ const PaymentCallback = () => {
 
         if (data?.receiptData) {
           setReceiptData(data.receiptData);
-          localStorage.removeItem("kolekto-pending-contribution");
           return;
         }
 

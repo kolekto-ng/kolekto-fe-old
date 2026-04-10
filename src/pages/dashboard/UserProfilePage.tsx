@@ -25,7 +25,7 @@ const ProfilePage: React.FC = () => {
   const { user } = useAuthStore() as any;
   const { activeSection, setActiveSection, kycData, fetchKYCStatus } = useProfileStore();
 
-  const kycStatus = user?.verification_status || kycData?.overallStatus || 'not_started';
+  const kycStatus = kycData?.overallStatus || user?.verification_status || 'not_started';
   const isVerified = kycStatus === 'verified';
 
   useEffect(() => {

@@ -681,12 +681,15 @@ const PwaCollectionDetails: React.FC = () => {
                 initialData={{
                     title: currentCollection.title,
                     description: currentCollection.description || '',
+                    amount: Number(currentCollection.amount || 0),
                     deadline: currentCollection.deadline,
                     type: colType,
                     max_contributions: currentCollection.max_contributions,
                     price_tiers: currentCollection.price_tiers,
                     code_prefix: currentCollection.code_prefix || '',
                     contributions_fields: currentCollection.contributions_fields || [],
+                    total_contributions: currentCollection.total_contributions || 0,
+                    collection_type: currentCollection.collection_type || currentCollection.type || colType,
                 }}
                 onSuccess={handleEditSuccess}
             />

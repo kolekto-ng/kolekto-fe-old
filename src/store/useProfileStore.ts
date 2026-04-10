@@ -86,6 +86,27 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   fetchKYCStatus: async (userId: string) => {
     set({ kycLoading: true });
+
+    // Subscribe to real-time changes on this user's kyc_verifications row so
+    // the KYC section updates automatically when an admin approves a document
+    // — without requiring a manual refresh.
+    supabase
+      .channel(`kyc-status-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "kyc_verifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          // Re-fetch silently (no loading spinner) when any KYC row changes
+          get().fetchKYCStatus(userId);
+        }
+      )
+      .subscribe();
+
     try {
       const [res, kycVerificationRes] = await Promise.all([
         axiosInstance.get(`/settings/kyc/${userId}`),
