@@ -20,6 +20,43 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const url = new URL(req.url);
+    let payload: Record<string, unknown> = {};
+
+    if (req.method !== "GET") {
+      try {
+        payload = await req.json();
+      } catch {
+        payload = {};
+      }
+    }
+
+    const requestedStatusRaw =
+      payload.status ?? url.searchParams.get("status") ?? null;
+    const requestedStatus =
+      typeof requestedStatusRaw === "string"
+        ? requestedStatusRaw.toLowerCase().trim()
+        : null;
+
+    const onlyLiveRaw =
+      payload.onlyLive ??
+      payload.only_live ??
+      url.searchParams.get("onlyLive") ??
+      url.searchParams.get("only_live");
+    const onlyLive =
+      onlyLiveRaw === true ||
+      onlyLiveRaw === "true" ||
+      onlyLiveRaw === "1";
+    const lightweightRaw =
+      payload.lightweight ??
+      payload.minimal ??
+      url.searchParams.get("lightweight") ??
+      url.searchParams.get("minimal");
+    const lightweight =
+      lightweightRaw === true ||
+      lightweightRaw === "true" ||
+      lightweightRaw === "1";
+
     // Create admin client with service role (bypasses RLS)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -27,11 +64,25 @@ Deno.serve(async (req: Request) => {
     );
 
     // Fetch all fundraising collections
-    const { data: colls, error: collErr } = await supabase
+    let collectionsQuery = supabase
       .from("collections")
-      .select("*")
+      .select(
+        lightweight
+          ? "id, user_id, slug, title, description, campaign_summary, banner_url, target_amount, min_contribution, currency, is_open_ended, deadline, campaign_country, campaign_category, campaign_keywords, total_contributions, status, created_at, updated_at"
+          : "*"
+      )
       .eq("collection_type", "fundraising")
       .order("created_at", { ascending: false });
+
+    if (requestedStatus) {
+      const rawStatus =
+        requestedStatus === "pending_verification"
+          ? "pending_review"
+          : requestedStatus;
+      collectionsQuery = collectionsQuery.eq("status", rawStatus);
+    }
+
+    const { data: colls, error: collErr } = await collectionsQuery;
 
     if (collErr) throw collErr;
 
@@ -45,39 +96,60 @@ Deno.serve(async (req: Request) => {
     let imagesMap: Record<string, any[]> = {};
     let donationsMap: Record<string, any[]> = {};
     let contribMap: Record<string, number> = {};
+      let walletMap: Record<string, any> = {};
 
     // Fetch related data in parallel
     if (ids.length > 0) {
-      const [campRes, profRes, kycRes, docsRes, imgRes, donRes, contRes] = await Promise.all([
-        supabase.from("campaigns").select("*").in("id", ids),
-        creatorIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", creatorIds) : { data: [] },
-        creatorIds.length > 0 ? supabase.from("kyc_verifications").select("user_id, status").in("user_id", creatorIds) : { data: [] },
-        supabase.from("verification_documents").select("*").in("campaign_id", ids),
-        supabase.from("campaign_images").select("*").in("campaign_id", ids),
-        supabase.from("campaign_donations").select("*").in("campaign_id", ids),
-        supabase.from("contributions").select("id, collection_id, status").in("collection_id", ids),
-      ]);
+      if (lightweight) {
+        const [walletRes] = await Promise.all([
+          supabase
+            .from("wallets")
+            .select("collection_id, net_payment, updated_at")
+            .in("collection_id", ids),
+        ]);
 
-      (campRes.data || []).forEach((c: any) => { campaignsMap[c.id] = c; });
-      (profRes.data || []).forEach((p: any) => { profilesMap[p.id] = p; });
-      ((kycRes as any).data || []).forEach((k: any) => {
-        if (profilesMap[k.user_id]) profilesMap[k.user_id].kyc_status = k.status;
-      });
-      (docsRes.data || []).forEach((d: any) => {
-        if (!docsMap[d.campaign_id]) docsMap[d.campaign_id] = [];
-        docsMap[d.campaign_id].push(d);
-      });
-      (imgRes.data || []).forEach((i: any) => {
-        if (!imagesMap[i.campaign_id]) imagesMap[i.campaign_id] = [];
-        imagesMap[i.campaign_id].push(i);
-      });
-      (donRes.data || []).forEach((d: any) => {
-        if (!donationsMap[d.campaign_id]) donationsMap[d.campaign_id] = [];
-        donationsMap[d.campaign_id].push(d);
-      });
-      (contRes.data || []).forEach((c: any) => {
-        if (c.status === "paid") contribMap[c.collection_id] = (contribMap[c.collection_id] || 0) + 1;
-      });
+        (walletRes.data || []).forEach((wallet: any) => {
+          const existing = walletMap[wallet.collection_id];
+          if (
+            !existing ||
+            new Date(wallet.updated_at || 0).getTime() >
+              new Date(existing.updated_at || 0).getTime()
+          ) {
+            walletMap[wallet.collection_id] = wallet;
+          }
+        });
+      } else {
+        const [campRes, profRes, kycRes, docsRes, imgRes, donRes, contRes] = await Promise.all([
+          supabase.from("campaigns").select("*").in("id", ids),
+          creatorIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", creatorIds) : { data: [] },
+          creatorIds.length > 0 ? supabase.from("kyc_verifications").select("user_id, status").in("user_id", creatorIds) : { data: [] },
+          supabase.from("verification_documents").select("*").in("campaign_id", ids),
+          supabase.from("campaign_images").select("*").in("campaign_id", ids),
+          supabase.from("campaign_donations").select("*").in("campaign_id", ids),
+          supabase.from("contributions").select("id, collection_id, status").in("collection_id", ids),
+        ]);
+
+        (campRes.data || []).forEach((c: any) => { campaignsMap[c.id] = c; });
+        (profRes.data || []).forEach((p: any) => { profilesMap[p.id] = p; });
+        ((kycRes as any).data || []).forEach((k: any) => {
+          if (profilesMap[k.user_id]) profilesMap[k.user_id].kyc_status = k.status;
+        });
+        (docsRes.data || []).forEach((d: any) => {
+          if (!docsMap[d.campaign_id]) docsMap[d.campaign_id] = [];
+          docsMap[d.campaign_id].push(d);
+        });
+        (imgRes.data || []).forEach((i: any) => {
+          if (!imagesMap[i.campaign_id]) imagesMap[i.campaign_id] = [];
+          imagesMap[i.campaign_id].push(i);
+        });
+        (donRes.data || []).forEach((d: any) => {
+          if (!donationsMap[d.campaign_id]) donationsMap[d.campaign_id] = [];
+          donationsMap[d.campaign_id].push(d);
+        });
+        (contRes.data || []).forEach((c: any) => {
+          if (c.status === "paid") contribMap[c.collection_id] = (contribMap[c.collection_id] || 0) + 1;
+        });
+      }
     }
 
     // Build enriched campaign objects
@@ -89,9 +161,11 @@ Deno.serve(async (req: Request) => {
       const storyImages = Array.isArray(c.story_images) ? c.story_images : [];
 
       const donations = donationsMap[c.id] || [];
-      const totalRaised = donations
-        .filter((d: any) => d.status === "success" || d.status === "paid")
-        .reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
+      const totalRaised = lightweight
+        ? Number(walletMap[c.id]?.net_payment || 0)
+        : donations
+            .filter((d: any) => d.status === "success" || d.status === "paid")
+            .reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
 
       // Helper: case-insensitive platform matching
       const findSocialUrl = (platforms: string[]): string | null => {
@@ -113,13 +187,14 @@ Deno.serve(async (req: Request) => {
 
       return {
         id: c.id,
+        slug: c.slug || null,
         creator_id: c.user_id,
         creator_name: profile?.full_name || profile?.email || "Unknown",
         creator_email: profile?.email || "",
         creator_kyc_status: profile?.kyc_status || "unverified",
         title: c.title,
         summary: c.campaign_summary || camp?.summary || c.description || null,
-        main_image_url: storyImages[0] || camp?.main_image_url || c.banner_url || null,
+        main_image_url: c.banner_url || storyImages[0] || camp?.main_image_url || null,
         target_amount: c.target_amount || camp?.target_amount || null,
         min_contribution: c.min_contribution || camp?.min_contribution || null,
         currency: c.currency || "NGN",
@@ -147,28 +222,46 @@ Deno.serve(async (req: Request) => {
         campaign_category: c.campaign_category || null,
         campaign_keywords: c.campaign_keywords || null,
         campaign_country: c.campaign_country || null,
-        story_images: storyImages,
+        story_images: lightweight ? [] : storyImages,
         banner_url: c.banner_url || null,
         support_phone_number: c.support_phone_number || null,
-        verification_documents: docsMap[c.id] || [],
-        campaign_images: imagesMap[c.id] || [],
-        campaign_donations: donations,
+        verification_documents: lightweight ? [] : docsMap[c.id] || [],
+        campaign_images: lightweight ? [] : imagesMap[c.id] || [],
+        campaign_donations: lightweight ? [] : donations,
         total_raised: totalRaised,
-        contributions_count: contribMap[c.id] || 0,
+        contributions_count: lightweight
+          ? Number(c.total_contributions || 0)
+          : contribMap[c.id] || 0,
       };
+    });
+
+    const visibleCampaigns = enriched.filter((campaign: any) => {
+      if (requestedStatus && campaign.status !== requestedStatus) {
+        return false;
+      }
+
+      if (
+        onlyLive &&
+        campaign.deadline &&
+        new Date(campaign.deadline).getTime() < Date.now()
+      ) {
+        return false;
+      }
+
+      return true;
     });
 
     // Calculate statistics
     const stats = {
-      total: enriched.length,
-      pending_verification: enriched.filter((c: any) => c.status === "pending_verification" || c.status === "pending").length,
-      active: enriched.filter((c: any) => c.status === "active").length,
-      paused: enriched.filter((c: any) => c.status === "paused").length,
-      rejected: enriched.filter((c: any) => c.status === "rejected").length,
-      closed: enriched.filter((c: any) => c.status === "closed" || c.status === "completed").length,
+      total: visibleCampaigns.length,
+      pending_verification: visibleCampaigns.filter((c: any) => c.status === "pending_verification" || c.status === "pending").length,
+      active: visibleCampaigns.filter((c: any) => c.status === "active").length,
+      paused: visibleCampaigns.filter((c: any) => c.status === "paused").length,
+      rejected: visibleCampaigns.filter((c: any) => c.status === "rejected").length,
+      closed: visibleCampaigns.filter((c: any) => c.status === "closed" || c.status === "completed").length,
     };
 
-    return json({ data: enriched, stats });
+    return json({ data: visibleCampaigns, stats });
   } catch (err: any) {
     console.error("Error fetching campaigns:", err);
     return json({ error: "Failed to fetch campaigns", details: err.message }, 500);

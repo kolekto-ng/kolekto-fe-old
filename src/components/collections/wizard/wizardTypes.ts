@@ -1,6 +1,10 @@
 import { FormField } from '@/types';
 
 export type CollectionType = 'fixed' | 'tiered' | 'open_pool' | 'ticket' | 'fundraising';
+export interface DraftUploadFile {
+  name: string;
+  dataUrl: string;
+}
 
 export type StepId =
   | 'type-selection'
@@ -107,8 +111,8 @@ export interface WizardData {
   social_links: SocialLink[];
 }
 
-export const initialWizardData: WizardData = {
-  collection_type: 'fixed',
+export const createInitialWizardData = (collectionType: CollectionType = 'fixed'): WizardData => ({
+  collection_type: collectionType,
   title: '',
   description: '',
   deadline: '',
@@ -142,6 +146,53 @@ export const initialWizardData: WizardData = {
   campaign_phone: '',
   campaign_country: 'Nigeria',
   social_links: [{ platform: 'twitter', url: '' }],
+});
+
+export const initialWizardData: WizardData = createInitialWizardData();
+
+export const hasWizardDraftContent = (
+  data: WizardData,
+  storyImageFiles: DraftUploadFile[] = [],
+  verificationFiles: DraftUploadFile[] = [],
+  stepIndex = 0
+) => {
+  if (stepIndex > 0) return true;
+  if (data.collection_type !== 'fixed') return true;
+  if (storyImageFiles.length > 0 || verificationFiles.length > 0) return true;
+
+  return Object.entries(data).some(([key, value]) => {
+    if (key === 'collection_type') return false;
+
+    if (typeof value === 'string') {
+      return value.trim().length > 0;
+    }
+
+    if (typeof value === 'boolean') {
+      return value !== (initialWizardData as any)[key];
+    }
+
+    if (Array.isArray(value)) {
+      if (key === 'pricing_tiers') {
+        return value.length !== 1 || value.some((tier) =>
+          Object.entries(tier).some(([tierKey, tierValue]) => tierKey !== 'id' && String(tierValue).trim())
+        );
+      }
+
+      if (key === 'form_fields') {
+        return value.length !== 1 || value.some((field) =>
+          field.name?.trim() || field.type !== 'text' || field.required
+        );
+      }
+
+      if (key === 'social_links') {
+        return value.length !== 1 || value.some((link) => link.url?.trim() || link.platform !== 'twitter');
+      }
+
+      return value.length > 0;
+    }
+
+    return false;
+  });
 };
 
 // Fee calculation utility

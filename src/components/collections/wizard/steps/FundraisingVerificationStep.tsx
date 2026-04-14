@@ -10,12 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { WizardData, SocialLink } from '../wizardTypes';
+import { FUNDRAISING_CATEGORIES } from '@/constants/fundraising';
+import { DraftUploadFile, WizardData, SocialLink } from '../wizardTypes';
 
-export interface VerificationFile {
-  name: string;
-  dataUrl: string;
-}
+export type VerificationFile = DraftUploadFile;
 
 interface Props {
   data: WizardData;
@@ -25,20 +23,6 @@ interface Props {
   onDocsChange: (docs: string[]) => void;
   onFilesChange?: (files: VerificationFile[]) => void;
 }
-
-const CATEGORIES = [
-  'Education',
-  'Healthcare',
-  'Humanitarian Relief',
-  'Community Development',
-  'Environment',
-  'Arts & Culture',
-  'Sports',
-  'Religion',
-  'Memorial',
-  'Personal Emergency',
-  'Other',
-];
 
 const SOCIAL_PLATFORMS = ['Twitter / X', 'Instagram', 'Facebook', 'LinkedIn', 'YouTube', 'TikTok', 'Website'];
 
@@ -177,7 +161,7 @@ const FundraisingVerificationStep: React.FC<Props> = ({
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
           <SelectContent className="bg-white z-50">
-            {CATEGORIES.map((cat) => (
+            {FUNDRAISING_CATEGORIES.map((cat) => (
               <SelectItem key={cat} value={cat}>
                 {cat}
               </SelectItem>

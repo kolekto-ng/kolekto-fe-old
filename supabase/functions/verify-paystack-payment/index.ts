@@ -422,11 +422,7 @@ function normalizePaymentRequest(input: {
     formData,
     contact,
     isAnonymous: metadata.isAnonymous === true || metadata.isAnonymous === 1 || metadata.isAnonymous === "1" || metadata.isAnonymous === "true",
-    codePrefix: String(
-      metadata.codePrefix ||
-      collection.code_prefix ||
-      (collectionType === "ticket" ? "TKT" : "KLK")
-    ),
+    codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
     providedAmount: roundCurrency(asNumber(metadata.totalPayable || metadata.amount || 0)),
   };
 }
@@ -517,6 +513,7 @@ serve(async (req: Request) => {
 
     let processedContributions: Record<string, unknown>[] = [];
     let normalizedPayment: ReturnType<typeof normalizePaymentRequest> | null = null;
+    let isNewPayment = false; // true only when we insert new contributions (not idempotent replay)
 
     if (transaction.status === "success") {
       // ── Idempotency: check if we already recorded contributions for this reference ──
@@ -613,14 +610,17 @@ serve(async (req: Request) => {
 
         for (let index = 0; index < contributionUnits.length; index++) {
           const unit = contributionUnits[index];
-          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "KLK").toUpperCase();
+          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase();
+          let uniqueCode: string | null = null;
 
-          // Per-prefix sequential code: count existing + count in this batch so far
-          const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
-          const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
-          const sequenceNumber = existingForPrefix + batchForPrefix + 1;
-          batchCountByPrefix.set(prefix, batchForPrefix + 1);
-          const uniqueCode = `${prefix}${String(sequenceNumber).padStart(3, "0")}`;
+          if (prefix) {
+            // Per-prefix sequential code: count existing + count in this batch so far
+            const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
+            const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
+            const sequenceNumber = existingForPrefix + batchForPrefix + 1;
+            batchCountByPrefix.set(prefix, batchForPrefix + 1);
+            uniqueCode = `${prefix}${String(sequenceNumber).padStart(3, "0")}`;
+          }
 
           // Fix #1: When organizer absorbs fees, contributions.amount = net the host receives.
           // When contributor pays fees, contributions.amount = base contribution amount.
@@ -738,9 +738,128 @@ serve(async (req: Request) => {
           }
           processedContributions.push(contribution);
         }
+        // Flag as a fresh (non-idempotent) payment so the receipt email is sent below
+        isNewPayment = processedContributions.length > 0;
       }
 
       await refreshCollectionAndWallets(supabase, collectionId, collection);
+
+      // ── Send receipt + organizer email (best-effort, non-blocking) ──────────
+      // Primary path: call the backend's /api/payments/send-receipt endpoint
+      //   which uses Zoho SMTP (already configured in the backend).
+      // Fallback: Resend API (if RESEND_API_KEY is set as a Supabase secret).
+      // Fires only on first-time payment insertion — never on idempotent replays.
+      if (isNewPayment && normalizedPayment) {
+        const payerEmail = normalizedPayment.contact.email || String(customer.email || "");
+        const payerName = normalizedPayment.contact.name || payerEmail.split("@")[0];
+
+        if (payerEmail) {
+          // @ts-ignore — Deno is a valid global in Supabase Edge Functions
+          const backendUrl = Deno.env.get("BACKEND_URL");
+          // @ts-ignore
+          const notifySecret = Deno.env.get("BACKEND_NOTIFY_SECRET");
+
+          // Build participant list for the email template
+          const emailParticipants = processedContributions.map((c) => {
+            const infoRows = Array.isArray((c as Record<string, unknown>).contributor_information)
+              ? ((c as Record<string, unknown>).contributor_information as Array<Record<string, unknown>>)
+              : [];
+            const details = infoRows.flatMap((row) =>
+              Object.entries(row)
+                .filter(([k]) => !k.startsWith("_"))
+                .map(([label, value]) => ({ label, value: String(value) }))
+            );
+            return {
+              id: String((c as Record<string, unknown>).id || ""),
+              uniqueCode: String((c as Record<string, unknown>).contributor_unique_code || ""),
+              details,
+            };
+          });
+
+          if (backendUrl) {
+            // ── Primary: backend Zoho SMTP email ──────────────────────────────
+            fetch(`${backendUrl}/api/payments/send-receipt`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(notifySecret ? { "x-internal-secret": notifySecret } : {}),
+              },
+              body: JSON.stringify({
+                payerEmail,
+                payerName,
+                collectionTitle: String(collection.title || "Collection"),
+                totalPaid: normalizedPayment.totalPayable,
+                currency: "NGN",
+                transactionRef: String(transaction.reference || ""),
+                paidAt: String(transaction.paid_at || new Date().toISOString()),
+                channel: String(transaction.channel || "card"),
+                participants: emailParticipants,
+                collectionId: collectionId,
+              }),
+            }).then(async (r) => {
+              if (!r.ok) {
+                const body = await r.text().catch(() => "");
+                console.warn("[verify] backend email non-OK:", r.status, body);
+                // Fallback to Resend if backend returned an error
+                return sendReceiptEmail({
+                  payerEmail, payerName,
+                  collectionTitle: String(collection.title || "Collection"),
+                  collectionType: normalizedPayment!.collectionType,
+                  contributionAmount: normalizedPayment!.contributionAmount,
+                  totalPaid: normalizedPayment!.totalPayable,
+                  platformFee: normalizedPayment!.platformFee,
+                  gatewayFee: normalizedPayment!.gatewayFee,
+                  transactionRef: String(transaction.reference || ""),
+                  paidAt: String(transaction.paid_at || new Date().toISOString()),
+                  uniqueCodes: processedContributions
+                    .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                    .filter(Boolean),
+                }).catch((e: unknown) =>
+                  console.warn("[verify] resend fallback also failed:", (e as Error)?.message)
+                );
+              }
+              console.log("[verify] ✅ Backend email sent successfully");
+            }).catch((err: unknown) => {
+              console.warn("[verify] backend email fetch error, trying Resend:", (err as Error)?.message);
+              // Fallback to Resend on network error
+              sendReceiptEmail({
+                payerEmail, payerName,
+                collectionTitle: String(collection.title || "Collection"),
+                collectionType: normalizedPayment!.collectionType,
+                contributionAmount: normalizedPayment!.contributionAmount,
+                totalPaid: normalizedPayment!.totalPayable,
+                platformFee: normalizedPayment!.platformFee,
+                gatewayFee: normalizedPayment!.gatewayFee,
+                transactionRef: String(transaction.reference || ""),
+                paidAt: String(transaction.paid_at || new Date().toISOString()),
+                uniqueCodes: processedContributions
+                  .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                  .filter(Boolean),
+              }).catch((e: unknown) =>
+                console.warn("[verify] resend fallback also failed:", (e as Error)?.message)
+              );
+            });
+          } else {
+            // ── No BACKEND_URL configured: fall back to Resend directly ───────
+            sendReceiptEmail({
+              payerEmail, payerName,
+              collectionTitle: String(collection.title || "Collection"),
+              collectionType: normalizedPayment.collectionType,
+              contributionAmount: normalizedPayment.contributionAmount,
+              totalPaid: normalizedPayment.totalPayable,
+              platformFee: normalizedPayment.platformFee,
+              gatewayFee: normalizedPayment.gatewayFee,
+              transactionRef: String(transaction.reference || ""),
+              paidAt: String(transaction.paid_at || new Date().toISOString()),
+              uniqueCodes: processedContributions
+                .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                .filter(Boolean),
+            }).catch((err: unknown) =>
+              console.warn("[verify] resend email failed (no backend URL set):", (err as Error)?.message)
+            );
+          }
+        }
+      }
     }
 
     const receiptData = buildReceiptData({
@@ -782,7 +901,7 @@ function buildContributionUnits(
         amount: selection.pricePerUnit,
         tierId: selection.tierId,
         tierName: selection.tierName,
-        prefix: selection.prefix || normalizedPayment.codePrefix,
+        prefix: selection.prefix || normalizedPayment.codePrefix || null,
       }))
     );
   }
@@ -790,8 +909,7 @@ function buildContributionUnits(
     amount: normalizedPayment.contributionAmount,
     tierId: normalizedPayment.selectedTierId,
     tierName: normalizedPayment.selectedTier,
-    // Use tier-specific prefix first, then collection prefix, then default
-    prefix: String(normalizedPayment.selectedTierPrefix || collection.code_prefix || normalizedPayment.codePrefix),
+    prefix: normalizedPayment.selectedTierPrefix || collection.code_prefix || normalizedPayment.codePrefix || null,
   }];
 }
 
@@ -1002,6 +1120,13 @@ function buildReceiptData(input: {
 
   return {
     collectionTitle: String(collection.title || "Your Collection"),
+    collectionType: String(collection.collection_type || collection.type || "fixed"),
+    description: collection.description ? String(collection.description) : "",
+    campaignSummary: collection.campaign_summary ? String(collection.campaign_summary) : "",
+    bannerUrl: String(collection.banner_url || collection.banner_image || ""),
+    eventDate: collection.event_date ? String(collection.event_date) : "",
+    uniqueIdEnabled: Boolean(collection.unique_id_enabled),
+    codePrefix: collection.code_prefix ? String(collection.code_prefix) : "",
     contributionAmount,  // Total Raised contribution — no fees
     platformFee,
     gatewayFee,
@@ -1072,3 +1197,150 @@ function stripStandardFields(data: Record<string, unknown>) {
   }, {});
 }
 
+// ─── RECEIPT EMAIL ────────────────────────────────────────────────────────────
+/**
+ * Sends a branded HTML receipt email to the payer via Resend.
+ * Requires RESEND_API_KEY env var. Fails gracefully if not configured.
+ */
+async function sendReceiptEmail(params: {
+  payerEmail: string;
+  payerName: string;
+  collectionTitle: string;
+  collectionType: string;
+  contributionAmount: number;
+  totalPaid: number;
+  platformFee: number;
+  gatewayFee: number;
+  transactionRef: string;
+  paidAt: string;
+  uniqueCodes: string[];
+}): Promise<void> {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendApiKey) {
+    console.warn("[verify] RESEND_API_KEY not set — skipping receipt email");
+    return;
+  }
+
+  const {
+    payerEmail, payerName, collectionTitle, collectionType,
+    contributionAmount, totalPaid, platformFee, gatewayFee,
+    transactionRef, paidAt, uniqueCodes,
+  } = params;
+
+  const fmt = (n: number) =>
+    `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const typeLabel: Record<string, string> = {
+    fixed: "Payment", tiered: "Payment", open_pool: "Contribution",
+    ticket: "Ticket Purchase", fundraising: "Donation",
+  };
+  const label = typeLabel[collectionType] || "Payment";
+
+  let formattedDate = paidAt;
+  try {
+    formattedDate = new Date(paidAt).toLocaleString("en-NG", {
+      dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos",
+    });
+  } catch { /* keep raw string */ }
+
+  const uniqueCodesRow = uniqueCodes.length > 0
+    ? `<tr style="border-top:1px solid #e5e7eb;">
+        <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Your Code(s)</td>
+        <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;font-family:monospace;">${uniqueCodes.join(", ")}</td>
+      </tr>`
+    : "";
+
+  const feesRow = (platformFee + gatewayFee) > 0
+    ? `<tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+        <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Processing Fees</td>
+        <td style="padding:12px 16px;color:#111827;font-size:14px;">${fmt(platformFee + gatewayFee)}</td>
+      </tr>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#1B5E20 0%,#388E3C 100%);padding:32px 40px;text-align:center;">
+            <div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:rgba(255,255,255,0.2);border-radius:50%;margin-bottom:12px;">
+              <span style="color:#ffffff;font-size:22px;">✓</span>
+            </div>
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${label} Confirmed</h1>
+            <p style="margin:6px 0 0;color:#bbf7d0;font-size:14px;">${collectionTitle}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px;">
+            <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hi <strong>${payerName}</strong>,</p>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.7;">
+              Your ${label.toLowerCase()} has been confirmed. Here is your receipt for your records.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Receipt Summary</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;width:45%;">Collection</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;">${collectionTitle}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Amount</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;">${fmt(contributionAmount)}</td>
+              </tr>
+              ${feesRow}
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;font-weight:600;">Total Paid</td>
+                <td style="padding:12px 16px;color:#16a34a;font-size:16px;font-weight:700;">${fmt(totalPaid)}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Reference</td>
+                <td style="padding:12px 16px;color:#111827;font-size:13px;font-family:'Courier New',monospace;">${transactionRef}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Date</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;">${formattedDate}</td>
+              </tr>
+              ${uniqueCodesRow}
+            </table>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;">
+              <p style="margin:0;color:#166534;font-size:13px;line-height:1.6;">
+                <strong>Payment not loading?</strong> Your payment was successful and is recorded. If the confirmation page didn't load, use your reference number above to contact support.
+              </p>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #f3f4f6;text-align:center;">
+            <p style="margin:0;color:#d1d5db;font-size:12px;">Powered by <strong style="color:#1B5E20;">Kolekto</strong> &nbsp;·&nbsp; Secure group payments across Nigeria</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Kolekto Payments <noreply@kolekto.io>",
+      to: [payerEmail],
+      subject: `${label} confirmed — ${collectionTitle}`,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Resend API error ${res.status}: ${body}`);
+  }
+  console.log("[verify] ✅ Receipt email sent to", payerEmail);
+}

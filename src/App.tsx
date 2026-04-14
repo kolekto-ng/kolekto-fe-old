@@ -3,18 +3,25 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
+import CreateCollectionPage from "./pages/CreateCollectionPage";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardPage from "./pages/dashboard/DashboardPage";
-import CreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
+import DashboardCreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
 import CollectionsPage from "./pages/dashboard/CollectionsPage";
 // import ProfilePage from "./pages/dashboard/ProfilePage";
 import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
 import ActivitiesPage from "./pages/dashboard/ActivitiesPage";
 import ContributePage from "./pages/contribute/ContributePage";
+import ActiveCampaignsPage from "./pages/ActiveCampaignsPage";
+import AboutPage from "./pages/AboutPage";
+import ContactPage from "./pages/ContactPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import TermsPage from "./pages/TermsPage";
+import HelpCenterPage from "./pages/HelpCenterPage";
 import NotFound from "./pages/NotFound";
 import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
 import { AuthProvider } from "./context/AuthContext";
@@ -23,10 +30,10 @@ import { useEffect } from "react";
 import PaymentCallback from "./components/contribute/paymentCallback";
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import KolektoCampusSignup from "./pages/KolektoCampus";
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import WhatsAppButton from "./components/WhatsappFloatButton";
+import { supabase } from "./integrations/supabase/client";
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -55,7 +62,9 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
-      <Route path="/kolekto-campus" element={<KolektoCampusSignup />} />
+      <Route path="/create-collection" element={<CreateCollectionPage />} />
+      {/* Kolekto on Campus route temporarily disabled */}
+      {/* <Route path="/kolekto-campus" element={<KolektoCampusSignup />} /> */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={
         <GoogleReCaptchaProvider reCaptchaKey="6LeWENorAAAAALS4O9P-c-x1e65yu-U5bt8XGp-t">
@@ -65,6 +74,12 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
+      <Route path="/active-campaigns" element={<ActiveCampaignsPage />} />
+      <Route path="/about" element={<AboutPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/help" element={<HelpCenterPage />} />
       <Route path="/payment/verify" element={<PaymentCallback />} />
 
       {/* Protected Dashboard Routes */}
@@ -79,7 +94,7 @@ const AuthenticatedApp = () => {
         <Route index element={<DashboardLayout />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
-        <Route path="create-collection" element={<CreateCollectionPage />} />
+        <Route path="create-collection" element={<DashboardCreateCollectionPage />} />
         <Route path="settings" element={<UserProfilePage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="activities" element={<ActivitiesPage />} />
@@ -107,6 +122,34 @@ const App = () => {
       });
     }
     , [])
+
+  useEffect(() => {
+    const syncSession = (session: any) => {
+      if (session?.access_token && session?.user) {
+        localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
+        useAuthStore.setState({
+          user: session.user,
+          session,
+          isLoading: false,
+          error: null,
+        } as any);
+      }
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      syncSession(data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncSession(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
 
 

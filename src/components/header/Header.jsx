@@ -18,7 +18,7 @@ const Header = () => {
         { name: 'Use Cases', href: '/use-cases' },
         { name: 'FAQs', href: '/faqs' },
         { name: 'Why Kolekto?', href: '/why-kolekto' },
-        { name: 'Kolekto Campus', href: '/kolekto-campus' },
+        // { name: 'Kolekto Campus', href: '/kolekto-campus' },
     ];
 
 
@@ -59,13 +59,14 @@ const Header = () => {
                     {/* Desktop Auth Buttons */}
 
                     <div className='hidden lg:flex items-center space-x-3 pr-2'>
-                        <Link
+                        {/* Kolekto on Campus entry point temporarily disabled */}
+                        {/* <Link
                             href='/kolekto-campus'
                             className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'
                             onClick={() => setIsMenuOpen(false)}
                         >
                             Kolekto Campus
-                        </Link>
+                        </Link> */}
 
                         <Link
                             href='/sign-in'
@@ -127,13 +128,14 @@ const Header = () => {
 
 
 
-                                        <Link
+                                        {/* Kolekto on Campus entry point temporarily disabled */}
+                                        {/* <Link
                                             href='/kolekto-campus'
                                             className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'
                                             onClick={() => setIsMenuOpen(false)}
                                         >
                                             Kolekto Campus
-                                        </Link>
+                                        </Link> */}
                                         <Link
                                             href='/sign up'
                                             className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'

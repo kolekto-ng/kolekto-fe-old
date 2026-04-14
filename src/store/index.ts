@@ -6,3 +6,4 @@ export { useDashboardStore } from "./useDashboardStore";
 export { useTransactionStore } from "./useTransactionStore";
 export { usePaystackStore } from "./usePaystackStore";
 export { useProfileStore } from "./useProfileStore";
+export { useCollectionDraftStore } from "./useCollectionDraftStore";

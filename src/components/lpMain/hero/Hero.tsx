@@ -65,14 +65,29 @@ const Hero = () => {
               From class dues to fundraising drives, Kolekto lets you collect, track, and manage contributions all in one place.
             </p>
 
-            <div className="flex gap-3 flex-col sm:flex-row lg:items-center">
-              {/* <Link to="/register">Get Started</Link> */}
-              <Link
-                to="/register"
-                className=" bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg"
-              >
-                Start collecting
-              </Link>
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Link
+                  to="/create-collection"
+                  className="bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg font-semibold hover:bg-green-900 transition-colors duration-200 shadow-lg"
+                >
+                  Create Collection
+                </Link>
+
+                <Link
+                  to="/register"
+                  className="border border-[#1C5C23]/15 bg-white text-[#1C5C23] text-[12.8] w-max lg:text-[20px] py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg font-semibold hover:bg-green-50 transition-colors duration-200"
+                >
+                  Sign Up
+                </Link>
+
+                <Link
+                  to="/active-campaigns"
+                  className="border border-[#1C5C23]/10 bg-[#E8F5E9] text-[#1C5C23] text-[12.8] w-max lg:text-[20px] py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg font-semibold hover:bg-[#D7F2DB] transition-colors duration-200"
+                >
+                  Explore Active Campaigns
+                </Link>
+              </div>
 
               <div className="flex items-center gap-2 text-[12.8px] lg:text-lg font-normal text-gray-600">
                 <div className="flex -space-x-6">
@@ -105,10 +120,9 @@ const Hero = () => {
                     className="w-[54px] h-[54px] rounded-full border-2 border-white"
                   />
                 </div>
-                {/* Trust Test */}
                 <div className="text-left">
                   <p className="text-sm font-semibold text-gray-900 mb-1">
-                    Trusted By 700+ Users
+                    Trusted By 5000+ Users
                   </p>
                   <div className="flex items-center space-x-2">
                     <div className="flex">

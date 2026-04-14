@@ -566,11 +566,7 @@ export function normalizePaymentRequest(input: {
     formData,
     contact,
     isAnonymous: Boolean(metadata.isAnonymous),
-    codePrefix: String(
-      metadata.codePrefix ||
-        collection.code_prefix ||
-        (collectionType === "ticket" ? "TKT" : "KLK")
-    ),
+    codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
     providedAmount: roundCurrency(
       asNumber(metadata.totalPayable || metadata.amount || 0)
     ),

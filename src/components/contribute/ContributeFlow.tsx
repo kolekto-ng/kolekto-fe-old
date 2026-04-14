@@ -498,7 +498,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         quantity: isTicket ? totalTicketQuantity : 1,
         ticketSelections: selectedTicketSelections,
         isAnonymous: isFundraising && isAnonymous,
-        codePrefix: collection.code_prefix || (isTicket ? 'TKT' : 'KLK'),
+        codePrefix: collection.code_prefix || '',
         feeBearer,
         totalPayable: total,
         feeBreakdown: {

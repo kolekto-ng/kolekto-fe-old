@@ -10,7 +10,7 @@ const CreateCollectionPage: React.FC = () => {
           Set up your collection in a few simple steps
         </p>
       </div>
-      <CreateCollectionWizard />
+      <CreateCollectionWizard cancelPath="/dashboard/collections" redirectToAuthPath="/create-collection" />
     </div>
   );
 };

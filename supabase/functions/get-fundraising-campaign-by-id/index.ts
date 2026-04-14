@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
       creator_kyc_status: profile?.kyc_status || "unverified",
       title: collection.title,
       summary: collection.campaign_summary || camp?.summary || collection.description || null,
-      main_image_url: storyImages[0] || camp?.main_image_url || collection.banner_url || null,
+      main_image_url: collection.banner_url || storyImages[0] || camp?.main_image_url || null,
       target_amount: collection.target_amount || camp?.target_amount || null,
       min_contribution: collection.min_contribution || camp?.min_contribution || null,
       currency: collection.currency || "NGN",

@@ -2,12 +2,9 @@ import React, { useRef } from 'react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, X } from 'lucide-react';
-import { WizardData } from '../wizardTypes';
+import { DraftUploadFile, WizardData } from '../wizardTypes';
 
-export interface StoryImageFile {
-  name: string;
-  dataUrl: string;
-}
+export type StoryImageFile = DraftUploadFile;
 
 interface Props {
   data: WizardData;

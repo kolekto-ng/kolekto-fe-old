@@ -5,6 +5,7 @@ import { WizardData, TYPE_META, fmtCurrency, calculateFees } from '../wizardType
 interface Props {
   data: WizardData;
   isSubmitting: boolean;
+  isAuthenticated: boolean;
   onSubmit: () => void;
   onBack: () => void;
   onCancel: () => void;
@@ -31,7 +32,7 @@ const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value
   </div>
 );
 
-const ReviewStep: React.FC<Props> = ({ data, isSubmitting, onSubmit, onBack, onCancel }) => {
+const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSubmit, onBack, onCancel }) => {
   const meta = TYPE_META[data.collection_type];
   const isFundraising = data.collection_type === 'fundraising';
   const isTicket = data.collection_type === 'ticket';
@@ -49,7 +50,9 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, onSubmit, onBack, onC
 
   const fees = calculateFees(reprAmount, data.collection_type, isFundraising || isOpenPool ? 'contributor' : data.fee_bearer);
 
-  const uniqueEnabled = isTicket || data.unique_id_enabled;
+  const uniqueEnabled =
+    data.unique_id_enabled &&
+    (Boolean(data.unique_id_prefix.trim()) || data.pricing_tiers.some((t) => Boolean(t.prefix.trim())));
 
   return (
     <div className="space-y-6">
@@ -199,7 +202,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, onSubmit, onBack, onC
       {uniqueEnabled && (
         <Section icon={<Hash className="w-4 h-4" />} title="Unique ID">
           {isTicket ? (
-            <p className="text-xs text-gray-600">Enabled — each ticket receives a unique ID and QR code</p>
+            <p className="text-xs text-gray-600">IDs will only be issued for the prefixes configured below.</p>
           ) : (
             <>
               {data.unique_id_prefix && <Row label="Global prefix" value={<span className="font-mono text-green-700">{data.unique_id_prefix}</span>} />}
@@ -221,6 +224,12 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, onSubmit, onBack, onC
 
       {/* Actions */}
       <div className="pt-2 space-y-3">
+        {!isAuthenticated && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            You can finish setting up this collection now. We will only ask you to sign in when you publish.
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onSubmit}
@@ -235,12 +244,16 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, onSubmit, onBack, onC
           ) : (
             <>
               <CheckCircle2 className="w-5 h-5" />
-              {isFundraising ? 'Submit for Review' : 'Publish Collection'}
+              {isAuthenticated
+                ? isFundraising
+                  ? 'Submit for Review'
+                  : 'Publish Collection'
+                : 'Continue to Publish'}
             </>
           )}
         </button>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={onBack}
