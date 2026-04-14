@@ -10,6 +10,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
+import { useAuthStore } from '@/store/useAuthStore';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,11 @@ interface CollectionPreview {
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const firstName = (user?.user_metadata?.full_name?.split(' ')[0]
+    || user?.user_metadata?.firstName
+    || user?.email?.split('@')[0]
+    || 'there');
   const [stats, setStats] = useState<DashStats>({
     totalCollections: 0, activeCollections: 0, totalBalance: 0, availableBalance: 0, pendingBalance: 0,
   });
@@ -325,20 +331,21 @@ const DashboardPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Overview of your wallet and collections</p>
+          <p className="text-sm text-gray-500">Good day,</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 capitalize">{firstName} 👋</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
             onClick={() => setIsGlobalWithdrawOpen(true)}
             className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
           >
-            <Banknote className="w-4 h-4" /> Withdraw
+            <Banknote className="w-4 h-4" />
+            <span className="hidden sm:inline">Withdraw</span>
           </Button>
           <Button
             size="sm"
-            className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm"
+            className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm hidden md:flex"
             onClick={() => navigate('/dashboard/create-collection')}
           >
             <Plus className="w-4 h-4" /> Create Collection

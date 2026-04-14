@@ -91,7 +91,7 @@ const AuthenticatedApp = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardLayout />} />
+        <Route index element={<DashboardPage />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<DashboardCreateCollectionPage />} />
