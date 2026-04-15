@@ -102,7 +102,7 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: true, // Enable PWA in dev mode for testing
+        enabled: false, // Disabled in dev — service worker was caching old code
       },
     }),
   ],

@@ -610,7 +610,12 @@ serve(async (req: Request) => {
 
         for (let index = 0; index < contributionUnits.length; index++) {
           const unit = contributionUnits[index];
-          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase();
+          // Only generate unique codes when the host explicitly enabled unique IDs.
+          // If unique_id_enabled is false on the collection, no code is ever assigned,
+          // even if a code_prefix value happens to exist on the record.
+          const prefix = normalizedPayment.uniqueIdEnabled
+            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase()
+            : "";
           let uniqueCode: string | null = null;
 
           if (prefix) {

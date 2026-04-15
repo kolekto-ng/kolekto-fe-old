@@ -341,7 +341,7 @@ const DashboardPage: React.FC = () => {
             className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
           >
             <Banknote className="w-4 h-4" />
-            <span className="hidden sm:inline">Withdraw</span>
+            Withdrawal
           </Button>
           <Button
             size="sm"
@@ -409,10 +409,10 @@ const DashboardPage: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Create a Collection</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Choose a collection type to get started</p>
+            <p className="text-xs text-gray-500 mt-0.5">Choose a type to get started</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="flex items-center justify-between gap-1">
           {Object.entries(TYPE_META).map(([key, m]) => {
             const Icon = m.IconEl;
             return (
@@ -420,19 +420,14 @@ const DashboardPage: React.FC = () => {
                 key={key}
                 to={`/dashboard/create-collection?type=${key}`}
                 state={{ skipToBasicInfo: true }}
-                className={`group flex flex-col items-center gap-2.5 p-4 rounded-xl border
-                  ${m.borderColor} ${m.bgColor} cursor-pointer transition-all
-                  hover:shadow-md hover:scale-[1.02] active:scale-[0.98]`}
+                className="flex flex-col items-center gap-2 flex-1 min-w-0 py-2 px-1 rounded-2xl active:scale-95 transition-transform hover:opacity-80"
               >
-                <div className={`p-2.5 rounded-xl bg-white shadow-sm border ${m.borderColor}`}>
-                  <Icon className={`h-5 w-5 ${m.iconColor}`} />
+                <div className={`flex items-center justify-center w-[50px] h-[50px] rounded-2xl ${m.bgColor} shadow-sm`}>
+                  <Icon className={`h-6 w-6 ${m.iconColor}`} />
                 </div>
-                <div className="text-center">
-                  <p className={`text-xs font-bold ${m.iconColor} leading-tight`}>{m.label}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5 leading-snug hidden sm:block">
-                    {m.description}
-                  </p>
-                </div>
+                <span className={`text-[11px] font-semibold ${m.iconColor} text-center leading-tight`}>
+                  {m.label}
+                </span>
               </Link>
             );
           })}
@@ -521,7 +516,17 @@ const DashboardPage: React.FC = () => {
 
       {/* ── Recent Activity ───────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-base font-semibold text-gray-900 mb-4">Recent Activity</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Recent Activities</h2>
+          {activities.length > 0 && (
+            <button
+              onClick={() => navigate('/dashboard/activities')}
+              className="text-xs font-semibold text-green-600 hover:text-green-700 flex items-center gap-1"
+            >
+              Show More →
+            </button>
+          )}
+        </div>
         <Card className="border-gray-200">
           <CardContent className="p-0">
             {activities.length === 0 ? (
@@ -532,7 +537,7 @@ const DashboardPage: React.FC = () => {
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {activities.map(a => (
+                {activities.slice(0, 5).map(a => (
                   <div key={a.id} className="flex items-center justify-between px-4 py-3.5 gap-3 hover:bg-gray-50/50 transition-colors">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -544,13 +549,13 @@ const DashboardPage: React.FC = () => {
                         <p className="text-sm font-medium text-gray-800 truncate">
                           {a.name || a.email || 'Anonymous'}
                         </p>
-                        <p className="text-xs text-gray-500 truncate flex items-center gap-1">
-                          ✅ <span className="font-medium text-gray-600">{a.collection_title}</span>
+                        <p className="text-xs text-gray-500 truncate">
+                          paid to <span className="font-medium text-gray-600">{a.collection_title}</span>
                         </p>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-green-600">{fmt(a.amount)}</p>
+                      <p className="text-sm font-semibold text-green-600">+{fmt(a.amount)}</p>
                       <p className="text-[11px] text-gray-400">
                         {(() => {
                           try {
@@ -563,6 +568,16 @@ const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {activities.length > 5 && (
+              <div className="border-t border-gray-50 p-3">
+                <button
+                  onClick={() => navigate('/dashboard/activities')}
+                  className="w-full text-xs font-semibold text-gray-500 hover:text-green-600 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
+                >
+                  Show All {activities.length} Activities →
+                </button>
               </div>
             )}
           </CardContent>

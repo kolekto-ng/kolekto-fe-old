@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store';
 import { Bell } from 'lucide-react';
@@ -6,6 +6,7 @@ import { SidebarTrigger } from '../ui/sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '../Logo';
+import { useActivities } from '@/store/useDashboard';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Home',
@@ -21,6 +22,13 @@ const DashboardNavbar: React.FC = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const user = useAuthStore((state) => state.user);
+  const { activities, getActivities } = useActivities();
+
+  useEffect(() => {
+    getActivities();
+  }, []);
+
+  const activityCount = (activities as any[]).length;
 
   const getPageTitle = () => {
     if (location.pathname.startsWith('/dashboard/collections/')) return 'Collection Details';
@@ -32,8 +40,24 @@ const DashboardNavbar: React.FC = () => {
     || user?.email?.split('@')[0]
     || 'there';
 
+  const BellButton = () => (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="relative h-9 w-9"
+      onClick={() => navigate('/dashboard/activities')}
+      aria-label={`Activities${activityCount > 0 ? ` (${activityCount})` : ''}`}
+    >
+      <Bell className="h-5 w-5 text-gray-600" />
+      {activityCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 ring-2 ring-white">
+          {activityCount > 99 ? '99+' : activityCount}
+        </span>
+      )}
+    </Button>
+  );
+
   if (isMobile) {
-    // Mobile: compact sticky header with logo + greeting + bell
     return (
       <header
         className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm"
@@ -44,17 +68,13 @@ const DashboardNavbar: React.FC = () => {
             <Logo size="sm" />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative h-9 w-9">
-              <Bell className="h-5 w-5 text-gray-600" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full ring-2 ring-white" />
-            </Button>
+            <BellButton />
           </div>
         </div>
       </header>
     );
   }
 
-  // Desktop: sidebar trigger + page title + notifications
   return (
     <div className="sticky top-0 z-30 bg-gray-50 border-b border-gray-100">
       <div className="flex items-center justify-between px-6 h-14">
@@ -63,10 +83,7 @@ const DashboardNavbar: React.FC = () => {
           <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative h-9 w-9">
-            <Bell className="h-5 w-5 text-gray-600" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full ring-2 ring-white" />
-          </Button>
+          <BellButton />
         </div>
       </div>
     </div>

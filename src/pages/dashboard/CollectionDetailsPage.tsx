@@ -290,41 +290,110 @@ const CollectionDetailsPage: React.FC = () => {
     }
   };
 
-  // ── Export CSV ──────────────────────────────────────────────────────────────
+  // ── Export PDF ──────────────────────────────────────────────────────────────
 
-  const exportCSV = () => {
+  const exportPDF = async () => {
     const filtered = getFilteredContributors();
     if (!filtered.length) { toast.info('No contributor data to export'); return; }
 
-    const dynamicFields = Array.from(
-      new Set(
-        filtered.flatMap(c =>
-          Object.keys((c.contributor_information || [])[0] || {}).filter(k => k !== 'TierAmount')
-        )
-      )
-    );
+    // Use the host's field definitions (in the order they were arranged) as the
+    // canonical column list. Fall back to scanning contributor_information keys
+    // only when no form_fields are stored, but always strip internal/system keys.
+    const INTERNAL_KEYS = new Set([
+      'TierAmount', 'TierId', 'Tier', 'Quantity', 'collectionType',
+      'paidAt', 'channel', '_receipt', 'date',
+    ]);
+    const hostFields: string[] = (col?.form_fields || []).map((f: any) => f.name);
+    const dynamicFields: string[] = hostFields.length > 0
+      ? hostFields
+      : Array.from(
+          new Set(
+            filtered.flatMap(c =>
+              Object.keys((c.contributor_information || [])[0] || {})
+                .filter(k => !INTERNAL_KEYS.has(k) && k.toLowerCase() !== 'date' && !k.startsWith('_'))
+            )
+          )
+        );
 
     const hasUniqueCode = filtered.some(c => c.contributor_unique_code);
     const tierCol = colType === 'tiered' || colType === 'ticket';
     const headers = [...dynamicFields, ...(tierCol ? ['Tier'] : []), ...(hasUniqueCode ? ['Unique Code'] : [])];
 
-    let csv = headers.join(',') + '\n';
-    filtered.forEach(c => {
+    const rows = filtered.map(c => {
       const info = (c.contributor_information || [])[0] || {};
       const tierName = getTierForContribution(c)?.name || '';
-      const row = [
-        ...dynamicFields.map(f => info[f] || ''),
+      return [
+        ...dynamicFields.map(f => info[f] ?? ''),
         ...(tierCol ? [tierName] : []),
         ...(hasUniqueCode ? [c.contributor_unique_code || ''] : []),
       ];
-      csv += row.map(v => (String(v).includes(',') ? `"${v}"` : v)).join(',') + '\n';
     });
 
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    link.download = `${col?.title || 'collection'}-contributors.csv`;
-    link.click();
-    toast.success('Exported successfully');
+    const exportDate = new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' });
+    const totalAmount = filtered.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+
+    const tableRows = rows.map(row =>
+      `<tr>${row.map(cell => `<td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;color:#374151;">${cell}</td>`).join('')}</tr>`
+    ).join('');
+
+    const html = `
+      <div style="font-family:'Inter',Arial,sans-serif;padding:32px;background:#fff;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #16a34a;margin-bottom:24px;">
+          <div>
+            <div style="font-size:26px;font-weight:900;color:#16a34a;letter-spacing:-0.5px;">Kolekto</div>
+            <div style="font-size:11px;color:#6B7280;margin-top:2px;">Contributors Export Report</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:#6B7280;">Generated on</div>
+            <div style="font-size:12px;font-weight:600;color:#111827;">${exportDate}</div>
+          </div>
+        </div>
+        <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+          <div style="font-size:18px;font-weight:800;color:#14532D;margin-bottom:8px;">${col?.title || 'Collection'}</div>
+          <div style="display:flex;gap:24px;">
+            <div>
+              <span style="font-size:11px;color:#6B7280;display:block;">Total Contributors</span>
+              <span style="font-size:15px;font-weight:700;color:#166534;">${filtered.length}</span>
+            </div>
+            <div>
+              <span style="font-size:11px;color:#6B7280;display:block;">Total Collected</span>
+              <span style="font-size:15px;font-weight:700;color:#166534;">₦${totalAmount.toLocaleString('en-NG')}</span>
+            </div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#16a34a;">
+              ${headers.map(h => `<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:0.05em;">${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E5E7EB;display:flex;justify-content:space-between;">
+          <span style="font-size:11px;color:#9CA3AF;">Powered by Kolekto · kolekto.com.ng</span>
+          <span style="font-size:11px;color:#9CA3AF;">Confidential — For authorized use only</span>
+        </div>
+      </div>
+    `;
+
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      const el = document.createElement('div');
+      el.innerHTML = html;
+      document.body.appendChild(el);
+      await html2pdf().set({
+        margin: 0,
+        filename: `${col?.title || 'collection'}-contributors.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      }).from(el).save();
+      document.body.removeChild(el);
+      toast.success('PDF exported successfully!');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to export PDF');
+    }
   };
 
   // ── Filter helpers ──────────────────────────────────────────────────────────
@@ -724,9 +793,9 @@ const CollectionDetailsPage: React.FC = () => {
                 </Select>
               )}
 
-              <Button variant="outline" size="sm" onClick={exportCSV} className="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={exportPDF} className="flex items-center gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
                 <Download className="w-4 h-4" />
-                Export CSV
+                Export PDF
               </Button>
             </div>
 
@@ -752,7 +821,6 @@ const CollectionDetailsPage: React.FC = () => {
                       {paidContributions.some(c => c.contributor_unique_code) && (
                         <TableHead>Unique Code</TableHead>
                       )}
-                      <TableHead>Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -792,9 +860,6 @@ const CollectionDetailsPage: React.FC = () => {
                                 </span>
                               </TableCell>
                             )}
-                            <TableCell className="text-gray-500 text-xs whitespace-nowrap">
-                              {fmtDate(c.created_at)}
-                            </TableCell>
                           </TableRow>
                         );
                       })

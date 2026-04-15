@@ -275,10 +275,18 @@ const GlobalStyles = () => (
       border: 1.5px solid var(--kol-border);
       transition: transform 0.25s ease, box-shadow 0.25s ease;
       cursor: pointer;
+      display: flex;
+      flex-direction: column;
     }
     .lp-campaign-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+      transform: translateY(-5px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.13);
+    }
+    .lp-campaign-card:hover img {
+      transform: scale(1.04);
+    }
+    .progress-fill {
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* ── Mobile nav overlay + slide panel ── */
@@ -457,7 +465,8 @@ const GlobalStyles = () => (
       .chip-marquee-outer { display: block !important; }
       .chip-mobile-scroll { display: none !important; }
       /* campaign marquee on mobile */
-      .campaign-marquee-wrap { padding: 0 !important; }
+      .campaign-marquee-wrap { padding: 0 8px !important; }
+      #active-fundraising { padding: 56px 0 !important; }
       /* hero mockup max-width */
       .hero-mockup-card { padding: 12px !important; }
       /* footer */
@@ -1359,49 +1368,89 @@ const LPCampaignCard: React.FC<{ campaign: LPCampaign; onClick: () => void }> = 
     ? Math.max(0, Math.ceil((new Date(campaign.deadline).getTime() - Date.now()) / 86400000))
     : null;
 
+  const urgencyColor = daysLeft !== null && daysLeft === 0
+    ? { bg: "#FEE2E2", color: "#DC2626" }
+    : daysLeft !== null && daysLeft <= 3
+    ? { bg: "#FEF3C7", color: "#92400E" }
+    : { bg: "rgba(20,83,45,0.85)", color: "#bbf7d0" };
+
   return (
-    <div className="lp-campaign-card" onClick={onClick}>
+    <div className="lp-campaign-card" onClick={onClick} style={{ cursor: "pointer" }}>
       {/* Image */}
-      <div style={{ height: 180, background: "linear-gradient(135deg, #1C5C23, #2E7D32, #FFCA28)", position: "relative", overflow: "hidden" }}>
-        {imageUrl && (
-          <img src={imageUrl} alt={campaign.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
-        )}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 60%)" }} />
-        {category && (
-          <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(255,255,255,0.92)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#1A1A2E" }}>{category}</div>
-        )}
-        {daysLeft !== null && daysLeft <= 7 && (
-          <div style={{ position: "absolute", top: 12, right: 12, background: daysLeft === 0 ? "#FEE2E2" : "#FEF3C7", color: daysLeft === 0 ? "#DC2626" : "#92400E", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
-            {daysLeft === 0 ? "Ends today" : `${daysLeft}d left`}
+      <div style={{ height: 190, background: "linear-gradient(135deg, #1C5C23, #2E7D32, #FFCA28)", position: "relative", overflow: "hidden" }}>
+        {imageUrl ? (
+          <img src={imageUrl} alt={campaign.title} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.3s" }} loading="lazy" />
+        ) : (
+          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Heart size={36} color="rgba(255,255,255,0.4)" />
           </div>
         )}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)" }} />
+
+        {/* Badges row */}
+        <div style={{ position: "absolute", top: 12, left: 12, right: 12, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+          {category ? (
+            <div style={{ background: "rgba(255,255,255,0.94)", borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 700, color: "#1A1A2E", flexShrink: 0 }}>{category}</div>
+          ) : <div />}
+          {daysLeft !== null && (
+            <div style={{ background: urgencyColor.bg, color: urgencyColor.color, borderRadius: 20, padding: "3px 10px", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+              {daysLeft === 0 ? "Ends today" : `${daysLeft}d left`}
+            </div>
+          )}
+        </div>
+
         <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: "white", margin: 0, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any, overflow: "hidden" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "white", margin: 0, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any, overflow: "hidden" }}>
             {campaign.title}
           </h3>
         </div>
       </div>
 
       {/* Body */}
-      <div style={{ padding: "16px" }}>
-        {/* Progress */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-            <span style={{ color: "var(--kol-green-800)" }}>{targetAmount > 0 ? `${progress.toFixed(0)}% funded` : "Open goal"}</span>
-            <span style={{ color: "var(--kol-muted)" }}>{fmt(totalRaised)} raised</span>
+      <div style={{ padding: "14px 16px 16px" }}>
+        {/* Amount row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "var(--kol-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Raised</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--kol-green-800)", letterSpacing: "-0.02em" }}>{fmt(totalRaised)}</div>
           </div>
-          <div style={{ height: 6, background: "#F3F4F6", borderRadius: 10, overflow: "hidden" }}>
-            <div className="progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg, #1C5C23, #4CAF50)", borderRadius: 10 }} />
-          </div>
+          {targetAmount > 0 && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--kol-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Goal</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{fmt(targetAmount)}</div>
+            </div>
+          )}
         </div>
 
+        {/* Progress bar */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ height: 7, background: "#F3F4F6", borderRadius: 10, overflow: "hidden", position: "relative" }}>
+            <div
+              className="progress-fill"
+              style={{
+                height: "100%",
+                width: `${targetAmount > 0 ? progress : totalRaised > 0 ? 100 : 0}%`,
+                background: "linear-gradient(90deg, #1C5C23, #4CAF50)",
+                borderRadius: 10,
+                transition: "width 0.8s ease",
+              }}
+            />
+          </div>
+          {targetAmount > 0 && (
+            <div style={{ marginTop: 4, fontSize: 10, fontWeight: 700, color: "var(--kol-green-700)", textAlign: "right" }}>
+              {progress.toFixed(0)}% funded
+            </div>
+          )}
+        </div>
+
+        {/* Meta row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 12, color: "var(--kol-muted)", display: "flex", alignItems: "center", gap: 4 }}>
-            <Users size={12} /> {campaign.contributions_count || 0} donors
+          <div style={{ fontSize: 11, color: "var(--kol-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+            <Users size={11} /> {campaign.contributions_count || 0} donor{(campaign.contributions_count || 0) === 1 ? "" : "s"}
           </div>
           {campaign.deadline && (
-            <div style={{ fontSize: 12, color: "var(--kol-muted)", display: "flex", alignItems: "center", gap: 4 }}>
-              <CalendarDays size={12} />
+            <div style={{ fontSize: 11, color: "var(--kol-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+              <CalendarDays size={11} />
               {new Date(campaign.deadline).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
             </div>
           )}

@@ -114,12 +114,12 @@ const WalletOverview: React.FC = () => {
             </div>
           </div>
           
-          <Button 
-            onClick={(e) => { e.stopPropagation(); setIsWithdrawOpen(true); }} 
-            className="bg-white text-green-900 hover:bg-gray-100 rounded-full font-bold shadow-sm whitespace-nowrap shrink-0 ml-auto h-9 px-4 md:h-10 md:px-6"
+          <Button
+            onClick={(e) => { e.stopPropagation(); setIsWithdrawOpen(true); }}
+            className="bg-white text-green-900 hover:bg-gray-100 rounded-full font-bold shadow-sm whitespace-nowrap shrink-0 ml-auto h-10 px-5"
           >
             <Download className="w-4 h-4 mr-2" />
-            Withdraw
+            Withdrawal
           </Button>
         </div>
       </div>
