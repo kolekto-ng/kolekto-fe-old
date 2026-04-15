@@ -32,6 +32,7 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ const CollectionDetailsPage: React.FC = () => {
   const [scanInput, setScanInput] = useState('');
   const [scannedTicket, setScannedTicket] = useState<any>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isFlierOpen, setIsFlierOpen] = useState(false);
 
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
   const formFields: any[] = col?.form_fields || [];
@@ -546,6 +548,18 @@ const CollectionDetailsPage: React.FC = () => {
               <Share2 className="w-4 h-4" />
               Share
             </Button>
+
+            {colType === 'fundraising' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsFlierOpen(true)}
+                className="flex items-center gap-1.5 border-green-600 text-green-700 hover:bg-green-50"
+              >
+                <Download className="w-4 h-4" />
+                Campaign Flyer
+              </Button>
+            )}
 
             {/* Status management menu */}
             <DropdownMenu>
@@ -1347,6 +1361,18 @@ const CollectionDetailsPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Fundraising Share / Flyer Dialog */}
+      {colType === 'fundraising' && (
+        <FundraisingShareDialog
+          open={isFlierOpen}
+          onOpenChange={setIsFlierOpen}
+          collection={col}
+          totalRaised={totalRaised}
+          donorCount={paidContributions.length}
+          shareUrl={shareUrl}
+        />
+      )}
 
       {/* Delete Confirm */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

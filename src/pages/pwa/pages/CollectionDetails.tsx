@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -103,6 +104,7 @@ const PwaCollectionDetails: React.FC = () => {
     const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
     const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isFlierOpen, setIsFlierOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState<Record<string, string>>({});
     const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
@@ -476,6 +478,16 @@ const PwaCollectionDetails: React.FC = () => {
                         <Wallet className="mr-2 h-4 w-4" />
                         <span className="hidden sm:inline">Withdraw</span>
                     </Button>
+                    {colType === 'fundraising' && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsFlierOpen(true)}
+                            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center"
+                        >
+                            <Download className="mr-2 h-4 w-4" />
+                            <span className="hidden sm:inline">Campaign Flyer</span>
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -790,6 +802,17 @@ const PwaCollectionDetails: React.FC = () => {
                 }}
                 onSuccess={handleEditSuccess}
             />
+
+            {colType === 'fundraising' && (
+                <FundraisingShareDialog
+                    open={isFlierOpen}
+                    onOpenChange={setIsFlierOpen}
+                    collection={currentCollection as any}
+                    totalRaised={totalCollected}
+                    donorCount={contributorsCount}
+                    shareUrl={shareUrl}
+                />
+            )}
         </div>
     );
 };
