@@ -227,7 +227,6 @@ const ContributePage: React.FC = () => {
   // Status gates
   const status = collection.status;
   const isExpired = collection.deadline && new Date(collection.deadline) < new Date();
-
   const supportPhone: string | undefined =
     collection.support_phone || collection.support_phone_number || collection.support || undefined;
 
