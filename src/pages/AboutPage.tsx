@@ -43,7 +43,6 @@ const AboutPage: React.FC = () => {
     { initials: "GA", name: "Gazali A.", role: "Co-founder & CEO", bio: "Passionate about simplifying how Nigerian communities handle money together." },
     { initials: "DO", name: "Dev Team", role: "Engineering & Product", bio: "A tight-knit team dedicated to building the most intuitive group payments platform in Africa." },
   ];
-
   return (
     <div className="min-h-screen flex flex-col" style={{ fontFamily: "'Inter', sans-serif", background: "#FAFAFA" }}>
       <NavBar />
