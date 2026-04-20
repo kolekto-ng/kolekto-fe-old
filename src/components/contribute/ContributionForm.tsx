@@ -116,7 +116,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const [isLoading, setIsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
-  const [fundraisingAmount, setFundraisingAmount] = useState('');
+  const [fundraisingAmount, setFundraisingAmount] = useState<number>(0);
   // Store hooks
   const { initializePayment, initiatePayment, verifyPayment } = usePaystackStore();
   const { createContribution } = useContributionStore();
@@ -191,7 +191,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
 
   const validateParticipantData = () => {
 
-    if (collectionType === 'fundraising' && (!fundraisingAmount || parseFloat(fundraisingAmount) < baseAmount)) {
+    if (collectionType === 'fundraising' && (!fundraisingAmount || fundraisingAmount < baseAmount)) {
       toast.error(`Please enter an amount greater than ${formatCurrency(baseAmount)}`);
       return false;
     }
@@ -272,37 +272,21 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
 
     try {
 
-      // Use new payment flow if amountBreakdown exists (second version)
+      // Send the BASE amount to the backend. The backend (createContribution)
+      // is the single source of truth for fee calculation — it will add fees
+      // when fee_bearer === "contributor". Adding fees here would double-charge.
       let payableAmount = selectedAmount;
 
-      console.log(selectedAmount, payableAmount, 'selectedAmount');
-      if (props?.fee_bearer == "contributor" && amountBreakdown && props.collection?.amount) {
-        payableAmount = amountBreakdown.totalPayable
-      }
-
       if (pricingTiers && pricingTiers.length > 0) {
-        baseAmount = selectedAmount
+        baseAmount = selectedAmount;
       }
 
-
-      let fees = 0;
-      if (amountBreakdown && props.fee_bearer == "contributor" && props.collection?.amount) {
-        fees = amountBreakdown.totalFees;
-        payableAmount = selectedAmount + fees;
+      if (collectionType === 'fundraising' && fundraisingAmount > 0) {
+        payableAmount = fundraisingAmount;
       }
-      if (props.fee_bearer == "contributor" && pricingTiers) {
 
-        fees = props.wallet?.fee_breakdown?.tiers.find(t => t.name === selectedTier)?.totalFees || 0;
-
-        payableAmount = selectedAmount + fees;
-      }
       if (amountBreakdown || selectedAmount) {
-        console.log('paymet initialize');
-
-        if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
-          // fees = 0.025 * parseFloat(fundraisingAmount)
-          payableAmount = fundraisingAmount
-        }
+        console.log('payment initialize');
 
         const paymentData = {
           contributor: {
@@ -417,6 +401,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
                   onChange={(e) =>
                     setFundraisingAmount(parseFloat(e.target.value) || 0)
                   }
+                  min={baseAmount || 0}
                   placeholder={
                     baseAmount
                       ? `Minimum amount to contribute is ${formatCurrency(baseAmount)}`
@@ -641,10 +626,10 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
       payableAmount = selectedAmount + fees;
     }
 
-    if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
-      selectedAmount = fundraisingAmount
-      fees = 0.025 * parseFloat(fundraisingAmount)
-      payableAmount = parseFloat(fundraisingAmount) + fees
+    if (collectionType === 'fundraising' && fundraisingAmount > 0) {
+      selectedAmount = fundraisingAmount;
+      fees = 0.025 * fundraisingAmount;
+      payableAmount = fundraisingAmount + fees;
     }
 
 
@@ -765,10 +750,10 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
       payableAmount = selectedAmount + fees;
     }
 
-    if (collectionType === 'fundraising' && (fundraisingAmount || parseFloat(fundraisingAmount) > baseAmount)) {
-      selectedAmount = fundraisingAmount
-      fees = 0.025 * parseFloat(fundraisingAmount)
-      payableAmount = parseFloat(fundraisingAmount) + fees
+    if (collectionType === 'fundraising' && fundraisingAmount > 0) {
+      selectedAmount = fundraisingAmount;
+      fees = 0.025 * fundraisingAmount;
+      payableAmount = fundraisingAmount + fees;
     }
 
     switch (step) {

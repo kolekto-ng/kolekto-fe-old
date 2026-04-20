@@ -118,7 +118,8 @@ export const useAuthStore = create((set, get) => ({
     lastName: string,
     phoneNumber?: string,
     recaptcherToken?: string,
-    recatcherType?: string
+    recatcherType?: string,
+    emailRedirectTo?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -131,21 +132,35 @@ export const useAuthStore = create((set, get) => ({
         phoneNumber,
         recaptcherToken,
         recatcherType,
+        emailRedirectTo,
       });
       const { data } = res;
       console.log(data, "Sign up data");
 
-      // Save to localStorage if session is returned
+      const hasSession = Boolean(data?.session?.access_token);
+
+      if (hasSession) {
+        localStorage.setItem("kolekto-auth-token", JSON.stringify(data.session));
+      }
+
       set({
-        // user: data.user,
-        // session: data.session,
+        user: data?.requireV2 || !hasSession ? null : data?.user ?? null,
+        session: data?.requireV2 || !hasSession ? null : data?.session ?? null,
         isLoading: false,
       });
 
-      return { user: data?.user ?? data, error: null };
+      return {
+        user: data?.user ?? null,
+        session: hasSession ? data?.session ?? null : null,
+        verificationRequired: Boolean(data?.requiresEmailVerification || (!hasSession && data?.user)),
+        error: null,
+      };
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.message || error.message || "Sign up failed";
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Sign up failed";
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }

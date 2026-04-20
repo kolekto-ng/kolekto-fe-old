@@ -1,1066 +1,1403 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
-import { useCollectionStore } from '@/store/useCollectionStore';
-import { useContributionStore } from '@/store/useContributionStore';
-import { useWithdrawalStore } from '@/store/useWithdrawalStore';
-import { useAuthStore } from '@/store';
-import { BarChart, Download, Eye, Share, Wallet, Users, Clock, AlertCircle, CheckCircle, TimerOff, Loader2, Filter, X } from 'lucide-react';
-import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
-import { toast } from 'sonner';
-import { ChartContainer } from "@/components/ui/chart";
-import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart as RechartsBarChart } from 'recharts';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
-import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
+import { toast } from 'sonner';
+import {
+  Wallet, Share2, Edit, QrCode, ScanLine, Download, Search, ChevronDown,
+  Loader2, ArrowLeft, Users, Calendar, Clock, TrendingUp,
+  CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
+} from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useCollectionStore } from '@/store/useCollectionStore';
+import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
+import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
+import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 
-type Status =
-  | "active"
-  | "paused"
-  | "expired"
-  | "completed"
-  | "closed"
-  | "deleted";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface StatusRule {
-  name: Status;
-  priority: number;
-  check: (ctx: {
-    statusFlag?: Status;
-    totalRaised: number;
-    targetAmount: number;
-    deadlineDate: Date;
-    now: Date;
-  }) => boolean;
+function fmtCurrency(n: number) {
+  return `₦${Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-const statusRules: StatusRule[] = [
-  { name: "deleted", priority: 100, check: ({ statusFlag }) => statusFlag === "deleted" },
-  { name: "closed", priority: 90, check: ({ statusFlag }) => statusFlag === "closed" },
-  { name: "paused", priority: 80, check: ({ statusFlag }) => statusFlag === "paused" },
-  { name: "completed", priority: 70, check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount },
-  { name: "expired", priority: 60, check: ({ deadlineDate, now }) => deadlineDate <= now },
-  { name: "active", priority: 10, check: () => true },
-];
-
-function computeStatus(ctx: {
-  statusFlag?: Status;
-  totalRaised: number;
-  targetAmount: number;
-  deadlineDate: Date;
-  now?: Date;
-}): Status {
-  const now = ctx.now ?? new Date();
-  return statusRules
-    .sort((a, b) => b.priority - a.priority)
-    .find((rule) => rule.check({ ...ctx, now }))!.name;
+function fmtDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-NG', { dateStyle: 'long' });
 }
 
-const statusColors: Record<Status, string> = {
-  active: "bg-green-100 text-green-800",
-  paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  closed: "bg-gray-200 text-gray-800",
-  deleted: "bg-gray-400 text-gray-900",
+function fmtDateTime(dateStr: string) {
+  return new Date(dateStr).toLocaleString('en-NG', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function daysLeft(deadline?: string | null): number | null {
+  if (!deadline) return null;
+  const diff = new Date(deadline).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-100 text-green-800',
+  paused: 'bg-yellow-100 text-yellow-800',
+  expired: 'bg-red-100 text-red-800',
+  completed: 'bg-blue-100 text-blue-800',
+  closed: 'bg-gray-200 text-gray-700',
+  deleted: 'bg-gray-300 text-gray-800',
+  pending_review: 'bg-amber-100 text-amber-800',
 };
 
-const statusIcons: Record<Status, React.ReactNode> = {
-  active: <CheckCircle className="h-4 w-4 mr-1" />,
-  paused: <AlertCircle className="h-4 w-4 mr-1" />,
-  expired: <TimerOff className="h-4 w-4 mr-1" />,
-  completed: <CheckCircle className="h-4 w-4 mr-1" />,
-  closed: <AlertCircle className="h-4 w-4 mr-1" />,
-  deleted: <AlertCircle className="h-4 w-4 mr-1" />,
+const CHECK_IN_COLORS: Record<string, string> = {
+  not_checked_in: 'bg-gray-100 text-gray-600',
+  checked_in: 'bg-green-100 text-green-700',
+  checked_out: 'bg-blue-100 text-blue-700',
 };
+
+const CHECK_IN_LABELS: Record<string, string> = {
+  not_checked_in: 'Not Checked In',
+  checked_in: 'Checked In',
+  checked_out: 'Checked Out',
+};
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
+const StatCard: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: boolean;
+}> = ({ icon, label, value, sub, highlight }) => (
+  <div className={`rounded-xl border p-4 flex items-start gap-3 ${highlight ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'}`}>
+    <div className={`p-2 rounded-lg ${highlight ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+      {icon}
+    </div>
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`font-bold text-lg leading-tight ${highlight ? 'text-green-700' : 'text-gray-900'}`}>{value}</p>
+      {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+    </div>
+  </div>
+);
+
+// ─── Progress Bar ────────────────────────────────────────────────────────────
+
+const ProgressBar: React.FC<{ raised: number; target: number }> = ({ raised, target }) => {
+  const pct = Math.min((raised / target) * 100, 100);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-sm">
+        <span className="font-medium text-gray-900">{fmtCurrency(raised)} raised</span>
+        <span className="text-gray-500">of {fmtCurrency(target)} target</span>
+      </div>
+      <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-green-600 rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-gray-500 text-right">{pct.toFixed(1)}% funded</p>
+    </div>
+  );
+};
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { updateCollectionStatus } = useCollectionStore();
+
+  const [col, setCol] = useState<any>(null);
+  const [contributions, setContributions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingContribs, setLoadingContribs] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [showQR, setShowQR] = useState(false);
-  const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
-  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<Record<string, string>>({});
-  const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
-  const { user } = useAuthStore();
+  const [tierFilter, setTierFilter] = useState('all');
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [scanInput, setScanInput] = useState('');
+  const [scannedTicket, setScannedTicket] = useState<any>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isFlierOpen, setIsFlierOpen] = useState(false);
 
-  const { fetchCollectionById, currentCollection, fetchCollections, isLoading } = useCollectionStore();
-  const { fetchContributions, contributions } = useContributionStore();
-  const { createWithdrawal } = useWithdrawalStore();
+  const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
+  const formFields: any[] = col?.form_fields || [];
+  const priceTiers: any[] = col?.pricing_tiers || [];
+  // Pick the most-recently-updated wallet row (guards against duplicate rows)
+  const walletRows: any[] = Array.isArray(col?.wallets) ? col.wallets : (col?.wallets ? [col.wallets] : []);
+  const wallet = walletRows.slice().sort((a: any, b: any) =>
+    new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime()
+  )[0] || {};
+  const ledgerBalance = Number(wallet?.ledger_balance ?? 0);
+  const availableBalance = Number(wallet?.available_balance ?? 0);
+  const pendingBalance = Number(wallet?.pending_balance ?? 0);
+  const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
 
-  console.log(currentCollection, 'current coll');
+  // ── Fetch helpers ───────────────────────────────────────────────────────────
+
+  const loadWallet = async () => {
+    if (!id) return;
+    const { data: walletData } = await supabase
+      .from('wallets')
+      .select('*')
+      .eq('collection_id', id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setCol((prev: any) => prev ? { ...prev, wallets: walletData ? [walletData] : [] } : prev);
+  };
+
+  const loadContributions = async () => {
+    if (!id) return;
+    const { data } = await supabase
+      .from('contributions')
+      .select('*')
+      .eq('collection_id', id)
+      .order('created_at', { ascending: false });
+    setContributions(data || []);
+    setLoadingContribs(false);
+  };
+
+  // ── Fetch data (always fresh — bypass store cache) ──────────────────────────
+
+  const loadCollection = async () => {
+    if (!id) return;
+    // Load collection WITHOUT contributions join (loaded separately below)
+    // Load wallet separately to get the latest row (sorted by updated_at)
+    const [{ data, error }, { data: walletData }] = await Promise.all([
+      supabase.from('collections').select('*').eq('id', id).single(),
+      supabase.from('wallets').select('*').eq('collection_id', id)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if (error) { toast.error('Failed to load collection'); setLoading(false); return; }
+    setCol({
+      ...data,
+      wallets: walletData ? [walletData] : [],
+      form_fields: Array.isArray(data.contributions_fields) ? data.contributions_fields : [],
+      pricing_tiers: Array.isArray(data.price_tiers) ? data.price_tiers : [],
+    });
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (id) {
-      // First fetch all collections
-      fetchCollections().then(() => {
-        // Then fetch the current collection by id
-        fetchCollectionById(id).catch((err) => {
-          console.error('Error fetching collection:', err);
-          toast.error('Failed to load collection details');
-        });
-      }).catch((err) => {
-        console.error('Error fetching collections:', err);
-        toast.error('Failed to load collections');
-      });
+    if (!id) return;
+    loadCollection();
+    loadContributions();
 
-      fetchContributions(id).catch((err) => {
-        console.error('Error fetching contributions:', err);
-        toast.error('Failed to load contributions');
-      });
-    }
-  }, [id, fetchCollections, fetchCollectionById, fetchContributions]);
+    const params = new URLSearchParams(location.search);
+    if (params.get('share') === 'true') setIsShareOpen(true);
+  }, [id]);
 
+  // ── Real-time: refresh contributions + wallet on any change ─────────────────
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    if (searchParams.get('share') === 'true') {
-      setIsShareDrawerOpen(true);
+    if (!id) return;
+    const channel = supabase
+      .channel(`col-details-${id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${id}` },
+        () => { loadContributions(); }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets', filter: `collection_id=eq.${id}` },
+        () => { loadWallet(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
+  // ── Computed values ─────────────────────────────────────────────────────────
+
+  const paidContributions = contributions.filter(c => c.status === 'paid');
+  // Authoritative: sum contributions.amount (net, no fees) from paid rows.
+  // This is correct even when wallet hasn't been created yet or upsert failed.
+  // Wallet balances (ledger/available/pending) still come from the wallet row
+  // since they incorporate the T+1 settlement cutoff which is computed server-side.
+  const totalRaised = paidContributions.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+  const targetAmount = col?.target_amount ? Number(col.target_amount) : null;
+  const deadline = col?.deadline || null;
+  const remaining = daysLeft(deadline);
+
+  // Tier matching — prefer stored Tier name in contributor_information, fall back to amount
+  const getTierForContribution = (c: any): any => {
+    if (!priceTiers.length) return null;
+    const tierName = (c.contributor_information?.[0] as any)?.Tier;
+    if (tierName) return priceTiers.find(t => t.name === tierName) || null;
+    return priceTiers.find(t => Math.abs(Number(t.price) - Number(c.amount)) < 1) || null;
+  };
+  // Legacy helper used in CSV export
+  const getTierForAmount = (amount: number): any => {
+    if (!priceTiers.length) return null;
+    return priceTiers.find(t => Math.abs(Number(t.price) - amount) < 1) || null;
+  };
+
+  // ── Tabs config ─────────────────────────────────────────────────────────────
+
+  const tabs =
+    colType === 'fundraising'
+      ? [{ id: 'overview', label: 'Overview' }, { id: 'contributors', label: 'Contributors' }, { id: 'activities', label: 'Activities' }]
+      : colType === 'ticket'
+      ? [{ id: 'overview', label: 'Overview' }, { id: 'tickets', label: 'Tickets' }, { id: 'activities', label: 'Activities' }]
+      : [{ id: 'overview', label: 'Overview' }, { id: 'contributors', label: 'Contributors' }, { id: 'activities', label: 'Activities' }];
+
+  // ── Ticket check-in ─────────────────────────────────────────────────────────
+
+  const updateCheckIn = async (contributionId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from('contributions')
+      .update({ check_in_status: newStatus })
+      .eq('id', contributionId);
+    if (error) { toast.error('Failed to update ticket status'); return; }
+    setContributions(prev =>
+      prev.map(c => c.id === contributionId ? { ...c, check_in_status: newStatus } : c)
+    );
+    toast.success(`Ticket marked as ${CHECK_IN_LABELS[newStatus]}`);
+  };
+
+  // ── QR Scan / ticket lookup ─────────────────────────────────────────────────
+
+  const handleScanLookup = () => {
+    const ticket = paidContributions.find(
+      c => c.contributor_unique_code === scanInput.trim()
+    );
+    if (ticket) {
+      setScannedTicket(ticket);
+    } else {
+      toast.error('No ticket found with that ID');
+      setScannedTicket(null);
     }
-  }, [location]);
-
-  console.log(currentCollection, 'current collection');
-
-
-  const shareUrl = `${window.location.origin}/contribute/${currentCollection?.slug}`;
-
-  const handleShare = () => {
-    setIsShareDrawerOpen(true);
   };
 
-  const handleEditCollection = () => {
-    setIsEditDialogOpen(true);
-  };
+  // ── Export PDF ──────────────────────────────────────────────────────────────
 
-  const handleCollectionDeleted = () => {
-    navigate('/dashboard/collections');
-  };
+  const exportPDF = async () => {
+    const filtered = getFilteredContributors();
+    if (!filtered.length) { toast.info('No contributor data to export'); return; }
 
-  const handleEditSuccess = () => {
-    // Refetch collection data after successful edit
-    if (id) {
-      fetchCollectionById(id);
-    }
-    toast.success('Collection updated successfully');
-  };
-
-  // Get available tiers from the collection
-  const availableTiers = currentCollection?.price_tiers || [];
-
-  // normalize helper
-  const normalizeAmount = (v: any): number | null => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  // find tier that matches a contribution amount (handles kobo vs naira)
-  const findMatchingTier = (contributionAmount: any) => {
-    const amt = normalizeAmount(contributionAmount);
-    if (amt === null) {
-      console.log('❌ findMatchingTier: contribution amount is null/invalid', contributionAmount);
-      return null;
-    }
-
-    console.log('🔍 findMatchingTier: looking for tier matching amount:', amt);
-    console.log('📊 availableTiers:', availableTiers.map(t => ({ name: t.name, price: t.price, priceNormalized: normalizeAmount(t.price) })));
-    console.log(availableTiers, 'avt');
-
-    // try direct numeric match first
-    let tier = availableTiers.find(t => {
-      const tierPrice = normalizeAmount(t.price);
-      const match = tierPrice === amt;
-      console.log(`  → Tier "${t.name}": price=${t.price} (norm=${tierPrice}), amt=${amt}, directMatch=${match}`);
-      return match;
-    });
-    if (tier) {
-      console.log('✅ Found direct match:', tier.name);
-      return tier;
-    }
-
-    // contribution may be in kobo (×100)
-    tier = availableTiers.find(t => {
-      const p = normalizeAmount(t.price);
-      const match = p !== null && Math.round(p * 100) === Math.round(amt);
-      console.log(`  → Tier "${t.name}" (kobo×100): tierPrice=${t.price}, amt=${amt}, match=${match}`);
-      return match;
-    });
-    if (tier) {
-      console.log('✅ Found kobo×100 match:', tier.name);
-      return tier;
-    }
-
-    // tier price might be in kobo while contribution is naira
-    tier = availableTiers.find(t => {
-      console.log(t);
-
-      const p = normalizeAmount(t.price);
-      const match = p !== null && Math.round(p) === Math.round(amt / 100);
-      console.log(`  → Tier "${t.name}" (naira/100): tierPrice=${t.price}, amt=${amt}, match=${match}`);
-      return match;
-    });
-    if (tier) {
-      console.log('✅ Found naira/100 match:', tier.name);
-      return tier;
-    }
-
-    console.log('❌ No tier match found for amount:', amt);
-    return null;
-  };
-
-  // safe getter used in UI where you want to show the tier name
-  const getTierNameFromAmount = (amount: any) => {
-    const tier = findMatchingTier(amount);
-    return tier ? tier.name : `₦${amount}`;
-  };
-
-  // Function to handle tier filter changes
-  const handleTierFilterChange = (tierName: string, checked: boolean) => {
-    setSelectedTiers(prev => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(tierName);
-      } else {
-        newSet.delete(tierName);
-      }
-      return newSet;
-    });
-  };
-
-  // Function to apply filters to contributions
-  const applyFilters = (data: any[]) => {
-    let filteredData = data;
-
-    // Apply search term filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filteredData = filteredData.filter(contribution => {
-        // Search in top-level fields
-        const topLevelMatch =
-          (contribution.name?.toLowerCase().includes(searchLower) ||
-            contribution.email?.toLowerCase().includes(searchLower) ||
-            contribution.contributor_unique_code?.toLowerCase().includes(searchLower));
-
-        // Also search in contributor_information fields
-        const infoMatch = (contribution.contributor_information || []).some(info =>
-          Object.values(info).some(val =>
-            String(val).toLowerCase().includes(searchLower)
+    // Use the host's field definitions (in the order they were arranged) as the
+    // canonical column list. Fall back to scanning contributor_information keys
+    // only when no form_fields are stored, but always strip internal/system keys.
+    const INTERNAL_KEYS = new Set([
+      'TierAmount', 'TierId', 'Tier', 'Quantity', 'collectionType',
+      'paidAt', 'channel', '_receipt', 'date',
+    ]);
+    const hostFields: string[] = (col?.form_fields || []).map((f: any) => f.name);
+    const dynamicFields: string[] = hostFields.length > 0
+      ? hostFields
+      : Array.from(
+          new Set(
+            filtered.flatMap(c =>
+              Object.keys((c.contributor_information || [])[0] || {})
+                .filter(k => !INTERNAL_KEYS.has(k) && k.toLowerCase() !== 'date' && !k.startsWith('_'))
+            )
           )
         );
 
-        return topLevelMatch || infoMatch;
-      });
-    }
+    const hasUniqueCode = filtered.some(c => c.contributor_unique_code);
+    const tierCol = colType === 'tiered' || colType === 'ticket';
+    const headers = [...dynamicFields, ...(tierCol ? ['Tier'] : []), ...(hasUniqueCode ? ['Unique Code'] : [])];
 
-    // Apply tier filter
-    if (selectedTiers.size > 0) {
-      filteredData = filteredData.filter(contribution => {
-        // Get tier name from contributor_information
-        const tierName = (contribution.contributor_information || [])[0]?.Tier;
-        return tierName && selectedTiers.has(tierName);
-      });
-    }
-
-    // Apply field filters
-    if (Object.keys(filters).length > 0) {
-      filteredData = filteredData.filter(contribution => {
-        for (const [field, value] of Object.entries(filters)) {
-          if (value) {
-            const fieldValue = (contribution.contributor_information || [])[0]?.[field] || '';
-            if (!fieldValue.toLowerCase().includes(value.toLowerCase())) {
-              return false;
-            }
-          }
-        }
-        return true;
-      });
-    }
-
-    return filteredData;
-  };
-
-  const exportToCSV = () => {
-    // Apply filters to get the data to export
-    const paidContributions = (contributions || []).filter(c => c.status === "paid");
-    const filteredData = applyFilters(paidContributions);
-
-    if (filteredData.length === 0) {
-      toast.info("No paid contributors data to export");
-      return;
-    }
-
-    // 1. Collect all unique dynamic fields from contributor_information
-    const allDynamicFields = Array.from(
-      new Set(
-        filteredData.flatMap(contributor =>
-          (contributor.contributor_information || []).flatMap(info =>
-            Object.keys(info)
-          )
-        )
-      )
-    ).filter(field => field !== "TierAmount");
-
-    // 2. Check if any contributor has a unique code
-    const hasUniqueCode = filteredData.some(
-      c => c.contributor_unique_code
-    );
-
-    // 3. Define headers for CSV (include Tier if it's a tiered collection)
-    const headers = [
-      ...allDynamicFields,
-      ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
-      ...(hasUniqueCode ? ['Unique Code'] : []),
-    ];
-
-    let csvContent = headers.join(',') + '\n';
-
-    filteredData.forEach((contribution) => {
-      const row = [
-        ...allDynamicFields.map(field =>
-          (contribution.contributor_information || [])[0]?.[field] || ''
-        ),
-        ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
-        ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+    const rows = filtered.map(c => {
+      const info = (c.contributor_information || [])[0] || {};
+      const tierName = getTierForContribution(c)?.name || '';
+      return [
+        ...dynamicFields.map(f => info[f] ?? ''),
+        ...(tierCol ? [tierName] : []),
+        ...(hasUniqueCode ? [c.contributor_unique_code || ''] : []),
       ];
-      csvContent += row.map(val =>
-        typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-      ).join(',') + '\n';
     });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const exportDate = new Date().toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' });
+    const totalAmount = filtered.reduce((s, c) => s + (Number(c.amount) || 0), 0);
 
-    toast.success('Contributor data exported successfully!');
-  };
+    const tableRows = rows.map(row =>
+      `<tr>${row.map(cell => `<td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;color:#374151;">${cell}</td>`).join('')}</tr>`
+    ).join('');
 
-  const handleWithdraw = () => {
-    setIsWithdrawDialogOpen(true);
-  };
-
-  const onWithdrawComplete = async (data: {
-    amount: number;
-    accountName: string;
-    accountNumber: string;
-    bankName: string;
-  }) => {
-    if (!user?.id) {
-      toast.error('Unable to process withdrawal. Please try again.');
-      return;
-    }
+    const html = `
+      <div style="font-family:'Inter',Arial,sans-serif;padding:32px;background:#fff;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #16a34a;margin-bottom:24px;">
+          <div>
+            <div style="font-size:26px;font-weight:900;color:#16a34a;letter-spacing:-0.5px;">Kolekto</div>
+            <div style="font-size:11px;color:#6B7280;margin-top:2px;">Contributors Export Report</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:#6B7280;">Generated on</div>
+            <div style="font-size:12px;font-weight:600;color:#111827;">${exportDate}</div>
+          </div>
+        </div>
+        <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+          <div style="font-size:18px;font-weight:800;color:#14532D;margin-bottom:8px;">${col?.title || 'Collection'}</div>
+          <div style="display:flex;gap:24px;">
+            <div>
+              <span style="font-size:11px;color:#6B7280;display:block;">Total Contributors</span>
+              <span style="font-size:15px;font-weight:700;color:#166534;">${filtered.length}</span>
+            </div>
+            <div>
+              <span style="font-size:11px;color:#6B7280;display:block;">Total Collected</span>
+              <span style="font-size:15px;font-weight:700;color:#166534;">₦${totalAmount.toLocaleString('en-NG')}</span>
+            </div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:#16a34a;">
+              ${headers.map(h => `<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:0.05em;">${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E5E7EB;display:flex;justify-content:space-between;">
+          <span style="font-size:11px;color:#9CA3AF;">Powered by Kolekto · kolekto.com.ng</span>
+          <span style="font-size:11px;color:#9CA3AF;">Confidential — For authorized use only</span>
+        </div>
+      </div>
+    `;
 
     try {
-      setIsWithdrawDialogOpen(false);
-      toast.success('Withdrawal request submitted successfully!');
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error: any) {
-      console.error('Withdrawal error:', error);
-      toast.error(error.message || 'Failed to submit withdrawal request');
-      setIsWithdrawDialogOpen(false);
+      const html2pdf = (await import('html2pdf.js')).default;
+      const el = document.createElement('div');
+      el.innerHTML = html;
+      document.body.appendChild(el);
+      await html2pdf().set({
+        margin: 0,
+        filename: `${col?.title || 'collection'}-contributors.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      }).from(el).save();
+      document.body.removeChild(el);
+      toast.success('PDF exported successfully!');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to export PDF');
     }
   };
 
-  // Helper to check if collection is active based on deadline
-  const isActiveByDeadline = currentCollection?.deadline
-    ? new Date(currentCollection.deadline) > new Date()
-    : false;
+  // ── Filter helpers ──────────────────────────────────────────────────────────
 
-  // Helper to get status string based on deadline
-  const getDeadlineStatus = () => {
-    if (!currentCollection?.deadline) return currentCollection?.status || "No deadline";
-    return currentCollection.status;
+  const getFilteredContributors = () => {
+    let data = paidContributions;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      data = data.filter(c => {
+        const info = (c.contributor_information || [])[0] || {};
+        return (
+          c.name?.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.phone?.toLowerCase().includes(q) ||
+          Object.values(info).some(v => String(v).toLowerCase().includes(q))
+        );
+      });
+    }
+    if (tierFilter !== 'all') {
+      data = data.filter(c => getTierForContribution(c)?.name === tierFilter);
+    }
+    return data;
   };
 
-  // Helper to get status color based on deadline
-  const getDeadlineStatusColor = () => {
-    const status = getDeadlineStatus();
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'paused':
-        return 'bg-purple-100 text-purple-800';
-      case 'expired':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'closed':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const getFilteredTickets = () => {
+    let data = paidContributions;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      data = data.filter(c =>
+        c.name?.toLowerCase().includes(q) ||
+        c.contributor_unique_code?.toLowerCase().includes(q)
+      );
+    }
+    if (tierFilter !== 'all') {
+      data = data.filter(c => getTierForContribution(c)?.name === tierFilter);
+    }
+    return data;
+  };
+
+  // ── Status actions ──────────────────────────────────────────────────────────
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      await updateCollectionStatus(id!, newStatus);
+      setCol((prev: any) => prev ? { ...prev, status: newStatus } : prev);
+      toast.success(`Collection ${newStatus === 'active' ? 'resumed' : newStatus}`);
+    } catch {
+      toast.error('Failed to update status');
     }
   };
 
-  // Helper to get status icon based on deadline
-  const getDeadlineStatusIcon = () => {
-    const status = getDeadlineStatus();
-    switch (status) {
-      case 'active':
-        return <CheckCircle className="h-4 w-4 mr-1" />;
-      case 'paused':
-        return <CheckCircle className="h-4 w-4 mr-1" />;
-      case 'expired':
-        return <TimerOff className="h-4 w-4 mr-1" />;
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 mr-1" />;
-      case 'closed':
-        return <AlertCircle className="h-4 w-4 mr-1" />;
-      default:
-        return <Clock className="h-4 w-4 mr-1" />;
-    }
-  };
+  // ── Loading ──────────────────────────────────────────────────────────────────
 
-  // Only show paid contributors
-  const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
-
-  // Apply filters to get the final list of contributors to display
-  const filteredContributors = applyFilters(paidContributions);
-
-  // Group contributions by date for chart data
-  const contributionsByDate = contributions?.reduce((acc, curr) => {
-    const date = new Date(curr.created_at).toLocaleDateString('en-NG');
-    acc[date] = (acc[date] || 0) + (curr.amount || 0);
-    return acc;
-  }, {} as Record<string, number>);
-
-  const chartData = Object.keys(contributionsByDate || {}).map((date) => ({
-    date,
-    amount: contributionsByDate?.[date] || 0
-  }));
-
-  // Calculate total collected amount and withdrawable amount
-  const totalCollected = contributions?.reduce((sum, contribution) => {
-    return contribution.status === 'paid' ? sum + (contribution.amount || 0) : sum;
-  }, 0) || 0;
-
-  const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-
-  const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
-
-  // Function to clear all filters
-  const clearAllFilters = () => {
-    setFilters({});
-    setSearchTerm('');
-    setSelectedTiers(new Set());
-  };
-
-  // Check if any filters are active
-  const hasActiveFilters = searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0;
-
-  if (isLoading) {
+  if (!loading && !col) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin h-6 w-6 text-gray-600" />
-      </div>
-    );
-  }
-
-
-  if (!currentCollection) {
-    return (
-      <div className="py-10 text-center">
-        <h2 className="text-2xl font-bold text-gray-700 mb-4">Collection Not Found</h2>
-        <p className="text-gray-600 mb-6">The collection you're looking for doesn't exist or you may not have permission to view it.</p>
-        <Button onClick={() => navigate('/dashboard/collections')} className="bg-kolekto hover:bg-kolekto/90">
-          Go to Collections
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <AlertCircle className="w-12 h-12 text-gray-400" />
+        <p className="text-gray-500">Collection not found</p>
+        <Button variant="outline" onClick={() => navigate('/dashboard/collections')}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Collections
         </Button>
       </div>
     );
   }
 
-  // 1. Collect all unique dynamic fields from contributor_information
-  const allDynamicFields = Array.from(
-    new Set(
-      paidContributions.flatMap(contributor => {
-        return (contributor.contributor_information || []).flatMap(info =>
-          Object.keys(info)
-        )
-      })
-    )
-  ).filter(field => field !== "TierAmount");
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
-  console.log(allDynamicFields);
-  console.log(paidContributions)
+  // ── Render ──────────────────────────────────────────────────────────────────
 
-  // 2. Check if any contributor has a unique code
-  const hasUniqueCode = paidContributions.some(
-    c => c.contributor_unique_code
-  );
-
-  // Function to handle filter changes
-  const handleFilterChange = (field: string, value: string) => {
-    setFilters(prev => {
-      if (value === '') {
-        const newFilters = { ...prev };
-        delete newFilters[field];
-        return newFilters;
-      }
-      return { ...prev, [field]: value };
-    });
-  };
-
-  const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
-  const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
-  const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
-
-  const computedStatus: Status = computeStatus({
-    statusFlag: currentCollection?.status as Status,
-    totalRaised,
-    targetAmount,
-    deadlineDate,
-  });
+  const statusLabel = col?.status === 'pending_review' ? 'Pending Review'
+    : col?.status ? col.status.charAt(0).toUpperCase() + col.status.slice(1) : 'Active';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
-              {statusIcons[computedStatus]}
-              {computedStatus}
-            </span>
-            <CollectionManagementMenu
-              collectionId={id as string}
-              onEditClick={handleEditCollection}
-              currentStatus={currentCollection.status || 'active'}
-              onDeleteSuccess={handleCollectionDeleted}
-            />
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+
+      {/* ── Back ───────────────────────────────────────────────────────────── */}
+      <button
+        onClick={() => navigate('/dashboard/collections')}
+        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        All Collections
+      </button>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="space-y-1.5">
+            <h1 className="text-2xl font-bold text-gray-900">{col.title}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[col.status] || 'bg-gray-100 text-gray-700'}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+                {statusLabel}
+              </span>
+              {colType === 'ticket' && col.event_date && (
+                <span className="text-xs text-gray-500">
+                  Event: {fmtDate(col.event_date)}
+                </span>
+              )}
+            </div>
           </div>
-          {currentCollection.description && (
-            <p className="text-gray-600 mt-1">{currentCollection.description}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={handleShare}
-            className="bg-kolekto hover:bg-kolekto/90 flex items-center"
-          >
-            <Share className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Share Collection</span>
-            <span className="sm:hidden">Share</span>
-          </Button>
 
-          <Button
-            onClick={handleWithdraw}
-            variant="outline"
-            className="border-kolekto text-kolekto hover:bg-kolekto/10 flex items-center"
-            disabled={withdrawableAmount <= 0}
-          >
-            <Wallet className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Withdraw Funds</span>
-            <span className="sm:hidden">Withdraw</span>
-          </Button>
-        </div>
-      </div>
-
-      {showQR && (
-        <div className="mb-6">
-          <QRCodeDisplay
-            collectionId={id || ''}
-            collectionTitle={currentCollection.title || 'Collection'}
-            shareUrl={shareUrl}
-          />
-        </div>
-      )}
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 w-full">
-          <TabsTrigger value="overview" className="flex items-center gap-1">
-            <Eye className="h-4 w-4 mr-1" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="contributors" className="flex items-center gap-1">
-            <Users className="h-4 w-4 mr-1" />
-            Contributors
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center gap-1">
-            <BarChart className="h-4 w-4 mr-1" />
-            Activity
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-            {
-              currentCollection.type === "fixed" && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Collection Amount</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">₦{currentCollection.amount.toLocaleString()}</div>
-                    <p className="text-sm text-gray-500">Per contributor</p>
-                  </CardContent>
-                </Card>
-              )
-
-            }
-
-            {currentCollection.type === "tiered" && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Collection Tier(s)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {currentCollection.price_tiers.map((tier, i) => {
-
-                    return (<div key={i} >
-                      <div className=' text-2xl font-bold flex justify-between items-center mb-2'>
-                        <div>{tier.name}</div>
-                        <div className="text-2xl font-bold">₦{tier.price}</div>
-                      </div>
-
-                    </div>)
-                  })}
-
-                  <p className="text-sm text-gray-500">Per contributor</p>
-                </CardContent>
-              </Card>
-
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {colType === 'ticket' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setScanInput(''); setScannedTicket(null); setIsScanOpen(true); }}
+                className="flex items-center gap-1.5"
+              >
+                <ScanLine className="w-4 h-4" />
+                Scan QR
+              </Button>
             )}
 
+            <Button
+              size="sm"
+              onClick={() => setIsWithdrawOpen(true)}
+              disabled={availableBalance <= 0}
+              className="bg-green-700 hover:bg-green-800 text-white flex items-center gap-1.5"
+            >
+              <Wallet className="w-4 h-4" />
+              Withdraw
+            </Button>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Collected</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsEditOpen(true)}
+              className="flex items-center gap-1.5"
+            >
+              <Edit className="w-4 h-4" />
+              Edit
+            </Button>
 
-                <div className="text-2xl font-bold">₦{currentCollection.type === 'fundraising' ? Number(totalCollected / 1.025).toFixed(2) : totalCollected.toLocaleString()}</div>
-                <p className="text-sm text-gray-500">From {contributorsCount} contributors</p>
-              </CardContent>
-            </Card>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsShareOpen(true)}
+              className="flex items-center gap-1.5"
+            >
+              <Share2 className="w-4 h-4" />
+              Share
+            </Button>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Deadline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {currentCollection.deadline ?
-                    new Date(currentCollection.deadline).toLocaleDateString('en-NG', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    }) : 'No deadline set'}
-                </div>
-                <p className="text-sm text-gray-500">
-                  {currentCollection.deadline && isActiveByDeadline
-                    ? `${Math.ceil((new Date(currentCollection.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left`
-                    : currentCollection.deadline ? 'Expired' : 'No deadline'}
-                </p>
-              </CardContent>
-            </Card>
+            {colType === 'fundraising' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsFlierOpen(true)}
+                className="flex items-center gap-1.5 border-green-600 text-green-700 hover:bg-green-50"
+              >
+                <Download className="w-4 h-4" />
+                Campaign Flyer
+              </Button>
+            )}
+
+            {/* Status management menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="px-2">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {col.status !== 'active' && col.status !== 'pending_review' && (
+                  <DropdownMenuItem onClick={() => handleStatusChange('active')}>
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-green-600" /> Resume Collection
+                  </DropdownMenuItem>
+                )}
+                {col.status === 'active' && (
+                  <DropdownMenuItem onClick={() => handleStatusChange('paused')}>
+                    <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" /> Pause Collection
+                  </DropdownMenuItem>
+                )}
+                {col.status !== 'closed' && (
+                  <DropdownMenuItem onClick={() => handleStatusChange('closed')}>
+                    <X className="w-4 h-4 mr-2 text-gray-600" /> Close Collection
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => {
+                    if (paidContributions.length > 0) {
+                      toast.error('Cannot delete a collection with existing payments. Close it instead.');
+                    } else {
+                      setDeleteConfirmOpen(true);
+                    }
+                  }}
+                >
+                  Delete Collection
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+        </div>
 
-          <div className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Collection Information</CardTitle>
-                <CardDescription>Details about this collection and how to contribute</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="font-medium mb-2">Collection Details</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Created On</span>
-                        <span className="font-medium">
-                          {new Date(currentCollection.created_at).toLocaleDateString('en-NG')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Status</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
-                          {statusIcons[computedStatus]}
-                          {computedStatus}
-                        </span>
-                      </div>
-                      {currentCollection.max_participants && (
-                        <div className="flex justify-between border-b pb-2">
-                          <span className="text-gray-600">Max Contributors</span>
-                          <span className="font-medium">{currentCollection.max_participants}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between border-b pb-2">
-                        <span className="text-gray-600">Current Contributors</span>
-                        <span className="font-medium">{contributorsCount}</span>
-                      </div>
-                      <div className="flex justify-between pb-2">
-                        <span className="text-gray-600">Unique Payment Link</span>
-                        <a
-                          href={shareUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-kolekto hover:underline truncate max-w-[200px]"
-                        >
-                          {shareUrl.split('/').pop()}
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">Quick Actions</h3>
-                    <div className="space-y-3">
-                      <Button
-                        onClick={handleShare}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        <Share className="mr-2 h-4 w-4" />
-                        Share Collection
-                      </Button>
-                      <Button
-                        onClick={() => setShowQR(!showQR)}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        {showQR ? 'Hide QR Code' : 'Show QR Code'}
-                      </Button>
-                      <Button
-                        onClick={exportToCSV}
-                        variant="outline"
-                        className="w-full flex items-center justify-center"
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Contributors Data
-                      </Button>
-                      <Button
-                        onClick={handleWithdraw}
-                        className="w-full bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
-                        disabled={withdrawableAmount <= 0}
-                      >
-                        <Wallet className="mr-2 h-4 w-4" />
-                        Withdraw Funds
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Share link + QR inline */}
+        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-500 mb-1">Collection Link</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 truncate">{shareUrl}</span>
+              <button
+                onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success('Link copied!'); }}
+                className="flex-shrink-0 text-gray-400 hover:text-gray-700"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-        </TabsContent>
+          <button
+            onClick={() => setIsShareOpen(true)}
+            className="flex-shrink-0 p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+            title="View QR Code"
+          >
+            <QrCode className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
 
-        <TabsContent value="contributors" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Contributors Details</CardTitle>
-              <div className="flex flex-col md:flex-row gap-2 w-full sm:w-auto">
-                <Input
-                  type="text"
-                  placeholder="Search contributors..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="px-3 py-1 border rounded w-full sm:w-auto"
+        {col.status === 'paused' && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-800">
+            This collection is currently paused — contributors cannot make payments.
+          </div>
+        )}
+      </div>
+
+      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-gray-100 p-1 rounded-xl h-auto">
+          {tabs.map(t => (
+            <TabsTrigger
+              key={t.id}
+              value={t.id}
+              className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
+        <TabsContent value="overview" className="mt-6 space-y-6">
+          {loadingContribs ? (
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+          ) : (
+            <>
+              {/* Fundraising banner + summary */}
+              {colType === 'fundraising' && col.campaign_summary && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Campaign Summary</p>
+                  <p className="text-gray-600 text-sm">{col.campaign_summary}</p>
+                </div>
+              )}
+
+              {/* Ticket event info */}
+              {colType === 'ticket' && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-1">
+                  {col.description && <p className="text-sm text-gray-600">{col.description}</p>}
+                  {col.event_date && (
+                    <p className="text-sm text-gray-500">
+                      <span className="font-medium">Event Date:</span> {fmtDate(col.event_date)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard
+                  icon={<TrendingUp className="w-5 h-5" />}
+                  label={colType === 'fundraising' ? 'Total Donated' : colType === 'ticket' ? 'Total Revenue' : 'Total Raised'}
+                  value={fmtCurrency(totalRaised)}
+                  highlight
                 />
-
-                {/* Tier Filter Dropdown - Only show for tiered collections */}
-                {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="flex items-center whitespace-nowrap">
-                        <Filter className="mr-2 h-4 w-4" />
-                        Filter by Tier
-                        {selectedTiers.size > 0 && (
-                          <Badge variant="secondary" className="ml-2">
-                            {selectedTiers.size}
-                          </Badge>
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56">
-                      <DropdownMenuLabel>Filter by Tier</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {availableTiers.map((tier) => (
-                        <DropdownMenuCheckboxItem
-                          key={tier.name}
-                          checked={selectedTiers.has(tier.name)}
-                          onCheckedChange={(checked) => handleTierFilterChange(tier.name, !!checked)}
-                        >
-                          {tier.name} - ₦{tier.price.toLocaleString()}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuCheckboxItem
-                        checked={false}
-                        onCheckedChange={() => setSelectedTiers(new Set())}
-                        className="text-red-600"
-                      >
-                        Clear All
-                      </DropdownMenuCheckboxItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-
-                {hasActiveFilters && (
-                  <Button
-                    onClick={clearAllFilters}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center whitespace-nowrap text-red-600 hover:text-red-700"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear Filters
-                  </Button>
-                )}
-
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center whitespace-nowrap"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Data
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <div className="w-full overflow-x-auto">
-                {filteredContributors.length > 0 ? (
-                  <Table className="min-w-[700px]">
-                    <TableHeader className='overflow-x-auto'>
-                      <TableRow>
-                        {allDynamicFields.map(field => (
-                          <TableHead key={field} className="lg:table-cell">{field}</TableHead>
-                        ))}
-                        {/* {currentCollection?.type === 'tiered' && (
-                          <TableHead className="lg:table-cell">Tier</TableHead>
-                        )} */}
-                        {hasUniqueCode && (
-                          <TableHead className="lg:table-cell">Unique Code</TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredContributors.map(contributor => (
-                        <TableRow key={contributor.id}>
-                          {allDynamicFields.map(field => (
-                            <TableCell key={field} className="lg:table-cell">
-                              {(contributor.contributor_information || [])[0]?.[field] || ''}
-                            </TableCell>
-                          ))}
-                          {/* {currentCollection?.type === 'tiered' && (
-                            <TableCell className="lg:table-cell">
-                              <Badge variant="outline">
-                                {getTierNameFromAmount(contributor.amount)}
-                              </Badge>
-                            </TableCell>
-                          )} */}
-                          {hasUniqueCode && (
-                            <TableCell className="lg:table-cell">
-                              {contributor.contributor_unique_code || ''}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="py-8 text-center text-gray-500">
-                    {searchTerm || Object.keys(filters).length > 0 || selectedTiers.size > 0
-                      ? 'No contributors match your filters'
-                      : 'No contributors yet'}
-                  </div>
-                )}
+                <StatCard
+                  icon={<Users className="w-5 h-5" />}
+                  label={colType === 'fundraising' ? 'Donors' : colType === 'ticket' ? 'Tickets Sold' : 'Contributors'}
+                  value={paidContributions.length.toString()}
+                />
+                <StatCard
+                  icon={<Calendar className="w-5 h-5" />}
+                  label="Deadline"
+                  value={deadline ? fmtDate(deadline) : 'No deadline'}
+                />
+                <StatCard
+                  icon={<Clock className="w-5 h-5" />}
+                  label="Time Remaining"
+                  value={remaining === null ? '—' : remaining <= 0 ? 'Ended' : `${remaining} day${remaining !== 1 ? 's' : ''}`}
+                  sub={remaining !== null && remaining <= 0 ? 'Collection has ended' : undefined}
+                />
               </div>
 
-              {/* Filter Summary */}
-              {hasActiveFilters && (
-                <div className="px-4 py-3 bg-gray-50 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      Showing {filteredContributors.length} of {paidContributions.length} contributors
-                    </span>
-                    <div className="flex gap-2 items-center">
-                      {selectedTiers.size > 0 && (
-                        <div className="flex gap-1">
-                          {Array.from(selectedTiers).map(tier => (
-                            <Badge key={tier} variant="secondary" className="text-xs">
-                              {tier}
-                            </Badge>
-                          ))}
+              {/* Fixed amount */}
+              {colType === 'fixed' && (
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <p className="text-sm text-gray-500">Fixed Amount per Contributor</p>
+                  <p className="text-2xl font-bold text-gray-900">{fmtCurrency(Number(col.amount || 0))}</p>
+                </div>
+              )}
+
+              {/* Progress bar */}
+              {targetAmount && targetAmount > 0 && (
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <ProgressBar raised={totalRaised} target={targetAmount} />
+                </div>
+              )}
+
+              {/* Tiered breakdown */}
+              {(colType === 'tiered' || (colType === 'ticket' && priceTiers.length > 0)) && (
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-3">
+                    {colType === 'ticket' ? 'Ticket Sales by Tier' : 'Contributors by Tier'}
+                  </p>
+                  <div className="space-y-3">
+                    {priceTiers.map(tier => {
+                      const tierContribs = paidContributions.filter(c => getTierForContribution(c)?.name === tier.name);
+                      const count = tierContribs.length;
+                      const revenue = count * Number(tier.price);
+                      return (
+                        <div key={tier.id || tier.name} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{tier.name}</p>
+                            <p className="text-xs text-gray-500">{fmtCurrency(Number(tier.price))} each</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-gray-900">{count} {colType === 'ticket' ? 'tickets' : 'contributors'}</p>
+                            <p className="text-xs text-green-600">{fmtCurrency(revenue)}</p>
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+
+              {/* Open pool info */}
+              {colType === 'open_pool' && col.min_contribution > 0 && (
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <p className="text-sm text-gray-500">Minimum Contribution</p>
+                  <p className="text-xl font-bold text-gray-900">{fmtCurrency(Number(col.min_contribution))}</p>
+                </div>
+              )}
+
+              {/* Wallet Summary Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Total Balance</p>
+                  <p className="text-xl font-bold text-gray-900">{fmtCurrency(ledgerBalance)}</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-green-700 mb-1">Available to Withdraw</p>
+                    <p className="text-xl font-bold text-green-700">{fmtCurrency(availableBalance)}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={availableBalance <= 0}
+                    onClick={() => setIsWithdrawOpen(true)}
+                    className="bg-green-700 hover:bg-green-800 text-white"
+                  >
+                    <Wallet className="w-4 h-4 mr-1.5" /> Withdraw
+                  </Button>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Balance</p>
+                  <p className="text-xl font-bold text-yellow-700">{fmtCurrency(pendingBalance)}</p>
+                </div>
+              </div>
+            </>
+          )}
         </TabsContent>
 
-        <TabsContent value="activity" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Contribution Activity</CardTitle>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">
-                  Available for withdrawal
-                </div>
-                <div className="font-bold text-lg">
-                  ₦{withdrawableAmount.toLocaleString()}
-                </div>
+        {/* ── CONTRIBUTORS ────────────────────────────────────────────────── */}
+        {colType !== 'fundraising' && colType !== 'ticket' && (
+          <TabsContent value="contributors" className="mt-6 space-y-4">
+            {/* Controls */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search by name, email, phone…"
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-            </CardHeader>
-            <CardContent>
-              <h3 className="font-medium mb-4">Recent Contributions</h3>
-              {filteredContributors.length > 0 ? (
-                <div className="space-y-4">
-                  {filteredContributors.slice(0, 5).map((contributor) => {
-                    if (contributor.status != "paid") return;
-                    return (
-                      <div
-                        key={contributor.id}
-                        className="flex justify-between items-center border-b pb-2"
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {contributor.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {new Date(
-                              contributor.created_at
-                            ).toLocaleDateString("en-NG")}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold">
-                            ₦{contributor.amount?.toLocaleString()}
-                          </div>
-                          {currentCollection?.type === 'tiered' && (
-                            <Badge variant="outline" className="text-xs mt-1">
-                              {getTierNameFromAmount(contributor.amount)}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-gray-500">
-                  No contributions yet
-                </div>
+
+              {colType === 'tiered' && priceTiers.length > 0 && (
+                <Select value={tierFilter} onValueChange={setTierFilter}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Filter by tier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tiers</SelectItem>
+                    {priceTiers.map(t => (
+                      <SelectItem key={t.id || t.name} value={t.name}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
 
-              <div className="mt-6">
-                <Button
-                  onClick={handleWithdraw}
-                  className="w-full bg-kolekto hover:bg-kolekto/90"
-                  disabled={withdrawableAmount <= 0}
-                >
-                  <Wallet className="mr-2 h-4 w-4" />
-                  Withdraw Funds
-                </Button>
+              <Button variant="outline" size="sm" onClick={exportPDF} className="flex items-center gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
+                <Download className="w-4 h-4" />
+                Export PDF
+              </Button>
+            </div>
+
+            {/* Table */}
+            {loadingContribs ? (
+              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            ) : (
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      {colType === 'tiered' && <TableHead>Tier</TableHead>}
+                      {formFields.length > 0
+                        ? formFields.map(f => <TableHead key={f.id}>{f.name}</TableHead>)
+                        : (
+                          <>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Phone</TableHead>
+                          </>
+                        )
+                      }
+                      {paidContributions.some(c => c.contributor_unique_code) && (
+                        <TableHead>Unique Code</TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getFilteredContributors().length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center py-10 text-gray-400">
+                          No contributors yet
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      getFilteredContributors().map(c => {
+                        const info = (c.contributor_information || [])[0] || {};
+                        const tier = getTierForContribution(c);
+                        return (
+                          <TableRow key={c.id}>
+                            {colType === 'tiered' && (
+                              <TableCell>
+                                <Badge variant="outline">{tier?.name || '—'}</Badge>
+                              </TableCell>
+                            )}
+                            {formFields.length > 0
+                              ? formFields.map(f => (
+                                  <TableCell key={f.id}>{info[f.name] || '—'}</TableCell>
+                                ))
+                              : (
+                                <>
+                                  <TableCell>{c.name || '—'}</TableCell>
+                                  <TableCell>{c.email || '—'}</TableCell>
+                                  <TableCell>{c.phone || '—'}</TableCell>
+                                </>
+                              )
+                            }
+                            {paidContributions.some(pc => pc.contributor_unique_code) && (
+                              <TableCell>
+                                <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
+                                  {c.contributor_unique_code || '—'}
+                                </span>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ── FUNDRAISING CONTRIBUTORS ────────────────────────────────────── */}
+        {colType === 'fundraising' && (
+          <TabsContent value="contributors" className="mt-6 space-y-5">
+            {loadingContribs ? (
+              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            ) : paidContributions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Users className="w-12 h-12 text-gray-200 mb-3" />
+                <p className="text-gray-500 font-medium">No contributors yet</p>
+                <p className="text-gray-400 text-sm mt-1">Share your fundraising link to start receiving donations</p>
+              </div>
+            ) : (() => {
+              const sortedByAmount = [...paidContributions].sort((a, b) => Number(b.amount) - Number(a.amount));
+              const top3 = sortedByAmount.slice(0, 3);
+
+              const isAnon = (c: any) => !c.name || c.name.trim() === '' || c.name.toLowerCase() === 'anonymous';
+              const displayName = (c: any) => isAnon(c) ? 'Anonymous' : c.name;
+
+              const searchFiltered = searchTerm
+                ? sortedByAmount.filter(c => {
+                    const q = searchTerm.toLowerCase();
+                    return displayName(c).toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q);
+                  })
+                : sortedByAmount;
+
+              const MEDAL = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
+
+              return (
+                <>
+                  {/* Top Contributors */}
+                  <div className="bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-2xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <TrendingUp className="w-4 h-4 text-green-600" />
+                      <h3 className="text-sm font-semibold text-gray-900">Top Contributors</h3>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {top3.map((c, i) => (
+                        <div
+                          key={c.id}
+                          className={`flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm border ${
+                            i === 0 ? 'border-yellow-300' : i === 1 ? 'border-gray-300' : 'border-orange-200'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white text-sm ${
+                            i === 0 ? 'bg-yellow-400' : i === 1 ? 'bg-gray-400' : 'bg-orange-400'
+                          }`}>
+                            {isAnon(c) ? '?' : displayName(c)[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1">
+                              <span className="text-base leading-none">{MEDAL[i]}</span>
+                              <p className="text-xs font-semibold text-gray-900 truncate">{displayName(c)}</p>
+                            </div>
+                            <p className="text-sm font-bold text-green-700 mt-0.5">{fmtCurrency(Number(c.amount))}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Search */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="relative flex-1 min-w-48">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by name or email…"
+                        value={searchTerm}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {searchFiltered.length} of {paidContributions.length} contributor{paidContributions.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {/* Full list */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="w-10">#</TableHead>
+                          <TableHead>Contributor</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {searchFiltered.map((c) => {
+                          const anon = isAnon(c);
+                          const rank = sortedByAmount.findIndex(x => x.id === c.id) + 1;
+                          return (
+                            <TableRow key={c.id} className="hover:bg-gray-50/50">
+                              <TableCell>
+                                <span className="text-xs font-mono text-gray-400">#{rank}</span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+                                    anon ? 'bg-gray-200 text-gray-500' : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {anon ? '?' : displayName(c)[0].toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className={`text-sm font-medium ${anon ? 'text-gray-400 italic' : 'text-gray-900'}`}>
+                                      {displayName(c)}
+                                      {anon && (
+                                        <span className="ml-1.5 text-[10px] not-italic font-normal bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                                          Anonymous
+                                        </span>
+                                      )}
+                                    </p>
+                                    {!anon && c.email && (
+                                      <p className="text-[11px] text-gray-400">{c.email}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm font-bold text-green-700">{fmtCurrency(Number(c.amount))}</span>
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-400 whitespace-nowrap">
+                                {fmtDate(c.created_at)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {searchFiltered.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-8 text-gray-400">
+                              No results for &ldquo;{searchTerm}&rdquo;
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              );
+            })()}
+          </TabsContent>
+        )}
+
+        {/* ── TICKETS ─────────────────────────────────────────────────────── */}
+        {colType === 'ticket' && (
+          <TabsContent value="tickets" className="mt-6 space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search by name or ticket ID…"
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {priceTiers.length > 0 && (
+                <Select value={tierFilter} onValueChange={setTierFilter}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Filter by tier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tiers</SelectItem>
+                    {priceTiers.map(t => (
+                      <SelectItem key={t.id || t.name} value={t.name}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead>Ticket ID</TableHead>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead>Tier</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Purchased</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {getFilteredTickets().length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-10 text-gray-400">
+                        No tickets sold yet
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    getFilteredTickets().map(c => {
+                      const tier = getTierForAmount(Number(c.amount));
+                      const checkIn = c.check_in_status || 'not_checked_in';
+                      return (
+                        <TableRow key={c.id}>
+                          <TableCell>
+                            <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                              {c.contributor_unique_code || c.id.slice(0, 8).toUpperCase()}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-sm font-medium">{c.name}</p>
+                            <p className="text-xs text-gray-500">{c.email}</p>
+                          </TableCell>
+                          <TableCell>
+                            {tier ? (
+                              <Badge variant="outline">{tier.name}</Badge>
+                            ) : (
+                              <span className="text-gray-400 text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${CHECK_IN_COLORS[checkIn]}`}>
+                              {CHECK_IN_LABELS[checkIn]}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 whitespace-nowrap">
+                            {fmtDate(c.created_at)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  disabled={checkIn === 'checked_in'}
+                                  onClick={() => updateCheckIn(c.id, 'checked_in')}
+                                >
+                                  <LogIn className="w-4 h-4 mr-2 text-green-600" /> Check In
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={checkIn !== 'checked_in'}
+                                  onClick={() => updateCheckIn(c.id, 'checked_out')}
+                                >
+                                  <LogOut className="w-4 h-4 mr-2 text-blue-600" /> Check Out
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={checkIn === 'not_checked_in'}
+                                  onClick={() => updateCheckIn(c.id, 'not_checked_in')}
+                                >
+                                  <X className="w-4 h-4 mr-2 text-gray-500" /> Reset Status
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        )}
+
+        {/* ── ACTIVITIES ──────────────────────────────────────────────────── */}
+        <TabsContent value="activities" className="mt-6 space-y-4">
+          {loadingContribs ? (
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+          ) : paidContributions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <TrendingUp className="w-12 h-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No payments yet</p>
+              <p className="text-gray-400 text-sm mt-1">Share your collection link to start receiving contributions</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {paidContributions.map(c => {
+                const tier = getTierForAmount(Number(c.amount));
+                const isAnon = colType === 'fundraising' && (!c.name || c.name.toLowerCase() === 'anonymous');
+                const displayName = isAnon ? 'Anonymous' : c.name;
+                const verb = colType === 'fundraising' ? 'donated' : colType === 'ticket' ? 'purchased a ticket for' : 'paid';
+                // Activities show the full checkout amount (gross_amount = totalPayable incl. fees).
+                // Fall back to amount for legacy rows that pre-date gross_amount column.
+                const displayAmount = Number(c.gross_amount || c.amount || 0);
+
+                return (
+                  <div key={c.id} className="flex items-start gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-green-700 font-semibold text-sm">
+                        {isAnon ? '?' : (displayName?.[0] || '?').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900">{displayName}</p>
+                        <span className="text-sm text-gray-500">{verb}</span>
+                        <span className="text-sm font-bold text-green-700">{fmtCurrency(displayAmount)}</span>
+                        {tier && (
+                          <Badge variant="outline" className="text-xs">{tier.name}</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-gray-400">{fmtDateTime(c.created_at)}</span>
+                        {c.payment_reference && (
+                          <span className="text-xs text-gray-400">Ref: {c.payment_reference}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <span className="text-sm font-bold text-gray-900">{fmtCurrency(displayAmount)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
-      <Drawer open={isShareDrawerOpen} onOpenChange={setIsShareDrawerOpen}>
+      {/* ── Dialogs ─────────────────────────────────────────────────────────── */}
+
+      {/* Withdraw */}
+      <WithdrawFundsDialog
+        open={isWithdrawOpen}
+        onOpenChange={setIsWithdrawOpen}
+        collectionId={id}
+        collectionTitle={col.title}
+        availableBalance={availableBalance}
+        onComplete={() => { setIsWithdrawOpen(false); toast.success('Withdrawal submitted!'); }}
+      />
+
+      {/* Share / QR */}
+      <Drawer open={isShareOpen} onOpenChange={setIsShareOpen}>
         <DrawerContent>
-          <DrawerHeader>
+          <DrawerHeader className="text-left">
             <DrawerTitle>Share Collection</DrawerTitle>
-            <DrawerDescription>
-              Share this collection with contributors to collect contributions
-            </DrawerDescription>
           </DrawerHeader>
-          <div className="px-4">
+          <div className="px-4 pb-6">
             <QRCodeDisplay
-              collectionId={id || ''}
-              collectionTitle={currentCollection.title || 'Collection'}
+              collectionId={id!}
+              collectionTitle={col.title}
               shareUrl={shareUrl}
             />
           </div>
-          <DrawerFooter>
-            <Button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: `Contribute to ${currentCollection.title}`,
-                    text: `Join me in contributing to ${currentCollection.title}`,
-                    url: shareUrl,
-                  }).catch(err => {
-                    console.error('Error sharing:', err);
-                  });
-                } else {
-                  // Fallback if Web Share API is not available
-                  navigator.clipboard.writeText(shareUrl);
-                  toast.success('Link copied to clipboard!');
-                }
-              }}
-              className="w-full bg-koleko hover:bg-koleko/90"
-            >
-              <Share className="mr-2 h-4 w-4" />
-              {navigator.share ? 'Share via apps' : 'Copy link'}
-            </Button>
-            <DrawerClose asChild>
-              <Button variant="outline">Close</Button>
-            </DrawerClose>
-          </DrawerFooter>
+          <DrawerClose asChild>
+            <div className="px-4 pb-6">
+              <Button variant="outline" className="w-full" onClick={() => setIsShareOpen(false)}>Close</Button>
+            </div>
+          </DrawerClose>
         </DrawerContent>
       </Drawer>
 
-      {
-        currentCollection && (
-          <WithdrawFundsDialog
-            open={isWithdrawDialogOpen}
-            onOpenChange={setIsWithdrawDialogOpen}
-            onComplete={onWithdrawComplete}
-            availableBalance={currentCollection.wallets[0].available_balance || 0}
-            collectionId={id || ''}
-            collectionTitle={currentCollection?.title || ''}
-          />
-        )
-      }
-
+      {/* Edit */}
       <EditCollectionDialog
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        collectionId={id || ''}
-        initialData={{
-          title: currentCollection.title,
-          description: currentCollection.description || '',
-          deadline: currentCollection.deadline,
-          type: currentCollection.type,
-          max_contributions: currentCollection.max_contributions,
-          price_tiers: currentCollection.price_tiers,
-          code_prefix: currentCollection.code_prefix || '',
-          contributions_fields: currentCollection.contributions_fields || [],
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        collectionId={id!}
+        initialData={(() => {
+          // Compute sold quantity per tier from paid contributions
+          const soldByTier = new Map<string, number>();
+          for (const c of paidContributions) {
+            const info = Array.isArray(c.contributor_information)
+              ? c.contributor_information[0] || {}
+              : (c.contributor_information || {});
+            const tierId = info?.TierId ? String(info.TierId) : '';
+            const tierName = info?.Tier ? String(info.Tier) : '';
+            const key = tierId || tierName;
+            if (!key) continue;
+            soldByTier.set(key, (soldByTier.get(key) || 0) + 1);
+          }
+          const enrichedTiers = (col.pricing_tiers || []).map((tier: any) => ({
+            ...tier,
+            sold_quantity:
+              soldByTier.get(String(tier.id || '')) ||
+              soldByTier.get(String(tier.name || '')) ||
+              0,
+          }));
+          return {
+            title: col.title || '',
+            description: (colType === 'fundraising' ? col.campaign_summary : col.description) || '',
+            amount: Number(col.amount || 0),
+            deadline: col.deadline || '',
+            fee_bearer: col.fee_bearer || 'contributor',
+            max_contributions: col.max_contributions || undefined,
+            code_prefix: col.code_prefix || '',
+            contributions_fields: col.form_fields || [],
+            total_contributions: col.total_contributions || 0,
+            type: col.collection_type === 'tiered' ? 'tiered' : 'fixed',
+            price_tiers: enrichedTiers,
+            collection_type: col.collection_type || col.type || 'fixed',
+            banner_image: col.banner_url || '',
+            story_what: col.story?.what || '',
+            story_why: col.story?.why || '',
+            story_impact: col.story?.impact || '',
+            story_images: Array.isArray(col.story_images) ? col.story_images : [],
+            event_date: col.event_date || '',
+          };
+        })()}
+        onSuccess={() => {
+          setIsEditOpen(false);
+          loadCollection();
+          toast.success('Collection updated');
         }}
-        onSuccess={handleEditSuccess}
       />
-    </div >
+
+      {/* QR / Ticket Scanner (Ticket type only) */}
+      <Dialog open={isScanOpen} onOpenChange={setIsScanOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScanLine className="w-5 h-5 text-green-700" />
+              Ticket Scanner
+            </DialogTitle>
+            <DialogDescription>
+              Enter a ticket ID or scan a QR code to look up a ticket.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter ticket ID…"
+                value={scanInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScanInput(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleScanLookup()}
+              />
+              <Button onClick={handleScanLookup} className="bg-green-700 hover:bg-green-800 text-white">
+                Look Up
+              </Button>
+            </div>
+
+            {scannedTicket && (
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-gray-900">{scannedTicket.name}</p>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${CHECK_IN_COLORS[scannedTicket.check_in_status || 'not_checked_in']}`}>
+                    {CHECK_IN_LABELS[scannedTicket.check_in_status || 'not_checked_in']}
+                  </span>
+                </div>
+                <div className="space-y-1 text-sm text-gray-600">
+                  <p><span className="text-gray-400">Email:</span> {scannedTicket.email}</p>
+                  <p><span className="text-gray-400">Ticket ID:</span> <span className="font-mono">{scannedTicket.contributor_unique_code || '—'}</span></p>
+                  <p><span className="text-gray-400">Amount:</span> {fmtCurrency(Number(scannedTicket.amount))}</p>
+                  {getTierForAmount(Number(scannedTicket.amount)) && (
+                    <p><span className="text-gray-400">Tier:</span> {getTierForAmount(Number(scannedTicket.amount))?.name}</p>
+                  )}
+                  {scannedTicket.payment_id && (
+                    <p><span className="text-gray-400">Ref:</span> {scannedTicket.payment_id}</p>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-green-700 hover:bg-green-800 text-white"
+                    disabled={(scannedTicket.check_in_status || 'not_checked_in') === 'checked_in'}
+                    onClick={async () => {
+                      await updateCheckIn(scannedTicket.id, 'checked_in');
+                      setScannedTicket({ ...scannedTicket, check_in_status: 'checked_in' });
+                    }}
+                  >
+                    <LogIn className="w-4 h-4 mr-1.5" /> Check In
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={(scannedTicket.check_in_status || 'not_checked_in') !== 'checked_in'}
+                    onClick={async () => {
+                      await updateCheckIn(scannedTicket.id, 'checked_out');
+                      setScannedTicket({ ...scannedTicket, check_in_status: 'checked_out' });
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-1.5" /> Check Out
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fundraising Share / Flyer Dialog */}
+      {colType === 'fundraising' && (
+        <FundraisingShareDialog
+          open={isFlierOpen}
+          onOpenChange={setIsFlierOpen}
+          collection={col}
+          totalRaised={totalRaised}
+          donorCount={paidContributions.length}
+          shareUrl={shareUrl}
+        />
+      )}
+
+      {/* Delete Confirm */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this collection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The collection and all its data will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={async () => {
+                await handleStatusChange('deleted');
+                navigate('/dashboard/collections');
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 };
 

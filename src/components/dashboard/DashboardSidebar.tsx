@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Logo from '../Logo';
@@ -11,190 +10,202 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from '@/components/ui/button';
 import {
-  Users,
-  CreditCard,
   LogOut,
   PlusCircle,
-  BarChart3,
   History,
   Home,
   BarChart2,
-  Flag,
   Settings,
+  Layers3,
+  MessageCircle,
+  ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
-
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuthStore } from '@/store';
-import { Layers3 } from 'lucide-react';
+import { useProfileStore } from '@/store/useProfileStore';
+
+interface NavItem {
+  label: string;
+  path: string;
+  icon: React.ElementType;
+}
+
+const primaryNavItems: NavItem[] = [
+  { label: 'Home', path: '/dashboard', icon: Home },
+  { label: 'Collections', path: '/dashboard/collections', icon: BarChart2 },
+  { label: 'Activities', path: '/dashboard/activities', icon: History },
+  { label: 'Wallet', path: '/dashboard/transactions', icon: Layers3 },
+];
+
+const secondaryNavItems: NavItem[] = [
+  { label: 'Profile', path: '/dashboard/settings', icon: Settings },
+];
 
 const DashboardSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuthStore();
   const user = useAuthStore((state) => state.user);
-  const { setOpen, setOpenMobile } = useSidebar();
+  const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
+  const { setActiveSection } = useProfileStore();
 
-  const isActive = (path: string) => {
-    return location.pathname === path ||
-      (path !== '/dashboard' && location.pathname.startsWith(path));
+  const isActive = (path: string) =>
+    location.pathname === path ||
+    (path !== '/dashboard' && location.pathname.startsWith(path));
+
+  const close = () => { if (isMobile) setOpenMobile(false); };
+
+  const handleNav = (path: string) => {
+    navigate(path);
+    close();
   };
 
   const handleSignOut = async () => {
     await signOut();
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+    close();
   };
 
-  const handleNavigation = (path: string) => {
-    navigate(path);
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+  const handleKycNavigation = () => {
+    setActiveSection('kyc');
+    handleNav('/dashboard/settings');
   };
 
-  console.log(user);
-
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userEmail = user?.email || '';
+  const initials = userName
+    .split(' ')
+    .slice(0, 2)
+    .map((n: string) => n[0]?.toUpperCase() || '')
+    .join('');
 
   return (
-    <Sidebar>
-      <SidebarHeader className="py-4 px-3">
-        <Logo size="md" />
+    <Sidebar className="border-r border-gray-100">
+      {/* ── Logo ─────────────────────────────────────────────────── */}
+      <SidebarHeader className="px-4 py-5 bg-white">
+        <Link to="/dashboard" onClick={close}>
+          <Logo size="md" />
+        </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-3">
-        <div className="space-y-2">
-          <Button
-            variant={isActive('/dashboard') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard')}
-          >
-            <Home className="mr-2 h-4 w-4" />
-            Home
-          </Button>
+      {/* ── Navigation ───────────────────────────────────────────── */}
+      <SidebarContent className="px-3 py-4 flex flex-col gap-6 bg-white">
+        {/* Primary nav */}
+        <nav className="space-y-1">
+          <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
+            Menu
+          </p>
+          {primaryNavItems.map(({ label, path, icon: Icon }) => {
+            const active = isActive(path);
+            return (
+              <button
+                key={path}
+                onClick={() => handleNav(path)}
+                className={`
+                  group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                  transition-all duration-150 outline-none
+                  ${active
+                    ? 'bg-kolekto text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }
+                `}
+              >
+                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                <span className="flex-1 text-left">{label}</span>
+                {active && <ChevronRight className="w-3.5 h-3.5 opacity-60" />}
+              </button>
+            );
+          })}
+        </nav>
 
-          <Button
-            variant={isActive('/dashboard/collections') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/collections')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/collections')}
+        {/* Create CTA */}
+        <div className="px-1">
+          <button
+            onClick={() => handleNav('/dashboard/create-collection')}
+            className={`
+              w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold
+              transition-all duration-150 border
+              ${isActive('/dashboard/create-collection')
+                ? 'bg-kolekto text-white border-kolekto shadow-sm'
+                : 'text-kolekto border-kolekto/30 bg-kolekto/5 hover:bg-kolekto hover:text-white hover:border-kolekto'
+              }
+            `}
           >
-            <BarChart2 className="mr-2 h-4 w-4" />
-            Collections
-          </Button>
-
-          <Button
-            variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/create-collection')}
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
+            <PlusCircle className="w-4 h-4 flex-shrink-0" />
             Create Collection
-          </Button>
-
-
-          {/* <Button
-            variant={isActive('/dashboard/create-collection') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/create-collection')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/create-collection')}
-          >
-            <Flag className="mr-2 h-4 w-4" />
-            Referall
-          </Button> */}
-
-          <Button
-            variant={isActive('/dashboard/settings') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/profile')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/settings')}
-          >
-            <Users className="mr-2 h-4 w-4" />
-            Profile
-          </Button>
-
-          <Button
-            variant={isActive('/dashboard/transactions') ? 'default' : 'ghost'}
-            className={`w-full justify-start transition-all duration-200 ${isActive('/dashboard/transactions')
-              ? 'bg-kolekto text-white font-semibold border-l-4 border-kolekto-dark scale-105'
-              : 'hover:bg-kolekto/80 hover:text-white'
-              }`}
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/transactions')}
-          >
-            <Layers3 className="mr-2 h-4 w-4" />
-            Wallet
-          </Button>
+          </button>
         </div>
+
+        {/* Secondary nav */}
+        <nav className="space-y-1">
+          <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
+            Account
+          </p>
+          {secondaryNavItems.map(({ label, path, icon: Icon }) => {
+            const active = isActive(path);
+            return (
+              <button
+                key={path}
+                onClick={() => handleNav(path)}
+                className={`
+                  group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                  transition-all duration-150
+                  ${active
+                    ? 'bg-kolekto text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }
+                `}
+              >
+                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                <span className="flex-1 text-left">{label}</span>
+                {active && <ChevronRight className="w-3.5 h-3.5 opacity-60" />}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={handleKycNavigation}
+            className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-150"
+          >
+            <ShieldCheck className="w-4 h-4 flex-shrink-0 text-gray-400 group-hover:text-gray-600" />
+            KYC Verification
+          </button>
+        </nav>
       </SidebarContent>
 
-      <SidebarFooter className="px-3 py-6">
-        <div className='space-y-2'>
-          <a
-            className="w-full flex gap-3 p-2 items-center font-semibold text-[14px] justify-start hover:bg-kolekto/80 hover:text-white"
-            size="sm"
-            href='mailto:team@kolekto.com.ng'
-            onClick={() => {
-              if (isMobile) setOpenMobile(false);
-            }}
-          >
-            <BarChart2 className="mr-2 h-4 w-4" />
-            Support
-          </a>
+      {/* ── Footer ───────────────────────────────────────────────── */}
+      <SidebarFooter className="px-3 py-4 bg-white border-t border-gray-100">
+        {/* Support link */}
+        <a
+          href="https://wa.me/+2349019840377"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={close}
+          className="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all duration-150 mb-1"
+        >
+          <MessageCircle className="w-4 h-4 flex-shrink-0 text-gray-400 group-hover:text-gray-600" />
+          Support
+        </a>
 
-          <Button
-            variant="ghost"
-            className="w-full justify-start hover:bg-kolekto/80 hover:text-white"
-            size="sm"
-            onClick={() => handleNavigation('/dashboard/settings')}
-          >
-            <Settings className="mr-2 h-4 w-4" />
-            Kyc Verification
-          </Button>
-
-          <div className="border-t pt-4 mt-4">
-            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-kolekto/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-kolekto/20 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-kolekto" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-foreground text-white">
-                    {user?.user_metadata.full_name || 'Reel Mein'}
-                  </span>
-                  <span className="text-xs text-muted-foreground text-white">
-                    {user?.email || 'example.com'}
-                  </span>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+        {/* User card */}
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-kolekto flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-bold leading-none">{initials || '?'}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate leading-tight">{userName}</p>
+              <p className="text-xs text-gray-400 truncate">{userEmail}</p>
             </div>
           </div>
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </SidebarFooter>
     </Sidebar>

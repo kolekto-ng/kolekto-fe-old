@@ -2,9 +2,6 @@ import React, { useState } from "react";
 import ContributionForm from "./ContributionForm";
 import PaymentSuccessful from "./PaymentSuccessful";
 import PaymentErrorHandler from "./PaymentErrorHandler";
-import { toast } from "sonner";
-import { format } from "path";
-import Maintenance from "../Maintenance";
 
 interface Field {
   name: string;
@@ -65,6 +62,11 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
   // Resolve organizer support phone from collection (supports multiple keys)
   const supportPhone: string | undefined =
     collection?.support || collection?.support_phone_number || undefined;
+  const hasConfiguredUniqueId = Boolean(
+    collection?.code_prefix ||
+    collection?.pricing_tiers?.some?.((tier: any) => tier?.prefix) ||
+    collection?.price_tiers?.some?.((tier: any) => tier?.prefix)
+  );
 
   const handlePaymentSuccess = (data: any) => {
     // Handle both old and new data formats
@@ -78,10 +80,12 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
               label: key,
               value: value as string,
             })),
-            uniqueCode: `${data.collectionId}-${Math.random()
-              .toString(36)
-              .substring(2, 8)
-              .toUpperCase()}`,
+            uniqueCode: hasConfiguredUniqueId
+              ? `${data.collectionId}-${Math.random()
+                  .toString(36)
+                  .substring(2, 8)
+                  .toUpperCase()}`
+              : '',
           };
         }
       );
@@ -96,7 +100,7 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           label: key,
           value: value as string
         })),
-        uniqueCode: data.referenceCode || 'N/A'
+        uniqueCode: hasConfiguredUniqueId ? (data.referenceCode || '') : ''
       }];
       setParticipantDetails(processedParticipants);
       setAmountPaid(data.amount || amount);
@@ -205,9 +209,17 @@ const ContributionWrapper: React.FC<ContributionWrapperProps> = ({
           open={isModalOpen}
           onOpenChange={handleModalChange}
           collectionTitle={collectionTitle}
-          amountPaid={amountPaid}
+          contributionAmount={amountPaid}
+          totalPaid={amountPaid}
           participants={participantDetails}
           transactionRef={transactionRef}
+          collectionType={collection?.collection_type || collection?.type}
+          bannerUrl={collection?.banner_url || collection?.banner_image}
+          description={collection?.description}
+          campaignSummary={collection?.campaign_summary}
+          eventDate={collection?.event_date}
+          uniqueIdEnabled={collection?.unique_id_enabled}
+          codePrefix={collection?.code_prefix}
         />
       )}
 
