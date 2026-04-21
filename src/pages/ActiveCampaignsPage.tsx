@@ -169,9 +169,7 @@ const ActiveCampaignsPage: React.FC = () => {
     event: React.MouseEvent<HTMLButtonElement>
   ) => {
     event.stopPropagation();
-
     const shareUrl = `${window.location.origin}${getCampaignLink(campaign)}`;
-
     try {
       if (navigator.share) {
         await navigator.share({
