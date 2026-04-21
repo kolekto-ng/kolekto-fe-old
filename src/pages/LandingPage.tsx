@@ -294,10 +294,11 @@ const GlobalStyles = () => (
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.4);
-      z-index: 99;
+      z-index: 1000;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s ease;
+      backdrop-filter: blur(4px);
     }
     .mobile-menu-overlay.open {
       opacity: 1;
@@ -308,16 +309,68 @@ const GlobalStyles = () => (
       top: 0;
       right: 0;
       bottom: 0;
-      width: min(320px, 85vw);
+      width: min(340px, 90vw);
       background: white;
-      z-index: 100;
+      z-index: 1001;
       transform: translateX(100%);
-      transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+      transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
       overflow-y: auto;
-      box-shadow: -8px 0 32px rgba(0,0,0,0.12);
+      box-shadow: -10px 0 40px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
     }
     .mobile-menu-panel.open {
       transform: translateX(0);
+    }
+
+    .nav-link {
+      color: var(--kol-muted);
+      font-size: 14px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .nav-link:hover {
+      color: var(--kol-green-800);
+      background: var(--kol-green-50);
+    }
+
+    .mobile-nav-link {
+      color: var(--kol-text);
+      font-size: 16px;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.2s;
+    }
+    .mobile-nav-link:active {
+      background: var(--kol-green-50);
+    }
+
+    .nav-btn-primary {
+      background: linear-gradient(135deg, #1C5C23, #2E7D32);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(28,92,35,0.2);
+    }
+    .nav-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(28,92,35,0.3);
+      filter: brightness(1.1);
     }
 
     /* ── Background floating chips in cinematic section ── */
@@ -500,7 +553,6 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
-  // Lock body scroll when menu is open
   useEffect(() => {
     if (menuOpen) {
       document.body.style.overflow = "hidden";
@@ -520,164 +572,182 @@ const Navbar = () => {
   return (
     <>
       <nav className={`lp-nav ${scrolled ? "scrolled" : ""}`}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
-          <Link to="/" style={{ display: "flex", alignItems: "center" }}>
+        <div className="container mx-auto px-6 flex items-center justify-between h-20 md:h-24">
+          <Link to="/" className="flex items-center">
             <Logo size="md" />
           </Link>
 
           {/* Desktop Nav */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }} className="hidden md:flex">
+          <div className="hidden lg:flex items-center gap-1">
             {navLinks.map(({ href, label }) => (
-              <a key={href} href={href} style={{ color: "var(--kol-muted)", fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s" }}
-                onMouseOver={e => (e.currentTarget.style.color = "var(--kol-green-800)")}
-                onMouseOut={e => (e.currentTarget.style.color = "var(--kol-muted)")}>{label}</a>
+              <a key={href} href={href} className="nav-link">
+                {label}
+              </a>
             ))}
-            <Link to="/active-campaigns" style={{ color: "var(--kol-muted)", fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s" }}
-              onMouseOver={e => (e.currentTarget.style.color = "var(--kol-green-800)")}
-              onMouseOut={e => (e.currentTarget.style.color = "var(--kol-muted)")}>Campaigns</Link>
+            <Link to="/active-campaigns" className="nav-link">
+              Campaigns
+            </Link>
+          </div>
 
+          <div className="hidden lg:flex items-center gap-4">
             {user ? (
               <>
-                <Link to="/dashboard" style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--kol-muted)", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>
-                  <LayoutDashboard size={15} /> Dashboard
+                <Link to="/dashboard" className="nav-link flex items-center gap-2">
+                  <LayoutDashboard size={18} /> Dashboard
                 </Link>
-                <button onClick={() => signOut()} style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--kol-muted)", fontSize: 14, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
-                  <LogOut size={15} /> Sign Out
+                <button 
+                  onClick={() => signOut()} 
+                  className="nav-link flex items-center gap-2 bg-transparent border-none cursor-pointer"
+                >
+                  <LogOut size={18} /> Sign Out
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" style={{ color: "var(--kol-muted)", fontSize: 14, textDecoration: "none", fontWeight: 500 }}>Login</Link>
-                <Link to="/register" style={{ background: "var(--kol-green-800)", color: "white", padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none", transition: "background 0.2s, transform 0.2s" }}
-                  onMouseOver={e => { e.currentTarget.style.background = "var(--kol-green-900)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                  onMouseOut={e => { e.currentTarget.style.background = "var(--kol-green-800)"; e.currentTarget.style.transform = "translateY(0)"; }}>Sign Up</Link>
+                <Link to="/login" className="nav-link">Login</Link>
+                <Link to="/register" className="nav-btn-primary" style={{ background: "transparent", color: "var(--kol-green-800)", border: "1.5px solid var(--kol-green-100)", boxShadow: "none" }}>
+                  Sign Up
+                </Link>
               </>
             )}
-            <Link to="/create-collection" style={{ background: "linear-gradient(135deg, #1C5C23, #2E7D32)", color: "white", padding: "8px 18px", borderRadius: 8, fontSize: 14, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}>
-              <PlusCircle size={15} /> Create Collection
+            <Link to="/create-collection" className="nav-btn-primary">
+              <PlusCircle size={18} /> Create Collection
             </Link>
           </div>
 
-          <button className="md:hidden" onClick={() => setMenuOpen(!menuOpen)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--kol-text)", zIndex: 101, position: "relative" }}>
+          {/* Mobile Menu Toggle */}
+          <button 
+            className="lg:hidden flex items-center justify-center w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 text-gray-900 z-[1002]" 
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
             {menuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </nav>
 
-      {/* Mobile slide-in panel */}
-      <div className={`mobile-menu-overlay ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(false)} />
-      <div className={`mobile-menu-panel ${menuOpen ? "open" : ""}`}>
-        {/* Header */}
-        <div style={{ padding: "20px 20px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--kol-border)" }}>
-          <Logo size="md" />
-          <button
-            onClick={() => setMenuOpen(false)}
-            style={{ background: "var(--kol-bg)", border: "1px solid var(--kol-border)", borderRadius: 8, cursor: "pointer", color: "var(--kol-text)", padding: "6px 8px", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <X size={18} />
-          </button>
-        </div>
+      {/* Mobile Slide-in Panel */}
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="mobile-menu-overlay open" 
+              onClick={() => setMenuOpen(false)} 
+            />
+            <motion.div 
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="mobile-menu-panel open"
+            >
+              {/* Header */}
+              <div className="p-6 flex justify-between items-center border-b border-gray-100">
+                <Logo size="md" />
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 border border-gray-100 text-gray-500"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
-        {/* Nav links */}
-        <div style={{ padding: "8px 12px 12px", display: "flex", flexDirection: "column", gap: 2 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.1em", padding: "12px 8px 6px", margin: 0 }}>Navigation</p>
-          {navLinks.map((link, i) => (
-            <motion.a
-              key={link.href}
-              href={link.href}
-              onClick={() => setMenuOpen(false)}
-              initial={{ opacity: 0, x: 16 }}
-              animate={menuOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 16 }}
-              transition={{ delay: 0.08 + i * 0.04, duration: 0.28 }}
-              style={{ color: "var(--kol-text)", fontSize: 15, textDecoration: "none", fontWeight: 600, padding: "11px 10px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "background 0.15s" }}
-              onMouseOver={e => (e.currentTarget.style.background = "var(--kol-bg)")}
-              onMouseOut={e => (e.currentTarget.style.background = "transparent")}
-            >
-              {link.label}
-              <ChevronRight size={15} color="var(--kol-muted)" />
-            </motion.a>
-          ))}
-          <motion.div
-            initial={{ opacity: 0, x: 16 }}
-            animate={menuOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 16 }}
-            transition={{ delay: 0.08 + navLinks.length * 0.04, duration: 0.28 }}
-          >
-            <Link
-              to="/active-campaigns"
-              onClick={() => setMenuOpen(false)}
-              style={{ color: "var(--kol-text)", fontSize: 15, textDecoration: "none", fontWeight: 600, padding: "11px 10px", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}
-            >
-              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 28, height: 28, borderRadius: 8, background: "#FEF2F2", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <Heart size={14} color="#EF4444" fill="#EF4444" />
-                </span>
-                Active Campaigns
-              </span>
-              <ChevronRight size={15} color="var(--kol-muted)" />
-            </Link>
-          </motion.div>
-        </div>
+              {/* Navigation Section */}
+              <div className="flex-1 p-6 space-y-6">
+                <div className="space-y-4">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-2">Navigation</p>
+                  <div className="space-y-1">
+                    {navLinks.map((link) => (
+                      <a 
+                        key={link.href} 
+                        href={link.href} 
+                        onClick={() => setMenuOpen(false)}
+                        className="mobile-nav-link"
+                      >
+                        {link.label}
+                        <ChevronRight size={16} className="text-gray-300" />
+                      </a>
+                    ))}
+                    <Link 
+                      to="/active-campaigns" 
+                      onClick={() => setMenuOpen(false)}
+                      className="mobile-nav-link"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+                          <Heart size={16} className="text-red-500 fill-red-500" />
+                        </span>
+                        Active Campaigns
+                      </span>
+                      <ChevronRight size={16} className="text-gray-300" />
+                    </Link>
+                  </div>
+                </div>
 
-        {/* Divider + Account */}
-        <div style={{ borderTop: "1px solid var(--kol-border)", padding: "8px 12px 12px" }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.1em", padding: "12px 8px 6px", margin: 0 }}>Account</p>
-          {user ? (
-            <motion.div
-              initial={{ opacity: 0, x: 16 }} animate={menuOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 16 }} transition={{ delay: 0.28, duration: 0.28 }}
-              style={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Link to="/dashboard" onClick={() => setMenuOpen(false)} style={{ color: "var(--kol-text)", fontSize: 15, textDecoration: "none", fontWeight: 600, padding: "11px 10px", borderRadius: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--kol-green-50)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <LayoutDashboard size={14} color="var(--kol-green-800)" />
-                </span>
-                Dashboard
-              </Link>
-              <button onClick={() => { signOut(); setMenuOpen(false); }} style={{ textAlign: "left", color: "#EF4444", fontSize: 15, background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "11px 10px", borderRadius: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 28, height: 28, borderRadius: 8, background: "#FEF2F2", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <LogOut size={14} color="#EF4444" />
-                </span>
-                Sign Out
-              </button>
+                <div className="space-y-4">
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-2">Account</p>
+                  <div className="space-y-1">
+                    {user ? (
+                      <>
+                        <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="mobile-nav-link">
+                          <span className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                              <LayoutDashboard size={16} className="text-green-700" />
+                            </span>
+                            Dashboard
+                          </span>
+                        </Link>
+                        <button 
+                          onClick={() => { signOut(); setMenuOpen(false); }} 
+                          className="mobile-nav-link w-full text-red-600 bg-transparent border-none"
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+                              <LogOut size={16} className="text-red-500" />
+                            </span>
+                            Sign Out
+                          </span>
+                        </button>
+                      </>
+                    ) : (
+                      <Link to="/login" onClick={() => setMenuOpen(false)} className="mobile-nav-link">
+                        <span className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
+                            <ArrowRight size={16} className="text-green-700" />
+                          </span>
+                          Log In
+                        </span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-6 border-t border-gray-100 space-y-3">
+                <Link
+                  to="/create-collection"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 p-4 bg-gradient-to-br from-green-800 to-green-700 text-white rounded-2xl font-bold shadow-lg shadow-green-900/20"
+                >
+                  <PlusCircle size={20} /> Create Collection
+                </Link>
+                {!user && (
+                  <Link
+                    to="/register"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center justify-center p-4 bg-green-50 text-green-800 rounded-2xl font-bold border border-green-100"
+                  >
+                    Sign Up Free
+                  </Link>
+                )}
+              </div>
             </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, x: 16 }} animate={menuOpen ? { opacity: 1, x: 0 } : { opacity: 0, x: 16 }} transition={{ delay: 0.28, duration: 0.28 }}
-            >
-              <Link to="/login" onClick={() => setMenuOpen(false)} style={{ color: "var(--kol-text)", fontSize: 15, textDecoration: "none", fontWeight: 600, padding: "11px 10px", borderRadius: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 28, height: 28, borderRadius: 8, background: "var(--kol-green-50)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  <ArrowRight size={14} color="var(--kol-green-800)" />
-                </span>
-                Log In
-              </Link>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Bottom CTA buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={menuOpen ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
-          transition={{ delay: 0.32, duration: 0.3 }}
-          style={{ padding: "0 16px 24px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--kol-border)", paddingTop: 16, marginTop: 4 }}
-        >
-          <Link
-            to="/create-collection"
-            onClick={() => setMenuOpen(false)}
-            style={{ background: "linear-gradient(135deg, #1C5C23, #2E7D32)", color: "white", padding: "14px 20px", borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: "none", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(28,92,35,0.3)" }}
-          >
-            <PlusCircle size={17} /> Create Collection
-          </Link>
-          {!user && (
-            <Link
-              to="/register"
-              onClick={() => setMenuOpen(false)}
-              style={{ background: "var(--kol-green-50)", color: "var(--kol-green-800)", padding: "13px 20px", borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: "none", textAlign: "center", border: "1.5px solid var(--kol-green-100)" }}
-            >
-              Sign Up Free
-            </Link>
-          )}
-        </motion.div>
-      </div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 };
