@@ -188,8 +188,7 @@ const ActiveCampaignsPage: React.FC = () => {
         toast.error("Unable to share this campaign right now.");
       }
     }
-  };
-
+  }
   const clearFilters = () => {
     setSearchTerm("");
     setCategoryFilter("all");
