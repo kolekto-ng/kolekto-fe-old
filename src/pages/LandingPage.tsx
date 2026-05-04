@@ -725,8 +725,7 @@ const HeroSection = () => {
             </motion.div>
 
             <motion.p variants={itemVariants} style={{ fontSize: 18, color: "var(--kol-muted)", lineHeight: 1.65, maxWidth: 520, margin: 0 }}>
-              Kolekto lets you run fixed contributions, tiered payments, open pools, ticketing &amp; fundraising — all with real-time tracking and instant receipts.
-            </motion.p>
+              From shared expenses to large-scale fundraising, Kolekto helps you collect, track, and manage payments from multiple people—all in one place.            </motion.p>
 
             <motion.div variants={itemVariants} className="hero-ctas" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Link to="/create-collection" className="btn-primary" style={{ background: "linear-gradient(135deg, #1C5C23, #2E7D32)", color: "white", padding: "14px 28px", borderRadius: 10, fontSize: 15, fontWeight: 700, textDecoration: "none", display: "flex", alignItems: "center", gap: 8, border: "none", cursor: "pointer" }}>
@@ -754,11 +753,11 @@ const HeroSection = () => {
               </div>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="hero-powered" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            {/* <motion.div variants={itemVariants} className="hero-powered" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Powered by</span>
               <img src={paystackLogo} alt="Paystack" style={{ height: 28, objectFit: "contain" }} />
               <img src={iihLogo} alt="Ilorin Innovation Hub" style={{ height: 28, objectFit: "contain" }} />
-            </motion.div>
+            </motion.div> */}
           </motion.div>
 
           {/* RIGHT — product UI mockup with floating badges */}
@@ -775,7 +774,7 @@ const HeroSection = () => {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 4 }}>ACTIVE COLLECTION</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>Year-End Party Fund 🎉</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>Year-End Party Fund</div>
                     <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>Fixed · ₦5,000 per person · 40 members</div>
                   </div>
                   <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600 }}>65%</div>
@@ -866,43 +865,43 @@ const CinematicUseCasesSection = () => {
 
   // Background floating chips — positioned absolutely behind cards
   const bgChips = [
-    { label: "Aso ebi", emoji: "👗", glow: true,  top: "7%",  left: "12%",  blur: 0,   opacity: 0.9, scale: 1.05 },
-    { label: "Monthly dues", emoji: "📅", glow: false, top: "4%",  right: "10%", blur: 1,   opacity: 0.6, scale: 0.9  },
-    { label: "Party tickets", emoji: "🎫", glow: false, top: "28%", right: "4%",  blur: 0,   opacity: 0.85, scale: 1   },
-    { label: "Handout fees", emoji: "📚", glow: true,  top: "18%", left: "3%",   blur: 2,   opacity: 0.5, scale: 0.85 },
-    { label: "Birthday contributions", emoji: "🎂", glow: false, top: "50%", left: "5%",   blur: 0,   opacity: 0.75, scale: 0.95 },
-    { label: "Donations", emoji: "❤️", glow: false, top: "60%", right: "5%",  blur: 1.5, opacity: 0.65, scale: 0.9  },
-    { label: "Membership fees", emoji: "🪪", glow: true,  top: "3%",  left: "42%",  blur: 0,   opacity: 0.8, scale: 1   },
-    { label: "Church tithes", emoji: "⛪", glow: false, top: "75%", left: "18%",  blur: 2,   opacity: 0.5, scale: 0.88 },
-    { label: "Community electricity", emoji: "💡", glow: false, top: "80%", right: "20%", blur: 0,   opacity: 0.7, scale: 0.92 },
-    { label: "Project fee", emoji: "🏗️", glow: true,  top: "40%", right: "2%",  blur: 1,   opacity: 0.6, scale: 0.9  },
-    { label: "Class dues", emoji: "🎓", glow: false, top: "88%", left: "45%",  blur: 0,   opacity: 0.65, scale: 0.95 },
-    { label: "Medical emergency", emoji: "🏥", glow: false, top: "55%", left: "50%",  blur: 2,   opacity: 0.45, scale: 0.82 },
+    { label: "Aso ebi", emoji: "👗", glow: true, top: "7%", left: "12%", blur: 0, opacity: 0.9, scale: 1.05 },
+    { label: "Monthly dues", emoji: "📅", glow: false, top: "4%", right: "10%", blur: 1, opacity: 0.6, scale: 0.9 },
+    { label: "Party tickets", emoji: "🎫", glow: false, top: "28%", right: "4%", blur: 0, opacity: 0.85, scale: 1 },
+    { label: "Handout fees", emoji: "📚", glow: true, top: "18%", left: "3%", blur: 2, opacity: 0.5, scale: 0.85 },
+    { label: "Birthday contributions", emoji: "🎂", glow: false, top: "50%", left: "5%", blur: 0, opacity: 0.75, scale: 0.95 },
+    { label: "Donations", emoji: "❤️", glow: false, top: "60%", right: "5%", blur: 1.5, opacity: 0.65, scale: 0.9 },
+    { label: "Membership fees", emoji: "🪪", glow: true, top: "3%", left: "42%", blur: 0, opacity: 0.8, scale: 1 },
+    { label: "Church tithes", emoji: "⛪", glow: false, top: "75%", left: "18%", blur: 2, opacity: 0.5, scale: 0.88 },
+    { label: "Community electricity", emoji: "💡", glow: false, top: "80%", right: "20%", blur: 0, opacity: 0.7, scale: 0.92 },
+    { label: "Project fee", emoji: "🏗️", glow: true, top: "40%", right: "2%", blur: 1, opacity: 0.6, scale: 0.9 },
+    { label: "Class dues", emoji: "🎓", glow: false, top: "88%", left: "45%", blur: 0, opacity: 0.65, scale: 0.95 },
+    { label: "Medical emergency", emoji: "🏥", glow: false, top: "55%", left: "50%", blur: 2, opacity: 0.45, scale: 0.82 },
   ];
 
   // Float keyframes per chip (varied)
   const chipFloats = [
     { y: [0, -14, 0, 8, 0], rotate: [-1, 1, -1, 0.5, -1], duration: 7 },
-    { y: [0, -9, 3, -6, 0],  rotate: [1, -1, 2, -0.5, 1],  duration: 9 },
-    { y: [0, 10, -8, 5, 0],  rotate: [-2, 1, -1, 2, -2],   duration: 8 },
+    { y: [0, -9, 3, -6, 0], rotate: [1, -1, 2, -0.5, 1], duration: 9 },
+    { y: [0, 10, -8, 5, 0], rotate: [-2, 1, -1, 2, -2], duration: 8 },
     { y: [0, -12, 6, -4, 0], rotate: [0.5, -1, 1.5, -0.5, 0.5], duration: 10 },
-    { y: [0, 8, -10, 4, 0],  rotate: [-1, 2, -1, 1, -1],   duration: 6.5 },
+    { y: [0, 8, -10, 4, 0], rotate: [-1, 2, -1, 1, -1], duration: 6.5 },
     { y: [0, -6, 10, -8, 0], rotate: [1, -0.5, 1, -1.5, 1], duration: 11 },
-    { y: [0, 12, -6, 8, 0],  rotate: [-1.5, 1, -2, 0.5, -1.5], duration: 7.5 },
-    { y: [0, -10, 4, -6, 0], rotate: [0, 1.5, -1, 1, 0],   duration: 9.5 },
-    { y: [0, 6, -12, 8, 0],  rotate: [1, -1, 1.5, -1, 1],  duration: 8.5 },
+    { y: [0, 12, -6, 8, 0], rotate: [-1.5, 1, -2, 0.5, -1.5], duration: 7.5 },
+    { y: [0, -10, 4, -6, 0], rotate: [0, 1.5, -1, 1, 0], duration: 9.5 },
+    { y: [0, 6, -12, 8, 0], rotate: [1, -1, 1.5, -1, 1], duration: 8.5 },
     { y: [0, -8, 10, -4, 0], rotate: [-0.5, 1, -1.5, 0.5, -0.5], duration: 12 },
-    { y: [0, 10, -6, 4, 0],  rotate: [1.5, -1, 1, -1.5, 1.5], duration: 7 },
+    { y: [0, 10, -6, 4, 0], rotate: [1.5, -1, 1, -1.5, 1.5], duration: 7 },
     { y: [0, -12, 8, -8, 0], rotate: [-1, 0.5, -1, 1, -1], duration: 10.5 },
   ];
 
   const useCases = [
-    { icon: <BookOpen size={22} />, title: "Students & Class Reps", desc: "Collect dues, organize trips, manage contributions — all in one link.", emoji: "🎓" },
-    { icon: <PartyPopper size={22} />, title: "Event Organizers", desc: "Sell tickets, collect RSVPs, manage group expenses effortlessly.", emoji: "🎉" },
-    { icon: <Church size={22} />, title: "Churches & Faith Groups", desc: "Manage tithes, offerings, building funds and community drives.", emoji: "⛪" },
-    { icon: <Users size={22} />, title: "Communities & Associations", desc: "Streamline union dues, AGM contributions and group welfare funds.", emoji: "🤝" },
-    { icon: <HeartHandshake size={22} />, title: "Friends & Family", desc: "Pool money for gifts, trips, emergencies and shared expenses.", emoji: "❤️" },
-    { icon: <Music2 size={22} />, title: "Clubs & Societies", desc: "Manage membership fees, equipment costs and event sponsorships.", emoji: "🏆" },
+    { icon: <BookOpen size={22} />, title: "Students & Class Reps", desc: "Collect dues, organize trips, manage contributions — all in one link." },
+    { icon: <PartyPopper size={22} />, title: "Event Organizers", desc: "Sell tickets, collect RSVPs, manage group expenses effortlessly." },
+    { icon: <Church size={22} />, title: "Churches & Faith Groups", desc: "Manage tithes, offerings, building funds and community drives." },
+    { icon: <Users size={22} />, title: "Communities & Associations", desc: "Streamline union dues, AGM contributions and group welfare funds." },
+    { icon: <HeartHandshake size={22} />, title: "Friends & Family", desc: "Pool money for gifts, trips, emergencies and shared expenses." },
+    { icon: <Music2 size={22} />, title: "Clubs & Societies", desc: "Manage membership fees, equipment costs and event sponsorships." },
   ];
 
   const cardEase = [0.22, 1, 0.36, 1] as [number, number, number, number];
@@ -928,7 +927,7 @@ const CinematicUseCasesSection = () => {
           const pos: React.CSSProperties = {
             position: "absolute",
             top: chip.top,
-            ...(chip.left  ? { left:  chip.left  } : {}),
+            ...(chip.left ? { left: chip.left } : {}),
             ...(chip.right ? { right: chip.right } : {}),
           };
           return (
@@ -953,9 +952,9 @@ const CinematicUseCasesSection = () => {
               } : { opacity: 0, y: -30, scale: chip.scale * 0.7 }}
               transition={{
                 opacity: { delay: 0.3 + i * 0.07, duration: 0.6 },
-                scale:   { delay: 0.3 + i * 0.07, duration: 0.6, type: "spring", stiffness: 200, damping: 16 },
-                y:       { delay: 1.0 + i * 0.05, duration: float.duration, repeat: Infinity, ease: "easeInOut", repeatType: "mirror" },
-                rotate:  { delay: 1.0 + i * 0.05, duration: float.duration * 1.1, repeat: Infinity, ease: "easeInOut", repeatType: "mirror" },
+                scale: { delay: 0.3 + i * 0.07, duration: 0.6, type: "spring", stiffness: 200, damping: 16 },
+                y: { delay: 1.0 + i * 0.05, duration: float.duration, repeat: Infinity, ease: "easeInOut", repeatType: "mirror" },
+                rotate: { delay: 1.0 + i * 0.05, duration: float.duration * 1.1, repeat: Infinity, ease: "easeInOut", repeatType: "mirror" },
               }}
             >
               <span style={{ fontSize: 15 }}>{chip.emoji}</span>
@@ -1011,11 +1010,11 @@ const CinematicUseCasesSection = () => {
           >
             {[
               { label: "Class dues & exam fees", emoji: "🎓", highlight: true },
-              { label: "Event tickets & RSVPs",  emoji: "🎫", highlight: false },
-              { label: "Aso ebi contributions",  emoji: "👗", highlight: true },
+              { label: "Event tickets & RSVPs", emoji: "🎫", highlight: false },
+              { label: "Aso ebi contributions", emoji: "👗", highlight: true },
               { label: "Church tithes & offerings", emoji: "⛪", highlight: false },
               { label: "Community welfare funds", emoji: "🤝", highlight: false },
-              { label: "Birthday & gift pools",  emoji: "🎂", highlight: true },
+              { label: "Birthday & gift pools", emoji: "🎂", highlight: true },
             ].map((item, i) => (
               <motion.div
                 key={i}
@@ -1371,8 +1370,8 @@ const LPCampaignCard: React.FC<{ campaign: LPCampaign; onClick: () => void }> = 
   const urgencyColor = daysLeft !== null && daysLeft === 0
     ? { bg: "#FEE2E2", color: "#DC2626" }
     : daysLeft !== null && daysLeft <= 3
-    ? { bg: "#FEF3C7", color: "#92400E" }
-    : { bg: "rgba(20,83,45,0.85)", color: "#bbf7d0" };
+      ? { bg: "#FEF3C7", color: "#92400E" }
+      : { bg: "rgba(20,83,45,0.85)", color: "#bbf7d0" };
 
   return (
     <div className="lp-campaign-card" onClick={onClick} style={{ cursor: "pointer" }}>
@@ -1478,7 +1477,7 @@ const ActiveFundraisingSection = () => {
         return new Date(c.deadline).getTime() >= Date.now();
       });
       setCampaigns(live.slice(0, 8));
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => { }).finally(() => setLoading(false));
   }, []);
 
   if (!loading && campaigns.length === 0) return null;
@@ -1875,33 +1874,41 @@ const FooterSection = () => {
   ];
 
   const cols = [
-    { title: "Product", links: [
-      { label: "Create Collection", href: "/create-collection" },
-      { label: "Explore Campaigns", href: "/active-campaigns" },
-      { label: "Contribution Tiers", href: "/create-collection" },
-      { label: "Real-Time Tracking", href: "/dashboard" },
-      { label: "Wallet & Withdrawals", href: "/dashboard/transactions" },
-    ]},
-    { title: "Company", links: [
-      { label: "About Us", href: "/about" },
-      { label: "Contact Us", href: "/contact" },
-      { label: "Careers", href: "/contact" },
-      { label: "Partnerships", href: "/contact" },
-      { label: "Press", href: "/about" },
-    ]},
-    { title: "Resources", links: [
-      { label: "Help Center", href: "/help" },
-      { label: "FAQ", href: "/#faq" },
-      { label: "Guides", href: "/help" },
-      { label: "Community Support", href: "https://chat.whatsapp.com/JctLgtMQTEc0nFCk40C4Vj" },
-      { label: "WhatsApp Support", href: "https://wa.me/+2349019840377" },
-    ]},
-    { title: "Legal", links: [
-      { label: "Privacy Policy", href: "/privacy" },
-      { label: "Terms of Service", href: "/terms" },
-      { label: "Cookie Policy", href: "/privacy" },
-      { label: "KYC & Compliance", href: "/privacy" },
-    ]},
+    {
+      title: "Product", links: [
+        { label: "Create Collection", href: "/create-collection" },
+        { label: "Explore Campaigns", href: "/active-campaigns" },
+        { label: "Contribution Tiers", href: "/create-collection" },
+        { label: "Real-Time Tracking", href: "/dashboard" },
+        { label: "Wallet & Withdrawals", href: "/dashboard/transactions" },
+      ]
+    },
+    {
+      title: "Company", links: [
+        { label: "About Us", href: "/about" },
+        { label: "Contact Us", href: "/contact" },
+        { label: "Careers", href: "/contact" },
+        { label: "Partnerships", href: "/contact" },
+        { label: "Press", href: "/about" },
+      ]
+    },
+    {
+      title: "Resources", links: [
+        { label: "Help Center", href: "/help" },
+        { label: "FAQ", href: "/#faq" },
+        { label: "Guides", href: "/help" },
+        { label: "Community Support", href: "https://chat.whatsapp.com/JctLgtMQTEc0nFCk40C4Vj" },
+        { label: "WhatsApp Support", href: "https://wa.me/+2349019840377" },
+      ]
+    },
+    {
+      title: "Legal", links: [
+        { label: "Privacy Policy", href: "/privacy" },
+        { label: "Terms of Service", href: "/terms" },
+        { label: "Cookie Policy", href: "/privacy" },
+        { label: "KYC & Compliance", href: "/privacy" },
+      ]
+    },
   ];
 
   return (
