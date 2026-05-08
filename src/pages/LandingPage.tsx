@@ -10,7 +10,7 @@ import {
   CalendarDays, Heart, Sparkles, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { FaWhatsapp, FaFacebook, FaTwitter, FaLinkedin, FaInstagram } from "react-icons/fa";
-import { supabase } from "@/integrations/supabase/client";
+import { getActiveFundraisingCampaigns } from "@/utils/fundraisingCampaigns";
 import { motion, AnimatePresence, useScroll, useTransform, useInView, useMotionValueEvent } from "framer-motion";
 
 // ─── Asset imports ─────────────────────────────────────────────────────
@@ -1538,17 +1538,12 @@ const ActiveFundraisingSection = () => {
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    supabase.functions.invoke("get-all-fundraising-campaigns", {
-      body: { status: "active", onlyLive: true, lightweight: true },
-    }).then(({ data }: { data: any }) => {
-      const rows: LPCampaign[] = Array.isArray(data?.data) ? data.data : [];
-      const live = rows.filter(c => {
-        if ((c.status || "").toLowerCase() !== "active") return false;
-        if (!c.deadline) return true;
-        return new Date(c.deadline).getTime() >= Date.now();
-      });
-      setCampaigns(live.slice(0, 8));
-    }).catch(() => {}).finally(() => setLoading(false));
+    getActiveFundraisingCampaigns()
+      .then((rows) => {
+        setCampaigns((rows as LPCampaign[]).slice(0, 8));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   if (!loading && campaigns.length === 0) return null;

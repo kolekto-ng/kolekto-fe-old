@@ -28,6 +28,7 @@ import {
   CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { axiosInstance } from '@/utils/axios';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
@@ -144,6 +145,12 @@ const CollectionDetailsPage: React.FC = () => {
   const [scannedTicket, setScannedTicket] = useState<any>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isFlierOpen, setIsFlierOpen] = useState(false);
+  const [balanceStats, setBalanceStats] = useState<{
+    totalRaised: number;
+    totalBalance: number;
+    availableBalance: number;
+    pendingBalance: number;
+  } | null>(null);
 
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
   const formFields: any[] = col?.form_fields || [];
@@ -153,9 +160,9 @@ const CollectionDetailsPage: React.FC = () => {
   const wallet = walletRows.slice().sort((a: any, b: any) =>
     new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime()
   )[0] || {};
-  const ledgerBalance = Number(wallet?.ledger_balance ?? 0);
-  const availableBalance = Number(wallet?.available_balance ?? 0);
-  const pendingBalance = Number(wallet?.pending_balance ?? 0);
+  const ledgerBalance = Number(balanceStats?.totalBalance ?? wallet?.ledger_balance ?? 0);
+  const availableBalance = Number(balanceStats?.availableBalance ?? wallet?.available_balance ?? 0);
+  const pendingBalance = Number(balanceStats?.pendingBalance ?? wallet?.pending_balance ?? 0);
   const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
 
   // ── Fetch helpers ───────────────────────────────────────────────────────────
@@ -183,6 +190,22 @@ const CollectionDetailsPage: React.FC = () => {
     setLoadingContribs(false);
   };
 
+  const loadBalanceStats = async () => {
+    if (!id) return;
+    try {
+      const { data } = await axiosInstance.get(`/dashboard/collections/${id}/stats`);
+      const stats = data?.data || data || {};
+      setBalanceStats({
+        totalRaised: Number(stats.totalRaised || 0),
+        totalBalance: Number(stats.totalBalance || 0),
+        availableBalance: Number(stats.availableBalance || 0),
+        pendingBalance: Number(stats.pendingBalance || 0),
+      });
+    } catch (err) {
+      console.error('Collection stats load error:', err);
+    }
+  };
+
   // ── Fetch data (always fresh — bypass store cache) ──────────────────────────
 
   const loadCollection = async () => {
@@ -202,12 +225,14 @@ const CollectionDetailsPage: React.FC = () => {
       pricing_tiers: Array.isArray(data.price_tiers) ? data.price_tiers : [],
     });
     setLoading(false);
+    loadBalanceStats();
   };
 
   useEffect(() => {
     if (!id) return;
     loadCollection();
     loadContributions();
+    loadBalanceStats();
 
     const params = new URLSearchParams(location.search);
     if (params.get('share') === 'true') setIsShareOpen(true);
@@ -220,11 +245,11 @@ const CollectionDetailsPage: React.FC = () => {
       .channel(`col-details-${id}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${id}` },
-        () => { loadContributions(); }
+        () => { loadContributions(); loadBalanceStats(); }
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'wallets', filter: `collection_id=eq.${id}` },
-        () => { loadWallet(); }
+        () => { loadWallet(); loadBalanceStats(); }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -237,7 +262,7 @@ const CollectionDetailsPage: React.FC = () => {
   // This is correct even when wallet hasn't been created yet or upsert failed.
   // Wallet balances (ledger/available/pending) still come from the wallet row
   // since they incorporate the T+1 settlement cutoff which is computed server-side.
-  const totalRaised = paidContributions.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+  const totalRaised = balanceStats?.totalRaised ?? paidContributions.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
   const targetAmount = col?.target_amount ? Number(col.target_amount) : null;
   const deadline = col?.deadline || null;
   const remaining = daysLeft(deadline);

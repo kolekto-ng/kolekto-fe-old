@@ -16,6 +16,7 @@ interface WithdrawFormProps {
   availableBalance: number;
   onSubmit: (data: {
     amount: number;
+    payoutAccountId?: string;
     accountName: string;
     accountNumber: string;
     bankName: string;
@@ -256,12 +257,26 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
     if (validate()) {
       const selectedAccount = payoutAccounts.find((acc: any) => acc.id === selectedAccountId);
       if (selectedAccount) {
+        const accountName = selectedAccount.account_name || selectedAccount.accountName || '';
+        const accountNumber = selectedAccount.account_number || selectedAccount.accountNumber || '';
+        const bankName = selectedAccount.bank_name || selectedAccount.bankName || '';
+        const bankCode = selectedAccount.bank_code || selectedAccount.bankCode || '';
+
+        if (!accountName || !bankName) {
+          setErrors((prev) => ({
+            ...prev,
+            account: 'Selected payout account is incomplete. Please re-add it in settings.',
+          }));
+          return;
+        }
+
         onSubmit({
           amount: parseFloat(amount),
-          accountName: selectedAccount.account_name,
-          accountNumber: selectedAccount.account_number,
-          bankName: selectedAccount.bank_name,
-          bankCode: selectedAccount.bank_code,
+          payoutAccountId: selectedAccount.id,
+          accountName,
+          accountNumber,
+          bankName,
+          bankCode,
         });
       }
     }
@@ -325,9 +340,9 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
                 {payoutAccounts.map((account: any) => (
                   <SelectItem key={account.id} value={account.id} className="py-3">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-gray-900 leading-none mb-1">{account.account_name}</span>
+                      <span className="font-semibold text-gray-900 leading-none mb-1">{account.account_name || account.accountName}</span>
                       <div className="flex items-center text-xs text-gray-500">
-                        <span>{account.bank_name}</span>
+                        <span>{account.bank_name || account.bankName}</span>
                         <span className="mx-1.5">•</span>
                         <span>••••{account.account_last4}</span>
                       </div>
