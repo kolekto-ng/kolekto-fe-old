@@ -8,6 +8,7 @@ import {
   FileText,
   Hash,
   Heart,
+  Home,
   Mail,
   Phone,
   ShieldCheck,
@@ -126,6 +127,21 @@ function normalizeCollectionType(
   if (normalized === 'fundraising') return 'fundraising';
   if (normalized === 'ticket' || ticketSelections.length > 0) return 'ticket';
   return 'fixed';
+}
+
+function hasValidAuthSession() {
+  const sessionStr = localStorage.getItem('kolekto-auth-token');
+  if (!sessionStr) return false;
+
+  try {
+    const session = JSON.parse(sessionStr);
+    const expiresAt = Number(session?.expires_at || 0);
+    if (!expiresAt) return false;
+    const now = Math.floor(Date.now() / 1000);
+    return now < expiresAt;
+  } catch {
+    return false;
+  }
 }
 
 function formatReceiptDate(value?: string) {
@@ -393,6 +409,11 @@ const PaymentSuccessful = ({
       .catch(() => {
         toast.error('Failed to download PDF');
       });
+  };
+
+  const handleGoToDashboard = () => {
+    onOpenChange(false);
+    window.location.href = hasValidAuthSession() ? '/dashboard' : '/login';
   };
 
   const renderStandardReceipt = () => (
@@ -787,6 +808,14 @@ const PaymentSuccessful = ({
                 >
                   <Copy className="mr-2 h-4 w-4" />
                   Copy Receipt
+                </Button>
+                <Button
+                  onClick={handleGoToDashboard}
+                  variant="outline"
+                  className="h-11 rounded-full border-slate-200 bg-white/90 px-5"
+                >
+                  <Home className="mr-2 h-4 w-4" />
+                  Dashboard Home
                 </Button>
                 <Button
                   onClick={handleDownloadPDF}

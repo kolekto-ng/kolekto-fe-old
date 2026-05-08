@@ -169,7 +169,7 @@ const LoginSecuritySection: React.FC = () => {
         <CardContent>
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-6">
-            {[
+              {[
               { label: 'Request OTP', step: 1 },
               { label: 'Enter OTP', step: 2 },
               { label: 'New Password', step: 3 },

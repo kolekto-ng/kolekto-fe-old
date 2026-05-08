@@ -174,9 +174,11 @@ export interface WithdrawalState {
   createWithdrawal: (withdrawalData: {
     amount: number;
     collection_id?: string;
-    account_name: string;
-    account_number: string;
-    bank_name: string;
+    payout_account_id?: string;
+    account_name?: string;
+    account_number?: string;
+    bank_name?: string;
+    bank_code?: string;
     organizer_id: string;
   }) => Promise<Withdrawal>;
 }

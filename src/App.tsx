@@ -2,36 +2,35 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Routes, Route, Navigate } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import CreateCollectionPage from "./pages/CreateCollectionPage";
-import LoginPage from "./pages/auth/LoginPage";
-import RegisterPage from "./pages/auth/RegisterPage";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
-import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
-import DashboardLayout from "./components/dashboard/DashboardLayout";
-import DashboardPage from "./pages/dashboard/DashboardPage";
-import DashboardCreateCollectionPage from "./pages/dashboard/CreateCollectionPage";
-import CollectionsPage from "./pages/dashboard/CollectionsPage";
+import React, { Suspense, lazy, useEffect } from "react";
+const HomePage = lazy(() => import("./pages/HomePage"));
+const CreateCollectionPage = lazy(() => import("./pages/CreateCollectionPage"));
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/auth/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
+const DashboardLayout = lazy(() => import("./components/dashboard/DashboardLayout"));
+const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
+const DashboardCreateCollectionPage = lazy(() => import("./pages/dashboard/CreateCollectionPage"));
+const CollectionsPage = lazy(() => import("./pages/dashboard/CollectionsPage"));
 // import ProfilePage from "./pages/dashboard/ProfilePage";
-import TransactionHistoryPage from "./pages/dashboard/TransactionHistoryPage";
-import ActivitiesPage from "./pages/dashboard/ActivitiesPage";
-import ContributePage from "./pages/contribute/ContributePage";
-import ActiveCampaignsPage from "./pages/ActiveCampaignsPage";
-import AboutPage from "./pages/AboutPage";
-import ContactPage from "./pages/ContactPage";
-import PrivacyPage from "./pages/PrivacyPage";
-import TermsPage from "./pages/TermsPage";
-import HelpCenterPage from "./pages/HelpCenterPage";
-import NotFound from "./pages/NotFound";
-import CollectionDetailsPage from "./pages/dashboard/CollectionDetailsPage";
+const TransactionHistoryPage = lazy(() => import("./pages/dashboard/TransactionHistoryPage"));
+const ActivitiesPage = lazy(() => import("./pages/dashboard/ActivitiesPage"));
+const ContributePage = lazy(() => import("./pages/contribute/ContributePage"));
+const ActiveCampaignsPage = lazy(() => import("./pages/ActiveCampaignsPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
 import { AuthProvider } from "./context/AuthContext";
-import UserProfilePage from "./pages/dashboard/UserProfilePage";
-import { useEffect } from "react";
-import PaymentCallback from "./components/contribute/paymentCallback";
+const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
+const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import AOS from 'aos';
-import 'aos/dist/aos.css';
+import "aos/dist/aos.css";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import { supabase } from "./integrations/supabase/client";
 // Create query client outside of the component to avoid React hooks issues
@@ -59,7 +58,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
   return (
-    <Routes>
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+        </div>
+      }
+    >
+      <Routes>
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
       <Route path="/create-collection" element={<CreateCollectionPage />} />
@@ -102,26 +108,41 @@ const AuthenticatedApp = () => {
 
       {/* Catch-all for 404 */}
       <Route path="*" element={<NotFound />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 };
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
-
-  useEffect(
-    () => {
-      AOS.init({
-        offset: 120, // offset (in px) from the original trigger point
-        delay: 0, // delay in ms
-        duration: 1000, // animation duration
-        easing: 'ease', // easing option
-        once: false, // whether animation should happen only once
-        mirror: false, // whether elements animate out while scrolling past
-        anchorPlacement: 'top-bottom', // defines trigger position
-      });
+  useEffect(() => {
+    // Supabase recovery links may land on the site root depending on allowed redirect URLs.
+    // When that happens, route users to the actual reset page while preserving the hash token.
+    const hash = window.location.hash || "";
+    if (hash.includes("type=recovery") && window.location.pathname === "/") {
+      window.location.replace(`/reset-password${hash}`);
     }
-    , [])
+  }, []);
+
+  useEffect(() => {
+    // AOS is purely a UX enhancement; keep it out of the initial JS chunk.
+    import("aos")
+      .then((mod) => mod.default)
+      .then((AOS) => {
+        AOS.init({
+          offset: 120, // offset (in px) from the original trigger point
+          delay: 0, // delay in ms
+          duration: 1000, // animation duration
+          easing: "ease", // easing option
+          once: false, // whether animation should happen only once
+          mirror: false, // whether elements animate out while scrolling past
+          anchorPlacement: "top-bottom", // defines trigger position
+        });
+      })
+      .catch(() => {
+        // optional
+      });
+  }, []);
 
   useEffect(() => {
     const syncSession = (session: any) => {

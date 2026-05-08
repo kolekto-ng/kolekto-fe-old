@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuthStore, useCollectionStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { axiosInstance } from '@/utils/axios';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
@@ -23,49 +24,47 @@ const WalletOverview: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!collections.length) {
-      setTotalBalance(0);
-      setAvailableBalance(0);
-      setPendingBalance(0);
-      return;
-    }
-
+    let isActive = true;
     const computeBalance = async () => {
-      const collectionIds = collections.map((c: any) => c.id);
+      try {
+        const { data } = await axiosInstance.get('/dashboard/stats');
+        const stats = data?.data || data || {};
 
-      // 1. Total Raised = sum of paid contribution amounts (authoritative source)
-      const { data: paidContribs } = await supabase
-        .from('contributions')
-        .select('amount')
-        .in('collection_id', collectionIds)
-        .eq('status', 'paid');
+        if (!isActive) return;
+        setAvailableBalance(Number(stats.availableBalance || 0));
+        setPendingBalance(Number(stats.pendingBalance || 0));
+        setTotalBalance(Number(stats.totalBalance || 0));
+      } catch (err) {
+        console.error('Wallet overview stats error:', err);
+        if (!isActive) return;
 
-      const totalRaised = (paidContribs || []).reduce(
-        (sum: number, c: any) => sum + Number(c.amount || 0), 0,
-      );
+        const collectionIds = collections.map((c: any) => c.id);
 
-      // 2. Withdrawals — completed and pending
-      const { data: withdrawals } = await supabase
-        .from('withdrawals')
-        .select('amount, status')
-        .in('collection_id', collectionIds);
+        // Fallback: derive from contributions if the API isn't reachable
+        if (collectionIds.length > 0) {
+          const { data: paidContribs } = await supabase
+            .from('contributions')
+            .select('amount')
+            .in('collection_id', collectionIds)
+            .eq('status', 'paid');
 
-      const totalWithdrawn = (withdrawals || [])
-        .filter((w: any) => w.status === 'completed')
-        .reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
+          const totalRaised = (paidContribs || []).reduce(
+            (sum: number, c: any) => sum + Number(c.amount || 0),
+            0,
+          );
 
-      const pendingWd = (withdrawals || [])
-        .filter((w: any) => w.status === 'pending')
-        .reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
-
-      const available = Math.max(0, totalRaised - totalWithdrawn - pendingWd);
-
-      setAvailableBalance(available);
-      setPendingBalance(pendingWd);
-      setTotalBalance(available + pendingWd);
+          if (!isActive) return;
+          setAvailableBalance(0);
+          setPendingBalance(totalRaised);
+          setTotalBalance(totalRaised);
+        }
+      }
     };
 
     computeBalance();
+    return () => {
+      isActive = false;
+    };
   }, [collections]);
 
   return (

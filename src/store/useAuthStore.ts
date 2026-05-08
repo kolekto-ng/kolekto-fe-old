@@ -103,7 +103,11 @@ export const useAuthStore = create((set, get) => ({
       return { user, error: null };
     } catch (error: any) {
       console.log(error, "sign in error");
-      const errorMessage = error.response.data.message || "Sign in failed";
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Sign in failed";
       console.log(errorMessage);
 
       set({ error: errorMessage, isLoading: false });
@@ -208,7 +212,10 @@ export const useAuthStore = create((set, get) => ({
   forgotPassword: async (email: string) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await axiosInstance.post("/auth/forgot-password", { email });
+      const res = await axiosInstance.post("/auth/forgot-password", {
+        email,
+        emailRedirectTo: `${window.location.origin}/reset-password`,
+      });
       if (res.status !== 200) {
         throw new Error("Failed to send password reset email");
       }

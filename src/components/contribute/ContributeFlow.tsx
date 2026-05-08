@@ -54,6 +54,13 @@ function fmt(n: number) {
   return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
 }
 
+function isContactFieldName(fieldName: string) {
+  const normalized = String(fieldName || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return ['fullname', 'name', 'email', 'phonenumber', 'phone', 'telephone'].includes(normalized);
+}
+
 // ── Image Slideshow (poster-sized) ────────────────────────────────────────────
 const ImageSlideshow: React.FC<{ images: string[]; title: string }> = ({ images, title }) => {
   const [idx, setIdx] = useState(0);
@@ -449,6 +456,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
     if (!isTicket && isTiered && !selectedTier) { toast.error('Please select a tier'); return false; }
     for (const field of formFields) {
       if (field.required && field.name.toLowerCase() !== 'unique code') {
+        if (isContactFieldName(field.name)) continue;
         if (!formData[field.name]?.trim()) { toast.error(`Please fill in ${field.name}`); return false; }
       }
     }
@@ -521,7 +529,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       // This ensures contributor_information only stores what the host asked for,
       // while payer contact is used only for payment processing and the Activities tab.
       const hostFormData = {
-        ...pending.formData,
+        ...Object.fromEntries(
+          Object.entries(pending.formData || {}).filter(([key]) => !isContactFieldName(key))
+        ),
         ...(pending.selectedTier ? { Tier: pending.selectedTier } : {}),
         ...(pending.selectedTierId ? { TierId: pending.selectedTierId } : {}),
       };
@@ -584,7 +594,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
   // --- Field renderer ---
   const renderField = (field: any) => {
-    if (field.name.toLowerCase() === 'unique code') return null;
+    if (field.name.toLowerCase() === 'unique code' || isContactFieldName(field.name)) return null;
     const value = formData[field.name] || '';
     const onChange = (val: string) => setFormData(prev => ({ ...prev, [field.name]: val }));
 
@@ -932,7 +942,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         <div className="space-y-4 pt-2 border-t">
           <p className="text-sm font-medium text-gray-700">Additional Details</p>
           {formFields.map((field, i) => {
-            if (field.name.toLowerCase() === 'unique code') return null;
+            if (field.name.toLowerCase() === 'unique code' || isContactFieldName(field.name)) return null;
             return (
               <div key={i} className="space-y-1.5">
                 <Label>{field.name}{field.required && <span className="text-red-500 ml-0.5">*</span>}</Label>
@@ -1061,17 +1071,17 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Organizer contact bar */}
       {supportPhone && (
-        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm">
-          <div className="flex items-center gap-2 text-gray-600 min-w-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm">
+          <div className="flex items-center gap-2 text-gray-600">
             <Phone className="h-4 w-4 text-kolekto flex-shrink-0" />
-            <span className="hidden sm:inline">Need help? Contact the organizer:</span>
-            <a href={`tel:${supportPhone}`} className="font-semibold text-kolekto hover:underline truncate">{supportPhone}</a>
+            <span>Need help? Contact the organizer:</span>
+            <a href={`tel:${supportPhone}`} className="font-semibold text-kolekto hover:underline whitespace-nowrap">{supportPhone}</a>
           </div>
           <a
             href={`https://wa.me/${supportPhone.replace(/^\+?0?/, '234')}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-green-600 font-medium hover:underline flex-shrink-0 ml-2"
+            className="text-xs text-green-600 font-medium hover:underline flex-shrink-0 self-start sm:self-auto"
           >
             WhatsApp
           </a>
@@ -1086,23 +1096,6 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           <CardTitle className="text-lg">{collection.title}</CardTitle>
           {(collection.campaign_summary || collection.description) && (
             <CardDescription className="mt-1">{collection.campaign_summary || collection.description}</CardDescription>
-          )}
-          {/* Capacity bar */}
-          {maxContributions > 0 && (
-            <div className="mt-3 space-y-1.5">
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>{participantsPaid} of {maxContributions} spots filled</span>
-                <span className={spotsRemaining === 0 ? 'text-red-600 font-medium' : 'text-gray-600'}>
-                  {spotsRemaining === 0 ? 'Full' : `${spotsRemaining} remaining`}
-                </span>
-              </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${spotsRemaining === 0 ? 'bg-red-500' : 'bg-kolekto'}`}
-                  style={{ width: `${Math.min((participantsPaid / maxContributions) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
           )}
         </CardHeader>
 
