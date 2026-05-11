@@ -28,8 +28,19 @@ import {
   CreditCard,
   AlertCircle,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useSettings } from '@/store/useSettings';
 import { axiosInstance } from '@/utils/axios';
+
+function dedupeBanks(list: Array<{ name: string; code: string }> = []) {
+  const seen = new Set<string>();
+  return list.filter((bank) => {
+    const code = String(bank?.code || '').trim();
+    if (!code || seen.has(code)) return false;
+    seen.add(code);
+    return true;
+  });
+}
 
 const BankDetailsSection: React.FC = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -52,7 +63,15 @@ const BankDetailsSection: React.FC = () => {
   useEffect(() => {
     if (showAddDialog) {
       getBanks().then((data: any) => {
-        if (data?.status) setBanks(data.data);
+        const payload = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        setBanks(dedupeBanks(payload));
+      }).catch((error: any) => {
+        const message =
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          error?.message ||
+          'Failed to load banks';
+        toast.error(message);
       });
     }
   }, [showAddDialog]);
@@ -60,12 +79,22 @@ const BankDetailsSection: React.FC = () => {
   const handleVerifyAccount = async () => {
     setVerified(false);
     setAccountName('');
-    const data = await verifyAccount({ accountNumber, bankCode });
-    if (data.status) {
-      setAccountName(data.data.account_name);
-      setVerified(true);
-    } else {
+    try {
+      const data = await verifyAccount({ accountNumber, bankCode });
+      if (data?.status && data?.data?.account_name) {
+        setAccountName(data.data.account_name);
+        setVerified(true);
+        return;
+      }
       setAccountName('');
+      toast.error('Unable to verify that bank account.');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Unable to verify that bank account.';
+      toast.error(message);
     }
   };
 
@@ -81,8 +110,15 @@ const BankDetailsSection: React.FC = () => {
       setShowAddDialog(false);
       resetForm();
       await getPayoutAccounts();
+      toast.success('Bank account saved successfully.');
     } catch (error) {
       console.error('Save account error:', error);
+      const message =
+        (error as any)?.response?.data?.error ||
+        (error as any)?.response?.data?.message ||
+        (error as any)?.message ||
+        'Failed to save bank account.';
+      toast.error(message);
     } finally {
       setSaving(false);
     }

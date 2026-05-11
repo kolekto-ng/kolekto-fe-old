@@ -1,4 +1,14 @@
 type RawContribution = Record<string, any>;
+type ContributionFieldDefinition = {
+  id?: string;
+  name?: string;
+  aliases?: string[];
+  legacy_names?: string[];
+};
+type ContributionFieldCollection = {
+  form_fields?: ContributionFieldDefinition[];
+  contributions_fields?: ContributionFieldDefinition[];
+} | null | undefined;
 
 function getNestedValue(source: RawContribution, path: string) {
   return path.split('.').reduce<any>((value, key) => {
@@ -40,6 +50,86 @@ export function getContributionInformation(row: RawContribution): any[] {
   if (Array.isArray(row.contact_info)) return row.contact_info;
   if (row.contact_info && typeof row.contact_info === 'object') return [row.contact_info];
   return [];
+}
+
+export function getContributionInformationObject(row: RawContribution): Record<string, any> {
+  const info = getContributionInformation(row);
+  return (info[0] && typeof info[0] === "object") ? info[0] : {};
+}
+
+function getFieldAliases(field: ContributionFieldDefinition): string[] {
+  const aliases = [
+    ...(Array.isArray(field.aliases) ? field.aliases : []),
+    ...(Array.isArray(field.legacy_names) ? field.legacy_names : []),
+  ];
+
+  return Array.from(
+    new Set(
+      aliases
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+export function getCollectionContributorFields(
+  collection: ContributionFieldCollection
+): ContributionFieldDefinition[] {
+  const storedFields =
+    Array.isArray(collection?.form_fields) && collection.form_fields.length > 0
+      ? collection.form_fields
+      : Array.isArray(collection?.contributions_fields)
+      ? collection.contributions_fields
+      : [];
+
+  const seen = new Set<string>();
+
+  return storedFields.filter((field) => {
+    const name = String(field?.name || "").trim();
+    if (!name || name.toLowerCase() === "unique code") return false;
+
+    const key = String(field?.id || name.toLowerCase());
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function getContributorFieldValue(
+  row: RawContribution,
+  field: ContributionFieldDefinition
+): string {
+  const info = getContributionInformationObject(row);
+  const mappedValues =
+    info.__fieldValues && typeof info.__fieldValues === "object"
+      ? info.__fieldValues
+      : {};
+
+  const candidates = Array.from(
+    new Set(
+      [
+        field.id,
+        field.name,
+        ...getFieldAliases(field),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  for (const key of candidates) {
+    const mappedValue = mappedValues[key];
+    if (mappedValue !== undefined && mappedValue !== null && mappedValue !== "") {
+      return String(mappedValue);
+    }
+
+    const directValue = info[key];
+    if (directValue !== undefined && directValue !== null && directValue !== "") {
+      return String(directValue);
+    }
+  }
+
+  return "";
 }
 
 export function isAnonymousContribution(row: RawContribution): boolean {

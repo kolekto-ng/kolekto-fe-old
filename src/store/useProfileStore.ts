@@ -178,10 +178,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
+        error?.response?.data?.details ||
         error?.response?.data?.message ||
         error?.message ||
         "Failed to send OTP";
-      set({ passwordStep: "error", passwordError: error.message });
+      set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
     }
@@ -202,10 +203,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
+        error?.response?.data?.details ||
         error?.response?.data?.message ||
         error?.message ||
         "Failed to change password";
-      set({ passwordStep: "error", passwordError: error.message });
+      set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
     }

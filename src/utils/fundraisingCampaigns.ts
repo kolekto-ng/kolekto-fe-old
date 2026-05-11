@@ -21,6 +21,16 @@ export interface FundraisingCampaignRow {
 }
 
 const FUNCTION_TIMEOUT_MS = 12000;
+const SHOULD_PREFER_DIRECT_FETCH = import.meta.env.DEV;
+
+function toNumber(...values: any[]) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
 
 function normalizeCampaignRow(row: any): FundraisingCampaignRow {
   const keywords = Array.isArray(row?.keywords)
@@ -41,9 +51,26 @@ function normalizeCampaignRow(row: any): FundraisingCampaignRow {
     main_image_url: row.main_image_url || row.banner_url || null,
     banner_url: row.banner_url || row.main_image_url || null,
     deadline: row.deadline || null,
-    target_amount: Number(row.target_amount || 0),
-    total_raised: Number(row.total_raised || 0),
-    contributions_count: Number(row.contributions_count || row.total_contributions || 0),
+    target_amount: toNumber(
+      row.target_amount,
+      row.fundraising_target_amount,
+      row.goal_amount,
+      row.amount
+    ),
+    total_raised: toNumber(
+      row.total_raised,
+      row.net_payment,
+      row.total_amount,
+      row.wallet?.net_payment,
+      row.wallets?.[0]?.net_payment
+    ),
+    contributions_count: toNumber(
+      row.contributions_count,
+      row.contributors_count,
+      row.donor_count,
+      row.donors_count,
+      row.total_contributions
+    ),
     category: row.category || row.campaign_category || null,
     campaign_category: row.campaign_category || row.category || null,
     keywords,
@@ -99,10 +126,17 @@ async function fetchFromCollectionsFallback(): Promise<FundraisingCampaignRow[]>
   }
 
   const ids = fundraiserRows.map((row: any) => row.id);
-  const { data: wallets } = await supabase
-    .from("wallets")
-    .select("collection_id, net_payment, updated_at")
-    .in("collection_id", ids);
+  const [{ data: wallets }, { data: contributions }] = await Promise.all([
+    supabase
+      .from("wallets")
+      .select("collection_id, net_payment, updated_at")
+      .in("collection_id", ids),
+    supabase
+      .from("contributions")
+      .select("collection_id, status")
+      .in("collection_id", ids)
+      .eq("status", "paid"),
+  ]);
 
   const walletMap: Record<string, any> = {};
   (wallets || []).forEach((wallet: any) => {
@@ -116,17 +150,33 @@ async function fetchFromCollectionsFallback(): Promise<FundraisingCampaignRow[]>
     }
   });
 
+  const contributionCountMap: Record<string, number> = {};
+  (contributions || []).forEach((contribution: any) => {
+    contributionCountMap[contribution.collection_id] =
+      (contributionCountMap[contribution.collection_id] || 0) + 1;
+  });
+
   return fundraiserRows
     .map((row: any) =>
       normalizeCampaignRow({
         ...row,
-        total_raised: Number(walletMap[row.id]?.net_payment || 0),
+        total_raised: toNumber(walletMap[row.id]?.net_payment, row.total_amount, 0),
+        contributions_count: contributionCountMap[row.id] ?? row.total_contributions ?? 0,
       })
     )
     .filter(isLive);
 }
 
 export async function getActiveFundraisingCampaigns(): Promise<FundraisingCampaignRow[]> {
+  if (SHOULD_PREFER_DIRECT_FETCH) {
+    try {
+      const rows = await fetchFromCollectionsFallback();
+      if (rows.length > 0) return rows;
+    } catch {
+      // Fall through to the edge function path.
+    }
+  }
+
   try {
     const rows = await fetchFromEdgeFunction();
     if (rows.length > 0) return rows;

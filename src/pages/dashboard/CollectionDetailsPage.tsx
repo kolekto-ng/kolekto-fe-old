@@ -30,6 +30,11 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
 import { useCollectionStore } from '@/store/useCollectionStore';
+import {
+  getCollectionContributorFields,
+  getContributorFieldValue,
+  normalizeContributions,
+} from '@/utils/contributions';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
@@ -153,7 +158,7 @@ const CollectionDetailsPage: React.FC = () => {
   } | null>(null);
 
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
-  const formFields: any[] = col?.form_fields || [];
+  const visibleContributorFields = getCollectionContributorFields(col);
   const priceTiers: any[] = col?.pricing_tiers || [];
   // Pick the most-recently-updated wallet row (guards against duplicate rows)
   const walletRows: any[] = Array.isArray(col?.wallets) ? col.wallets : (col?.wallets ? [col.wallets] : []);
@@ -186,7 +191,7 @@ const CollectionDetailsPage: React.FC = () => {
       .select('*')
       .eq('collection_id', id)
       .order('created_at', { ascending: false });
-    setContributions(data || []);
+    setContributions(normalizeContributions(data));
     setLoadingContribs(false);
   };
 
@@ -258,6 +263,11 @@ const CollectionDetailsPage: React.FC = () => {
   // ── Computed values ─────────────────────────────────────────────────────────
 
   const paidContributions = contributions.filter(c => c.status === 'paid');
+  const hasUniqueCode = paidContributions.some(c => c.contributor_unique_code);
+  const contributorColumnCount =
+    visibleContributorFields.length +
+    (colType === 'tiered' ? 1 : 0) +
+    (hasUniqueCode ? 1 : 0);
   // Authoritative: sum contributions.amount (net, no fees) from paid rows.
   // This is correct even when wallet hasn't been created yet or upsert failed.
   // Wallet balances (ledger/available/pending) still come from the wallet row
@@ -323,36 +333,26 @@ const CollectionDetailsPage: React.FC = () => {
     const filtered = getFilteredContributors();
     if (!filtered.length) { toast.info('No contributor data to export'); return; }
 
-    // Use the host's field definitions (in the order they were arranged) as the
-    // canonical column list. Fall back to scanning contributor_information keys
-    // only when no form_fields are stored, but always strip internal/system keys.
-    const INTERNAL_KEYS = new Set([
-      'TierAmount', 'TierId', 'Tier', 'Quantity', 'collectionType',
-      'paidAt', 'channel', '_receipt', 'date',
-    ]);
-    const hostFields: string[] = (col?.form_fields || []).map((f: any) => f.name);
-    const dynamicFields: string[] = hostFields.length > 0
-      ? hostFields
-      : Array.from(
-          new Set(
-            filtered.flatMap(c =>
-              Object.keys((c.contributor_information || [])[0] || {})
-                .filter(k => !INTERNAL_KEYS.has(k) && k.toLowerCase() !== 'date' && !k.startsWith('_'))
-            )
-          )
-        );
-
-    const hasUniqueCode = filtered.some(c => c.contributor_unique_code);
+    const exportFields = visibleContributorFields;
     const tierCol = colType === 'tiered' || colType === 'ticket';
-    const headers = [...dynamicFields, ...(tierCol ? ['Tier'] : []), ...(hasUniqueCode ? ['Unique Code'] : [])];
+    const exportHasUniqueCode = filtered.some(c => c.contributor_unique_code);
+    if (exportFields.length === 0 && !tierCol && !exportHasUniqueCode) {
+      toast.info('No host-defined contributor fields to export for this collection');
+      return;
+    }
+
+    const headers = [
+      ...exportFields.map((field: any) => field.name),
+      ...(tierCol ? ['Tier'] : []),
+      ...(exportHasUniqueCode ? ['Unique Code'] : []),
+    ];
 
     const rows = filtered.map(c => {
-      const info = (c.contributor_information || [])[0] || {};
       const tierName = getTierForContribution(c)?.name || '';
       return [
-        ...dynamicFields.map(f => info[f] ?? ''),
+        ...exportFields.map((field: any) => getContributorFieldValue(c, field) || ''),
         ...(tierCol ? [tierName] : []),
-        ...(hasUniqueCode ? [c.contributor_unique_code || ''] : []),
+        ...(exportHasUniqueCode ? [c.contributor_unique_code || ''] : []),
       ];
     });
 
@@ -846,53 +846,42 @@ const CollectionDetailsPage: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50">
+                      {visibleContributorFields.map((field: any) => (
+                        <TableHead key={field.id || field.name}>{field.name}</TableHead>
+                      ))}
                       {colType === 'tiered' && <TableHead>Tier</TableHead>}
-                      {formFields.length > 0
-                        ? formFields.map(f => <TableHead key={f.id}>{f.name}</TableHead>)
-                        : (
-                          <>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Phone</TableHead>
-                          </>
-                        )
-                      }
-                      {paidContributions.some(c => c.contributor_unique_code) && (
-                        <TableHead>Unique Code</TableHead>
-                      )}
+                      {hasUniqueCode && <TableHead>Unique Code</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {getFilteredContributors().length === 0 ? (
+                    {contributorColumnCount === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-10 text-gray-400">
+                        <TableCell colSpan={1} className="text-center py-10 text-gray-400">
+                          No host-defined contributor fields were requested for this collection
+                        </TableCell>
+                      </TableRow>
+                    ) : getFilteredContributors().length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={contributorColumnCount} className="text-center py-10 text-gray-400">
                           No contributors yet
                         </TableCell>
                       </TableRow>
                     ) : (
                       getFilteredContributors().map(c => {
-                        const info = (c.contributor_information || [])[0] || {};
                         const tier = getTierForContribution(c);
                         return (
                           <TableRow key={c.id}>
+                            {visibleContributorFields.map((field: any) => (
+                              <TableCell key={field.id || field.name}>
+                                {getContributorFieldValue(c, field) || '-'}
+                              </TableCell>
+                            ))}
                             {colType === 'tiered' && (
                               <TableCell>
-                                <Badge variant="outline">{tier?.name || '—'}</Badge>
+                                <Badge variant="outline">{tier?.name || '-'}</Badge>
                               </TableCell>
                             )}
-                            {formFields.length > 0
-                              ? formFields.map(f => (
-                                  <TableCell key={f.id}>{info[f.name] || '—'}</TableCell>
-                                ))
-                              : (
-                                <>
-                                  <TableCell>{c.name || '—'}</TableCell>
-                                  <TableCell>{c.email || '—'}</TableCell>
-                                  <TableCell>{c.phone || '—'}</TableCell>
-                                </>
-                              )
-                            }
-                            {paidContributions.some(pc => pc.contributor_unique_code) && (
+                            {hasUniqueCode && (
                               <TableCell>
                                 <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
                                   {c.contributor_unique_code || '—'}
@@ -1427,3 +1416,4 @@ const CollectionDetailsPage: React.FC = () => {
 };
 
 export default CollectionDetailsPage;
+
