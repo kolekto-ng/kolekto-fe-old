@@ -86,17 +86,25 @@ export default defineConfig({
               },
             },
           },
-          // API calls (network first, fallback to cache)
+          // B-18: API calls MUST NOT be cached by the service worker.
+          //
+          // Previously this used NetworkFirst with maxAgeSeconds=300 (5 min).
+          // For a payments product that is wrong: a user could refresh their
+          // wallet page and see a 5-minute-stale `available_balance`, request
+          // a withdrawal believing funds were there, then get rejected by the
+          // backend. Same risk for collection lists, contributions, KYC.
+          //
+          // We now ALWAYS go to the network for /api/* — no SW caching at
+          // all on financial paths. Workbox still falls through to the
+          // network without caching when no rule matches.
+          //
+          // (Direct calls to *.supabase.co/functions/v1/* are also uncached
+          // because they don't match any rule above.)
           {
             urlPattern: /^https:\/\/.*\/api\/.*/i,
-            handler: "NetworkFirst",
+            handler: "NetworkOnly",
             options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5, // 5 minutes
-              },
+              cacheName: "api-no-cache",
             },
           },
         ],
