@@ -81,6 +81,7 @@
 
 body {
   position: relative;
+  overflow-x: hidden;
 }
 
 @layer base {

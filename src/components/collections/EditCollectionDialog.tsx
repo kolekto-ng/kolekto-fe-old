@@ -436,7 +436,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         )}
 
         <Tabs defaultValue="basic">
-          <TabsList className={`grid w-full grid-cols-${tabs.length}`}>
+          <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
             {tabs.map(t => <TabsTrigger key={t} value={t}>{tabLabels[t]}</TabsTrigger>)}
           </TabsList>
 

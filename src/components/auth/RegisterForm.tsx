@@ -469,7 +469,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         </Link>
       </div>
       {showV2 && (
-        <div className="mt-4">
+        <div className="mt-4 overflow-x-auto -mx-4 px-4 flex justify-center">
           <ReCAPTCHA
             sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}

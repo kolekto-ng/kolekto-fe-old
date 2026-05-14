@@ -175,7 +175,7 @@ const Hero = () => {
                     alt="Paystack-logo"
                     width={100}
                     height={100}
-                    className="w-[10ox] object-cover"
+                    className="w-[100px] object-cover"
                   />
                 </div>
 
@@ -188,7 +188,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
             <div className={`${styles.marqueeItem}`}>
@@ -197,7 +197,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
             <div className={`${styles.marqueeItem}`}>
@@ -206,7 +206,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
             <div className={`${styles.marqueeItem}`}>
@@ -215,7 +215,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
             <div className={`${styles.marqueeItem}`}>
@@ -224,7 +224,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
             <div className={`${styles.marqueeItem}`}>
@@ -233,7 +233,7 @@ const Hero = () => {
                 alt="Paystack-logo"
                 width={100}
                 height={100}
-                className="w-[10ox] object-cover"
+                className="w-[100px] object-cover"
               />
             </div>
           </div>
