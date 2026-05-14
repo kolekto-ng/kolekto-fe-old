@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CreateCollectionPage = lazy(() => import("./pages/CreateCollectionPage"));
@@ -115,6 +115,9 @@ const AuthenticatedApp = () => {
 
 // Main App component restructured to fix React hooks issues
 const App = () => {
+  const location = useLocation();
+  const shouldShowWhatsAppButton = !location.pathname.startsWith("/dashboard");
+
   useEffect(() => {
     // Supabase recovery links may land on the site root depending on allowed redirect URLs.
     // When that happens, route users to the actual reset page while preserving the hash token.
@@ -179,7 +182,7 @@ const App = () => {
       <Toaster />
       <Sonner />
       <AuthenticatedApp />
-      <WhatsAppButton />
+      {shouldShowWhatsAppButton && <WhatsAppButton />}
       {/* <AuthSessionWatcher /> */}
     </TooltipProvider>
   );

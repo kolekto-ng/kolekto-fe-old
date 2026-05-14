@@ -33,6 +33,10 @@ import CollectionManagementMenu from '@/components/collections/CollectionManagem
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 import {
+    getCollectionContributorFields,
+    getContributorFieldValue,
+} from '@/utils/contributions';
+import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
@@ -163,6 +167,7 @@ const PwaCollectionDetails: React.FC = () => {
 
     const colType: string = (currentCollection as any)?.collection_type || currentCollection?.type || 'fixed';
     const availableTiers = currentCollection?.price_tiers || (currentCollection as any)?.pricing_tiers || [];
+    const visibleContributorFields = getCollectionContributorFields(currentCollection as any);
 
     const getTierNameFromAmount = (amount: number) => {
         const tier = availableTiers.find(t => t.price === amount);
@@ -227,37 +232,25 @@ const PwaCollectionDetails: React.FC = () => {
             return;
         }
 
-        // Use the host's field definitions in their original order as the
-        // canonical column list. Strip all internal/system keys from the fallback.
-        const INTERNAL_KEYS = new Set([
-            'TierAmount', 'TierId', 'Tier', 'Quantity', 'collectionType',
-            'paidAt', 'channel', '_receipt', 'date',
-        ]);
-        const hostFields: string[] = ((currentCollection as any)?.form_fields || (currentCollection as any)?.contributions_fields || []).map((f: any) => f.name);
-        const allDynamicFields: string[] = hostFields.length > 0
-            ? hostFields
-            : Array.from(
-                new Set(
-                    filteredData.flatMap((contributor: any) =>
-                        Object.keys((contributor.contributor_information || [])[0] || {})
-                            .filter((k: string) => !INTERNAL_KEYS.has(k) && k.toLowerCase() !== 'date' && !k.startsWith('_'))
-                    )
-                )
-              );
-
+        const exportFields = visibleContributorFields;
         const hasUniqueCode = filteredData.some((c: any) => c.contributor_unique_code);
+        const tierColumnVisible = colType === 'tiered' || colType === 'ticket';
+        if (exportFields.length === 0 && !tierColumnVisible && !hasUniqueCode) {
+            toast.info('No host-defined contributor fields to export for this collection');
+            return;
+        }
 
         const headers = [
-            ...allDynamicFields,
-            ...(colType === 'tiered' ? ['Tier'] : []),
+            ...exportFields.map((field: any) => field.name),
+            ...(tierColumnVisible ? ['Tier'] : []),
             ...(hasUniqueCode ? ['Unique Code'] : []),
         ];
 
         const rows = filteredData.map((contribution: any) => [
-            ...allDynamicFields.map((field: string) =>
-                (contribution.contributor_information || [])[0]?.[field] ?? ''
+            ...exportFields.map((field: any) =>
+                getContributorFieldValue(contribution, field) || ''
             ),
-            ...(colType === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
+            ...(tierColumnVisible ? [getTierNameFromAmount(contribution.amount)] : []),
             ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
         ]);
 
@@ -404,23 +397,12 @@ const PwaCollectionDetails: React.FC = () => {
     const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
     const filteredContributors = applyFilters(paidContributions);
 
-    const TABLE_INTERNAL_KEYS = new Set([
-        'TierAmount', 'TierId', 'Tier', 'Quantity', 'collectionType',
-        'paidAt', 'channel', '_receipt', 'date',
-    ]);
-    const hostTableFields: string[] = ((currentCollection as any)?.form_fields || (currentCollection as any)?.contributions_fields || []).map((f: any) => f.name);
-    const allDynamicFields: string[] = hostTableFields.length > 0
-        ? hostTableFields
-        : Array.from(
-            new Set(
-                paidContributions.flatMap(contributor =>
-                    Object.keys((contributor.contributor_information || [])[0] || {})
-                        .filter((k: string) => !TABLE_INTERNAL_KEYS.has(k) && k.toLowerCase() !== 'date' && !k.startsWith('_'))
-                )
-            )
-          );
-
     const hasUniqueCode = paidContributions.some(c => c.contributor_unique_code);
+    const tierColumnVisible = colType === 'tiered' || colType === 'ticket';
+    const contributorColumnCount =
+        visibleContributorFields.length +
+        (tierColumnVisible ? 1 : 0) +
+        (hasUniqueCode ? 1 : 0);
 
     const totalCollected = contributions?.reduce((sum, contribution) => {
         return contribution.status === 'paid' ? sum + (contribution.amount || 0) : sum;
@@ -658,30 +640,36 @@ const PwaCollectionDetails: React.FC = () => {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                {(colType === 'tiered' || colType === 'ticket') && (
+                                                {visibleContributorFields.map((field: any) => (
+                                                    <TableHead key={field.id || field.name}>{field.name}</TableHead>
+                                                ))}
+                                                {tierColumnVisible && (
                                                     <TableHead>Tier</TableHead>
                                                 )}
-                                                {allDynamicFields.map(field => (
-                                                    <TableHead key={field}>{field}</TableHead>
-                                                ))}
                                                 {hasUniqueCode && <TableHead>Unique Code</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {filteredContributors.map(contributor => (
+                                            {contributorColumnCount === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={1} className="text-center py-8 text-gray-500">
+                                                        No host-defined contributor fields were requested for this collection
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : filteredContributors.map(contributor => (
                                                 <TableRow key={contributor.id}>
-                                                    {(colType === 'tiered' || colType === 'ticket') && (
+                                                    {visibleContributorFields.map((field: any) => (
+                                                        <TableCell key={field.id || field.name}>
+                                                            {getContributorFieldValue(contributor, field) || '-'}
+                                                        </TableCell>
+                                                    ))}
+                                                    {tierColumnVisible && (
                                                         <TableCell>
                                                             <span className="text-xs font-medium bg-gray-100 px-2 py-0.5 rounded">
                                                                 {getTierNameFromAmount(contributor.amount)}
                                                             </span>
                                                         </TableCell>
                                                     )}
-                                                    {allDynamicFields.map(field => (
-                                                        <TableCell key={field}>
-                                                            {(contributor.contributor_information || [])[0]?.[field] ?? ''}
-                                                        </TableCell>
-                                                    ))}
                                                     {hasUniqueCode && (
                                                         <TableCell>
                                                             <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">

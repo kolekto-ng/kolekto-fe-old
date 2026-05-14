@@ -1,17 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Camera, Loader2, Save, User, Mail, Phone, Calendar, MapPin } from 'lucide-react';
-import { useAuthStore } from '@/store';
-import { useProfileStore } from '@/store/useProfileStore';
-import { useSettings } from '@/store/useSettings';
-import { axiosInstance } from '@/utils/axios';
+import React, { useState, useRef, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Camera,
+  Loader2,
+  Save,
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+} from "lucide-react";
+import { useAuthStore } from "@/store";
+import { useProfileStore } from "@/store/useProfileStore";
+import { useSettings } from "@/store/useSettings";
+import { axiosInstance } from "@/utils/axios";
 
 const PersonalInfoSection: React.FC = () => {
   const { user } = useAuthStore() as any;
-  const { profile, profileLoading, updateProfile, fetchProfile } = useProfileStore();
+  const { profile, profileLoading, updateProfile, fetchProfile } =
+    useProfileStore();
   const { profile: settingsProfile, getProfile } = useSettings() as any;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -19,13 +29,13 @@ const PersonalInfoSection: React.FC = () => {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
-    fullName: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    dateOfBirth: '',
-    address: '',
+    fullName: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
+    address: "",
   });
 
   useEffect(() => {
@@ -43,25 +53,26 @@ const PersonalInfoSection: React.FC = () => {
     // Initialize form from user data or profile
     const p = profile || settingsProfile;
     setFormData({
-      fullName: p?.full_name || user?.user_metadata?.full_name || '',
-      firstName: p?.first_name || '',
-      lastName: p?.last_name || '',
-      email: p?.email || user?.email || '',
-      phone: p?.phone_number || user?.user_metadata?.phone || '',
-      dateOfBirth: p?.date_of_birth || user?.user_metadata?.dob || '',
-      address: p?.address || user?.user_metadata?.address || '',
+      fullName: p?.full_name || user?.user_metadata?.full_name || "",
+      firstName: p?.first_name || "",
+      lastName: p?.last_name || "",
+      email: p?.email || user?.email || "",
+      phone: p?.phone_number || user?.user_metadata?.phone || "",
+      dateOfBirth: p?.date_of_birth || user?.user_metadata?.dob || "",
+      address: p?.address || user?.user_metadata?.address || "",
     });
   }, [profile, settingsProfile, user]);
 
   const handleChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
     const success = await updateProfile({
       full_name: formData.fullName,
-      first_name: formData.firstName || formData.fullName.split(' ')[0],
-      last_name: formData.lastName || formData.fullName.split(' ').slice(1).join(' '),
+      first_name: formData.firstName || formData.fullName.split(" ")[0],
+      last_name:
+        formData.lastName || formData.fullName.split(" ").slice(1).join(" "),
       phone_number: formData.phone,
       date_of_birth: formData.dateOfBirth || null,
       address: formData.address,
@@ -74,27 +85,32 @@ const PersonalInfoSection: React.FC = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith("image/")) return;
     if (file.size > 5 * 1024 * 1024) return;
 
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('avatar', file);
-      await axiosInstance.post('settings/profile/upload-avatar', formData);
+      formData.append("avatar", file);
+      await axiosInstance.post("settings/profile/upload-avatar", formData);
       const imageUrl = URL.createObjectURL(file);
       setProfileImage(imageUrl);
       await getProfile();
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error("Upload error:", error);
     } finally {
       setUploading(false);
     }
   };
 
   const initials = formData.fullName
-    ? formData.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'U';
+    ? formData.fullName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "U";
 
   return (
     <div className="space-y-6">
@@ -113,7 +129,9 @@ const PersonalInfoSection: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-2xl font-bold text-[#1B5E20]">{initials}</span>
+                  <span className="text-2xl font-bold text-[#1B5E20]">
+                    {initials}
+                  </span>
                 )}
               </div>
               <button
@@ -138,7 +156,9 @@ const PersonalInfoSection: React.FC = () => {
 
             {/* Name & Email */}
             <div className="text-center sm:text-left flex-1 pt-2">
-              <h2 className="text-xl font-bold text-gray-900">{formData.fullName || 'Your Name'}</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {formData.fullName || "Your Name"}
+              </h2>
               <p className="text-sm text-gray-500">{formData.email}</p>
             </div>
 
@@ -148,8 +168,8 @@ const PersonalInfoSection: React.FC = () => {
               disabled={profileLoading}
               className={
                 isEditing
-                  ? 'bg-[#1B5E20] hover:bg-[#2E7D32] text-white'
-                  : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? "bg-[#1B5E20] hover:bg-[#2E7D32] text-white"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
               }
             >
               {profileLoading ? (
@@ -159,7 +179,7 @@ const PersonalInfoSection: React.FC = () => {
               ) : (
                 <User className="w-4 h-4 mr-2" />
               )}
-              {isEditing ? 'Save Changes' : 'Edit Profile'}
+              {isEditing ? "Save Changes" : "Edit Profile"}
             </Button>
           </div>
         </CardContent>
@@ -177,54 +197,72 @@ const PersonalInfoSection: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Full Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="fullName" className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Label
+                htmlFor="fullName"
+                className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5"
+              >
                 <User className="w-3 h-3" /> Full Name
               </Label>
               {isEditing ? (
                 <Input
                   id="fullName"
                   value={formData.fullName}
-                  onChange={(e) => handleChange('fullName', e.target.value)}
+                  onChange={(e) => handleChange("fullName", e.target.value)}
                   className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
                   placeholder="Enter your full name"
                 />
               ) : (
-                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">{formData.fullName || '—'}</p>
+                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
+                  {formData.fullName || "—"}
+                </p>
               )}
             </div>
 
             {/* Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Label
+                htmlFor="email"
+                className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5"
+              >
                 <Mail className="w-3 h-3" /> Email Address
               </Label>
               <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md flex items-center gap-2">
                 {formData.email}
-                <span className="text-[10px] bg-[#E8F5E9] text-[#1B5E20] px-1.5 py-0.5 rounded-full font-medium">Verified</span>
+                <span className="text-[10px] bg-[#E8F5E9] text-[#1B5E20] px-1.5 py-0.5 rounded-full font-medium">
+                  Verified
+                </span>
               </p>
             </div>
 
             {/* Phone */}
             <div className="space-y-1.5">
-              <Label htmlFor="phone" className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Label
+                htmlFor="phone"
+                className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5"
+              >
                 <Phone className="w-3 h-3" /> Phone Number
               </Label>
               {isEditing ? (
                 <Input
                   id="phone"
                   value={formData.phone}
-                  onChange={(e) => handleChange('phone', e.target.value)}
+                  onChange={(e) => handleChange("phone", e.target.value)}
                   className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
                   placeholder="+234 800 000 0000"
                 />
               ) : (
-                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">{formData.phone || '—'}</p>
+                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
+                  {formData.phone || "—"}
+                </p>
               )}
             </div>
 
             {/* Date of Birth */}
             <div className="space-y-1.5">
-              <Label htmlFor="dateOfBirth" className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Label
+                htmlFor="dateOfBirth"
+                className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5"
+              >
                 <Calendar className="w-3 h-3" /> Date of Birth
               </Label>
               {isEditing ? (
@@ -232,31 +270,41 @@ const PersonalInfoSection: React.FC = () => {
                   id="dateOfBirth"
                   type="date"
                   value={formData.dateOfBirth}
-                  onChange={(e) => handleChange('dateOfBirth', e.target.value)}
+                  onChange={(e) => handleChange("dateOfBirth", e.target.value)}
                   className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
                 />
               ) : (
                 <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
-                  {formData.dateOfBirth ? new Date(formData.dateOfBirth).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
+                  {formData.dateOfBirth
+                    ? new Date(formData.dateOfBirth).toLocaleDateString(
+                        "en-NG",
+                        { year: "numeric", month: "long", day: "numeric" },
+                      )
+                    : "—"}
                 </p>
               )}
             </div>
 
             {/* Address (full width) */}
             <div className="space-y-1.5 md:col-span-2">
-              <Label htmlFor="address" className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Label
+                htmlFor="address"
+                className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5"
+              >
                 <MapPin className="w-3 h-3" /> Address
               </Label>
               {isEditing ? (
                 <Input
                   id="address"
                   value={formData.address}
-                  onChange={(e) => handleChange('address', e.target.value)}
+                  onChange={(e) => handleChange("address", e.target.value)}
                   className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
                   placeholder="Enter your address"
                 />
               ) : (
-                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">{formData.address || '—'}</p>
+                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
+                  {formData.address || "—"}
+                </p>
               )}
             </div>
           </div>
@@ -275,7 +323,9 @@ const PersonalInfoSection: React.FC = () => {
                 disabled={profileLoading}
                 className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white"
               >
-                {profileLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {profileLoading && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
                 Save Changes
               </Button>
             </div>

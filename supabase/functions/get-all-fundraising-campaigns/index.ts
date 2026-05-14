@@ -101,11 +101,16 @@ Deno.serve(async (req: Request) => {
     // Fetch related data in parallel
     if (ids.length > 0) {
       if (lightweight) {
-        const [walletRes] = await Promise.all([
+        const [walletRes, contributionRes] = await Promise.all([
           supabase
             .from("wallets")
             .select("collection_id, net_payment, updated_at")
             .in("collection_id", ids),
+          supabase
+            .from("contributions")
+            .select("collection_id, status")
+            .in("collection_id", ids)
+            .eq("status", "paid"),
         ]);
 
         (walletRes.data || []).forEach((wallet: any) => {
@@ -117,6 +122,11 @@ Deno.serve(async (req: Request) => {
           ) {
             walletMap[wallet.collection_id] = wallet;
           }
+        });
+
+        (contributionRes.data || []).forEach((contribution: any) => {
+          contribMap[contribution.collection_id] =
+            (contribMap[contribution.collection_id] || 0) + 1;
         });
       } else {
         const [campRes, profRes, kycRes, docsRes, imgRes, donRes, contRes] = await Promise.all([
@@ -230,7 +240,7 @@ Deno.serve(async (req: Request) => {
         campaign_donations: lightweight ? [] : donations,
         total_raised: totalRaised,
         contributions_count: lightweight
-          ? Number(c.total_contributions || 0)
+          ? Number(contribMap[c.id] || c.total_contributions || 0)
           : contribMap[c.id] || 0,
       };
     });

@@ -37,6 +37,7 @@ type TicketTierSelection = {
 
 const FUNDRAISING_PRESETS = [5000, 10000, 20000, 50000];
 const MAX_TICKETS_PER_ORDER = 10;
+const CONTRIBUTOR_FIELD_MAP_KEY = "__fieldValues";
 
 function calcFees(amount: number, feeBearer: string, collectionType: string) {
   // Fundraising: fee is invisible to donor — backend embeds 2.5% in stored amount
@@ -54,11 +55,44 @@ function fmt(n: number) {
   return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
 }
 
-function isContactFieldName(fieldName: string) {
-  const normalized = String(fieldName || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-  return ['fullname', 'name', 'email', 'phonenumber', 'phone', 'telephone'].includes(normalized);
+function getFieldStorageKey(field: any) {
+  return String(field?.id || field?.name || "").trim();
+}
+
+function getFieldValue(formData: Record<string, string>, field: any) {
+  return formData[getFieldStorageKey(field)] || "";
+}
+
+function buildContributorFieldPayload(fields: any[], formData: Record<string, string>) {
+  const namedValues: Record<string, string> = {};
+  const mappedValues: Record<string, string> = {};
+
+  fields.forEach((field) => {
+    const storageKey = getFieldStorageKey(field);
+    const displayName = String(field?.name || "").trim();
+
+    if (!storageKey || displayName.toLowerCase() === "unique code") {
+      return;
+    }
+
+    const value = formData[storageKey];
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    mappedValues[storageKey] = value;
+
+    if (displayName) {
+      namedValues[displayName] = value;
+    }
+  });
+
+  return Object.keys(mappedValues).length > 0
+    ? {
+        ...namedValues,
+        [CONTRIBUTOR_FIELD_MAP_KEY]: mappedValues,
+      }
+    : namedValues;
 }
 
 // ── Image Slideshow (poster-sized) ────────────────────────────────────────────
@@ -134,15 +168,15 @@ const FeeBreakdown: React.FC<{
     <div className="flex-1">
       <p className="font-semibold text-xs uppercase tracking-wide mb-1.5">Processing fees applied</p>
       <div className="space-y-0.5 text-xs">
-        <div className="flex justify-between">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5">
           <span>Gateway fee (1.5%, max ₦2,000):</span>
           <span className="font-medium">{formatCurrency(gatewayFee)}</span>
         </div>
-        <div className="flex justify-between">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5">
           <span>Platform fee ({isFundraising ? '1%' : '0.5%'}, max ₦2,000):</span>
           <span className="font-medium">{formatCurrency(platformFee)}</span>
         </div>
-        <div className="flex justify-between font-bold border-t border-amber-300 pt-1 mt-1 text-sm">
+        <div className="flex flex-col sm:flex-row sm:justify-between font-bold border-t border-amber-300 pt-1 mt-1 text-sm gap-0.5">
           <span>Total you pay:</span>
           <span>{formatCurrency(total)}</span>
         </div>
@@ -456,8 +490,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
     if (!isTicket && isTiered && !selectedTier) { toast.error('Please select a tier'); return false; }
     for (const field of formFields) {
       if (field.required && field.name.toLowerCase() !== 'unique code') {
-        if (isContactFieldName(field.name)) continue;
-        if (!formData[field.name]?.trim()) { toast.error(`Please fill in ${field.name}`); return false; }
+        if (!getFieldValue(formData, field)?.trim()) { toast.error(`Please fill in ${field.name}`); return false; }
       }
     }
     return true;
@@ -529,9 +562,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       // This ensures contributor_information only stores what the host asked for,
       // while payer contact is used only for payment processing and the Activities tab.
       const hostFormData = {
-        ...Object.fromEntries(
-          Object.entries(pending.formData || {}).filter(([key]) => !isContactFieldName(key))
-        ),
+        ...buildContributorFieldPayload(formFields, pending.formData || {}),
         ...(pending.selectedTier ? { Tier: pending.selectedTier } : {}),
         ...(pending.selectedTierId ? { TierId: pending.selectedTierId } : {}),
       };
@@ -594,9 +625,11 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
   // --- Field renderer ---
   const renderField = (field: any) => {
-    if (field.name.toLowerCase() === 'unique code' || isContactFieldName(field.name)) return null;
-    const value = formData[field.name] || '';
-    const onChange = (val: string) => setFormData(prev => ({ ...prev, [field.name]: val }));
+    if (field.name.toLowerCase() === 'unique code') return null;
+    const fieldKey = getFieldStorageKey(field);
+    const inputId = field.id || field.name;
+    const value = getFieldValue(formData, field);
+    const onChange = (val: string) => setFormData(prev => ({ ...prev, [fieldKey]: val }));
 
     switch (field.type) {
       case 'textarea':
@@ -616,8 +649,8 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           <RadioGroup value={value} onValueChange={onChange}>
             {field.options?.map((opt: string, i: number) => (
               <div key={i} className="flex items-center space-x-2">
-                <RadioGroupItem value={opt} id={`${field.name}-${i}`} />
-                <Label htmlFor={`${field.name}-${i}`}>{opt}</Label>
+                <RadioGroupItem value={opt} id={`${inputId}-${i}`} />
+                <Label htmlFor={`${inputId}-${i}`}>{opt}</Label>
               </div>
             ))}
           </RadioGroup>
@@ -625,8 +658,8 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       case 'checkbox':
         return (
           <div className="flex items-center space-x-2">
-            <Checkbox checked={value === 'true'} onCheckedChange={(c: boolean | 'indeterminate') => onChange(c.toString())} id={field.name} />
-            <Label htmlFor={field.name}>{field.name}</Label>
+            <Checkbox checked={value === 'true'} onCheckedChange={(c: boolean | 'indeterminate') => onChange(c.toString())} id={inputId} />
+            <Label htmlFor={inputId}>{field.name}</Label>
           </div>
         );
       default:
@@ -942,9 +975,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         <div className="space-y-4 pt-2 border-t">
           <p className="text-sm font-medium text-gray-700">Additional Details</p>
           {formFields.map((field, i) => {
-            if (field.name.toLowerCase() === 'unique code' || isContactFieldName(field.name)) return null;
+            if (field.name.toLowerCase() === 'unique code') return null;
             return (
-              <div key={i} className="space-y-1.5">
+              <div key={field.id || `${field.name}-${i}`} className="space-y-1.5">
                 <Label>{field.name}{field.required && <span className="text-red-500 ml-0.5">*</span>}</Label>
                 {renderField(field)}
               </div>

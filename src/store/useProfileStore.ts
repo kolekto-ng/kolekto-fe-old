@@ -178,10 +178,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
+        error?.response?.data?.details ||
         error?.response?.data?.message ||
         error?.message ||
         "Failed to send OTP";
-      set({ passwordStep: "error", passwordError: error.message });
+      set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
     }
@@ -190,7 +191,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   verifyOTPAndChangePassword: async (otp: string, newPassword: string, confirmPassword: string) => {
     set({ passwordStep: "verifying", passwordError: null });
     try {
-      await axiosInstance.post("/settings/security/verify-password-otp", {
+      const res = await axiosInstance.post("/settings/security/verify-password-otp", {
         otp,
         newPassword,
         confirmPassword,
@@ -198,14 +199,32 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       set({ passwordStep: "success", passwordError: null });
       toast.success("Password changed successfully!");
+
+      // Supabase invalidates active sessions when a password changes.
+      // If the backend confirms this, clear local credentials and route the
+      // user to /login proactively instead of leaving them with a token that
+      // 401s on the next request.
+      if (res?.data?.sessionInvalidated) {
+        try {
+          localStorage.removeItem("kolekto-auth-token");
+        } catch {
+          /* storage may be unavailable; ignore */
+        }
+        // Give the success state a beat so the user sees the confirmation.
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 1200);
+      }
+
       return true;
     } catch (error: any) {
       const msg =
         error?.response?.data?.error ||
+        error?.response?.data?.details ||
         error?.response?.data?.message ||
         error?.message ||
         "Failed to change password";
-      set({ passwordStep: "error", passwordError: error.message });
+      set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
     }

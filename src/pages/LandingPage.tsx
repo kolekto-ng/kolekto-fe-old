@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Link } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -3091,31 +3097,67 @@ const ActiveFundraisingSection = () => {
   const headerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(headerRef, { once: true, margin: "-80px" });
   const [campaigns, setCampaigns] = useState<LPCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
 
-  useEffect(() => {
-    getActiveFundraisingCampaigns()
-      .then((rows) => {
-        setCampaigns((rows as LPCampaign[]).slice(0, 8));
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const CAMPAIGN_CACHE_KEY = "kolekto_lp_active_campaigns_v1";
+  const CAMPAIGN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  const loadCampaigns = useCallback(async () => {
+    setLoading(true);
+    setHasAttemptedLoad(true);
+    try {
+      const cachedRaw = sessionStorage.getItem(CAMPAIGN_CACHE_KEY);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as {
+          data: LPCampaign[];
+          timestamp: number;
+        };
+        if (
+          cached?.data?.length &&
+          Date.now() - Number(cached.timestamp || 0) < CAMPAIGN_CACHE_TTL_MS
+        ) {
+          setCampaigns(cached.data.slice(0, 8));
+          return;
+        }
+      }
+
+      const rows = (await getActiveFundraisingCampaigns()) as LPCampaign[];
+      const sliced = rows.slice(0, 8);
+      setCampaigns(sliced);
+      sessionStorage.setItem(
+        CAMPAIGN_CACHE_KEY,
+        JSON.stringify({ data: sliced, timestamp: Date.now() }),
+      );
+    } catch {
+      // Keep the section resilient: fail quietly and show nothing if data cannot load.
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  if (!loading && campaigns.length === 0) return null;
+  useEffect(() => {
+    // Only fetch when this section is about to be seen.
+    if (!isInView || campaigns.length > 0 || loading) return;
+    loadCampaigns();
+  }, [isInView, campaigns.length, loading, loadCampaigns]);
 
-  // Need at least 4 items to look good scrolling — pad with duplicates
-  const base = campaigns.length > 0 ? campaigns : [];
-  const padded =
-    base.length < 4 && base.length > 0
-      ? [...base, ...base, ...base, ...base].slice(
-          0,
-          Math.max(8, base.length * 3),
-        )
-      : base;
-  // Duplicate for infinite loop
-  const scrollCampaigns = [...padded, ...padded];
+  if (hasAttemptedLoad && !loading && campaigns.length === 0) return null;
+
+  const scrollCampaigns = useMemo(() => {
+    // Need at least 4 items to look good scrolling — pad with duplicates.
+    const base = campaigns.length > 0 ? campaigns : [];
+    const padded =
+      base.length < 4 && base.length > 0
+        ? [...base, ...base, ...base, ...base].slice(
+            0,
+            Math.max(8, base.length * 3),
+          )
+        : base;
+    // Duplicate for infinite loop.
+    return [...padded, ...padded];
+  }, [campaigns]);
 
   const CARD_W = 320;
   const CARD_GAP = 24;

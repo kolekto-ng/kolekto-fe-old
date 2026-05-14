@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Contribution, ContributionState } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { axiosInstance } from "@/utils/axios";
+import { normalizeContributions } from "@/utils/contributions";
 
 export const useContributionStore = create((set, get) => ({
   contributions: [],
@@ -44,8 +45,9 @@ export const useContributionStore = create((set, get) => ({
       });
 
       // Format data
+      const normalizedData = normalizeContributions(data.data || []);
       const formattedData =
-        data.data?.map((contribution) => ({
+        normalizedData.map((contribution) => ({
           ...contribution,
           formattedAmount: formatCurrency(contribution.amount),
           formattedDate: formatDate(contribution.created_at),

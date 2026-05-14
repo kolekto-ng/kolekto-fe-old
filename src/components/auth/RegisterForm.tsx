@@ -469,7 +469,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         </Link>
       </div>
       {showV2 && (
-        <div className="mt-4">
+        <div className="mt-4 overflow-x-auto -mx-4 px-4 flex justify-center">
           <ReCAPTCHA
             sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}
@@ -479,7 +479,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
 
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 shadow-lg flex items-center">
+          <div className="bg-white rounded-lg p-4 shadow-lg flex items-center max-w-[calc(100vw-2rem)] mx-4">
             <span className="loader mr-2"></span>
             <span className="text-kolekto font-semibold">Creating Account...</span>
           </div>
