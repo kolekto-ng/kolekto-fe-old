@@ -113,7 +113,7 @@ const ActivitiesPage: React.FC = () => {
                         {collectionName && (
                           <>
                             <span className="text-gray-300">•</span>
-                            <span className="text-green-600 font-medium whitespace-nowrap">
+                            <span className="text-green-600 font-medium truncate min-w-0">
                               ✅ {collectionName}
                             </span>
                           </>

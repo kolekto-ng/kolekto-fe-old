@@ -168,15 +168,15 @@ const FeeBreakdown: React.FC<{
     <div className="flex-1">
       <p className="font-semibold text-xs uppercase tracking-wide mb-1.5">Processing fees applied</p>
       <div className="space-y-0.5 text-xs">
-        <div className="flex justify-between">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5">
           <span>Gateway fee (1.5%, max ₦2,000):</span>
           <span className="font-medium">{formatCurrency(gatewayFee)}</span>
         </div>
-        <div className="flex justify-between">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5">
           <span>Platform fee ({isFundraising ? '1%' : '0.5%'}, max ₦2,000):</span>
           <span className="font-medium">{formatCurrency(platformFee)}</span>
         </div>
-        <div className="flex justify-between font-bold border-t border-amber-300 pt-1 mt-1 text-sm">
+        <div className="flex flex-col sm:flex-row sm:justify-between font-bold border-t border-amber-300 pt-1 mt-1 text-sm gap-0.5">
           <span>Total you pay:</span>
           <span>{formatCurrency(total)}</span>
         </div>

@@ -114,7 +114,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
 
       {/* Body */}
       <div className="border-t border-gray-200 px-5 py-5 bg-gray-50/50 flex-1 flex flex-col">
-        <div className="grid gap-3 grid-cols-3">
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
             <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 truncate">Raised</p>
             <p className="mt-2 text-base font-bold text-green-700 truncate">{fmt(totalRaised)}</p>

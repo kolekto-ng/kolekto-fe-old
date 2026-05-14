@@ -45,7 +45,7 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'banner' 
     // Banner variant - Floating banner at bottom of page
     if (variant === 'banner') {
         return (
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-[#16a34a] to-[#15803d] text-white shadow-lg">
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-[#16a34a] to-[#15803d] text-white shadow-lg" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 flex-1">
                         <div className="hidden sm:flex h-10 w-10 bg-white/20 rounded-lg items-center justify-center">

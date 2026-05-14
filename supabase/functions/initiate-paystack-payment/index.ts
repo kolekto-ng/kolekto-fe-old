@@ -590,6 +590,11 @@ serve(async (req: Request) => {
 
     const reference = `kolekto-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
+    // F4: structured payment-lifecycle log (correlation ID = Paystack reference).
+    console.log(
+      `[initiate ref=${reference}] PAYMENT_INITIATED collectionId=${normalized.collectionId} type=${normalized.collectionType} contributionAmount=${normalized.contributionAmount} totalPayable=${normalized.totalPayable} feeBearer=${normalized.feeBearer} quantity=${normalized.quantity}`
+    );
+
     // Paystack metadata MUST be a simple JSON object. Deeply-nested objects,
     // arrays of objects with many fields, or oversized payloads (> ~5KB) cause
     // Paystack to reject the transaction with a generic "An error occurred" 400.
@@ -713,16 +718,17 @@ serve(async (req: Request) => {
         const paystackResult = await paystackResponse.json();
 
         if (!paystackResponse.ok) {
-          // Log the full Paystack error for diagnostics
-          console.error("[initiate] Paystack non-OK response:", {
-            status: paystackResponse.status,
-            body: paystackResult,
-            sentAmount: paystackBody.amount,
-            sentEmail: paystackBody.email,
-            sentReference: paystackBody.reference,
-            metadataKeys: Object.keys(normalizedMetadata),
-            metadataSize: JSON.stringify(normalizedMetadata).length,
-          });
+          // F4: Paystack rejected the initialization
+          console.error(
+            `[initiate ref=${reference}] PAYSTACK_INIT_FAILED status=${paystackResponse.status}`,
+            {
+              body: paystackResult,
+              sentAmount: paystackBody.amount,
+              sentEmail: paystackBody.email,
+              metadataKeys: Object.keys(normalizedMetadata),
+              metadataSize: JSON.stringify(normalizedMetadata).length,
+            }
+          );
 
           const msg = paystackResult?.message || paystackResult?.error || "Failed to initialize payment";
           if (paystackResponse.status === 401 || paystackResponse.status === 403) {
@@ -759,6 +765,11 @@ serve(async (req: Request) => {
             { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
           );
         }
+
+        // F4: Paystack accepted the initialization
+        console.log(
+          `[initiate ref=${reference}] PAYSTACK_INIT_OK auth_url_present=${!!paystackResult.data?.authorization_url}`
+        );
 
         return new Response(
           JSON.stringify(paystackResult.data),
