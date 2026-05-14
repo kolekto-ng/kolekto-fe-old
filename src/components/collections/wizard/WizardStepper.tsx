@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
 import { StepId, STEP_LABELS } from './wizardTypes';
 
@@ -8,6 +8,12 @@ interface Props {
 }
 
 const WizardStepper: React.FC<Props> = ({ steps, currentIndex }) => {
+  const activeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [currentIndex]);
+
   return (
     <div className="w-full overflow-x-auto pb-2">
       <div className="flex items-center min-w-max mx-auto px-2">
@@ -19,7 +25,7 @@ const WizardStepper: React.FC<Props> = ({ steps, currentIndex }) => {
           return (
             <React.Fragment key={stepId}>
               {/* Step node */}
-              <div className="flex flex-col items-center" style={{ minWidth: 64 }}>
+              <div ref={isActive ? activeRef : undefined} className="flex flex-col items-center" style={{ minWidth: 64 }}>
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
                     isCompleted

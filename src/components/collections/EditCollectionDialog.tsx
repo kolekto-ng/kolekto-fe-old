@@ -570,7 +570,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 
                 {/* Image grid — existing + pending */}
                 {(storyImageUrls.length > 0 || pendingStoryFiles.length > 0) && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {storyImageUrls.map((src, i) => (
                       <div key={`existing-${i}`} className="relative aspect-square">
                         <img src={src} alt={`Story image ${i + 1}`} className="w-full h-full object-cover rounded-lg border" onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.parentElement!.style.display = 'none'; }} />

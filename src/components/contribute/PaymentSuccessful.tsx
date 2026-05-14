@@ -828,8 +828,8 @@ const PaymentSuccessful = ({
             </div>
           </div>
 
-          <div className="max-h-[70vh] overflow-y-auto bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] p-3 sm:p-5">
-            <div ref={receiptRef} className="space-y-4">
+          <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] p-3 sm:p-5">
+            <div ref={receiptRef} className="space-y-4 max-w-full">
               <div className="flex justify-end">
                 <PoweredByKolekto />
               </div>
