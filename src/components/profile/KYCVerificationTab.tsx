@@ -678,6 +678,7 @@ const KYCVerificationTab = () => {
             variant="outline"
             className="w-full"
             onClick={() => setShowIdentityForm(true)}
+            disabled={kycData.identityVerification.status === 'pending' || kycData.identityVerification.status === 'reviewing'}
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Identity Document
@@ -727,6 +728,7 @@ const KYCVerificationTab = () => {
             variant="outline"
             className="w-full"
             onClick={() => setShowAddressForm(true)}
+            disabled={kycData.addressVerification.status === 'pending' || kycData.addressVerification.status === 'reviewing'}
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Proof of Address

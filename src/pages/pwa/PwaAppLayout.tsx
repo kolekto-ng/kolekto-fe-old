@@ -47,7 +47,7 @@ const PwaAppLayout: React.FC = () => {
             </main>
 
             {/* Pill nav + FAB on top of rectangle */}
-            <nav className="fixed left-0 right-0 bottom-0 z-5 backdrop-blur-xl flex justify-center pointer-events-none  w-full max-w-4xl rounded-t-xl h-24 bg-[#00994D]/10 items-center shadow-2xl">
+            <nav className="fixed left-0 right-0 bottom-0 z-50 backdrop-blur-xl flex justify-center pointer-events-none w-full max-w-4xl rounded-t-xl h-24 bg-[#00994D]/10 items-center shadow-2xl" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 <div className="relative w-full mx-4 flex items-center justify-center gap-4">
                     {/* Pill container */}
                     <div

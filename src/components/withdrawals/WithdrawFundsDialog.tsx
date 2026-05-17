@@ -86,6 +86,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
 
   const handleWithdraw = async (data: {
     amount: number;
+    payoutAccountId?: string;
     accountName: string;
     accountNumber: string;
     bankName: string;
@@ -99,9 +100,15 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     setIsLoading(true);
 
     try {
+      // `account_number` from a saved payout account is not available in
+      // plaintext on the client — the table only stores the encrypted cipher
+      // + last-4. We pass `payout_account_id` so the backend can decrypt
+      // server-side and store the readable number on the withdrawal row for
+      // admin review.
       await createWithdrawal({
         amount: data.amount,
         collection_id: selectedCollectionId,
+        payout_account_id: data.payoutAccountId,
         account_name: data.accountName,
         account_number: data.accountNumber,
         bank_name: data.bankName,
@@ -112,8 +119,20 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
       onOpenChange(false);
       if (onComplete) onComplete();
     } catch (error: any) {
+      // Surface the actual error from the backend instead of a generic
+      // "Please try again later" message. createWithdrawal already shows a
+      // toast with the specific reason; we only fire a fallback toast here
+      // if the inner call somehow didn't (e.g. non-axios error).
       console.error('Withdrawal error:', error);
-      toast.error('Failed to process withdrawal request. Please try again later.');
+      const backendMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message;
+      if (backendMessage && !String(backendMessage).includes('Network')) {
+        // The store-level toast already showed this — no need to double-toast.
+      } else {
+        toast.error('Failed to process withdrawal request. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }

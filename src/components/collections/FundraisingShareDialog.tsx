@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -37,7 +37,19 @@ const FundraisingShareDialog: React.FC<FundraisingShareDialogProps> = ({
   // html2canvas captures that element at its native 1080×1080 size,
   // regardless of the CSS scale applied to its parent wrapper.
   const captureRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [previewScale, setPreviewScale] = useState(0.433);
+
+  useEffect(() => {
+    const el = previewContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setPreviewScale(entry.contentRect.width / 1080);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const canvasProps: FundraisingShareCanvasProps = {
     title: collection.title,
@@ -154,10 +166,11 @@ const FundraisingShareDialog: React.FC<FundraisingShareDialogProps> = ({
               so "what you see here = what you download".
           ────────────────────────────────────────────────────────────── */}
           <div
+            ref={previewContainerRef}
             className="rounded-2xl border border-gray-200 shadow-sm"
             style={{
               width: '100%',
-              paddingTop: '100%',     // square aspect ratio
+              paddingTop: '100%',
               position: 'relative',
               overflow: 'hidden',
               background: '#0C3318',
@@ -169,15 +182,10 @@ const FundraisingShareDialog: React.FC<FundraisingShareDialogProps> = ({
               top: 0, left: 0, right: 0, bottom: 0,
               overflow: 'hidden',
             }}>
-              {/*
-                Scale wrapper: transforms 1080 → preview container width.
-                ~468px dialog interior → scale ≈ 0.433.
-                The canvas itself is NOT transformed — only this wrapper is.
-              */}
               <div style={{
                 width: 1080,
                 height: 1080,
-                transform: 'scale(0.433)',
+                transform: `scale(${previewScale})`,
                 transformOrigin: 'top left',
               }}>
                 <FundraisingShareCanvas ref={captureRef} {...canvasProps} />

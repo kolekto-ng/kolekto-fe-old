@@ -104,7 +104,7 @@ export const Setup2FAForm: React.FC<Setup2FAFormProps> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Card className="p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors">
                   <CardContent className="p-0">
                     <div className="space-y-2">
@@ -221,7 +221,7 @@ export const Setup2FAForm: React.FC<Setup2FAFormProps> = ({
 
               <div className="space-y-3">
                 <Label>Backup Codes</Label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {backupCodes.map((code, index) => (
                     <div key={index} className="flex items-center space-x-2">
                       <code className="flex-1 p-2 bg-muted rounded text-sm font-mono">

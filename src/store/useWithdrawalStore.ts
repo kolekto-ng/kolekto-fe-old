@@ -36,11 +36,21 @@ export const useWithdrawalStore = create((set, get) => ({
         "/withdrawals/request",
         withdrawalData
       );
+      set({ isLoading: false });
       toast.success("Withdrawal request submitted successfully");
-      // return formattedWithdrawal as Withdrawal;
+      return data;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
-      toast.error(`Failed to submit withdrawal request: ${error.message}`);
+      // Prefer the backend's specific error message (the controller now
+      // returns `error`, `code`, `details`, `hint`). Falling back to the
+      // raw axios message would show "Request failed with status code 500"
+      // which is useless to the user.
+      const backendMessage =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Withdrawal request failed";
+      set({ error: backendMessage, isLoading: false });
+      toast.error(backendMessage);
       throw error;
     }
   },

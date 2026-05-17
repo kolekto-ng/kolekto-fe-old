@@ -12,7 +12,7 @@ const whyKolekto = () => {
                 <Link to="/register" className='poppins inline-block bg-[#1C5C23] text-[12.8] w-max lg:text-[20px] text-white py-[11.5px] px-[12.8px] lg:px-4 lg:py-4 rounded-lg  font-semibold hover:bg-green-900 transition-colors duration-200'>Get started - it’s free</Link>
             </div>
 
-            <div className='grid grid-cols-2 gap-8'>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-8'>
                 <div>
                     <h3 className='text-2xl font-medium mb-2'>Save time and reduce stress</h3>
                     <p className='poppins text-[12px] lg:text-[16px] font-normal text-[#333333]'>No more chasing people for payments or keeping messy records. Kolekto helps you set up drives, automate tracking, and view everything in one place.</p>

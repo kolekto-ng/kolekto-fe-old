@@ -1,9 +1,8 @@
 import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardState, DashboardStats, Transaction } from "@/types";
-import { Stats } from "fs";
 import { useMemo } from "react";
-import { isAfter } from "date-fns"; // Add this import
+import { isAfter } from "date-fns";
 
 export function useDashboard(collections = [], contributions = [], userId) {
   // Ensure collections and contributions are always arrays
@@ -65,19 +64,19 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       const { count: totalCollections } = await supabase
         .from("collections")
         .select("*", { count: "exact", head: true })
-        .eq("organizer_id", userId);
+        .eq("user_id", userId);
 
       const { count: activeCollections } = await supabase
         .from("collections")
         .select("*", { count: "exact", head: true })
-        .eq("organizer_id", userId)
+        .eq("user_id", userId)
         .eq("status", "active");
 
       // Get user's collections to calculate contributions
       const { data: collections } = await supabase
         .from("collections")
         .select("id")
-        .eq("organizer_id", userId);
+        .eq("user_id", userId);
 
       let totalContributions = 0;
       let totalAmount = 0;
@@ -128,7 +127,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       const { data: collections } = await supabase
         .from("collections")
         .select("id, title")
-        .eq("organizer_id", userId);
+        .eq("user_id", userId);
 
       if (!collections || collections.length === 0) {
         set({ recentPayments: [], isLoading: false });

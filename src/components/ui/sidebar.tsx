@@ -277,8 +277,21 @@ const SidebarTrigger = React.forwardRef<
       {...props}
     >
       {/* <PanelLeft /> */}
-      <svg class="w-[42px] h-[42px] text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="42" height="42" fill="none" viewBox="0 0 24 24">
-        <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M5 7h14M5 12h14M5 17h14" />
+      <svg
+        className="h-[42px] w-[42px] text-gray-800 dark:text-white"
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+        width="42"
+        height="42"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="2"
+          d="M5 7h14M5 12h14M5 17h14"
+        />
       </svg>
 
 

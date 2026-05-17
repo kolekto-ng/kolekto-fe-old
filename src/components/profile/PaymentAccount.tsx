@@ -72,14 +72,20 @@ export default function PaymentAccounts() {
         }
     };
 
-    const saveAccount = () => {
-        axiosInstance.post("/settings/profile/save-account", {
-            bankCode,
-            accountNumber,
-            accountName,
-            bankName,
-        });
-        setOpen(false);
+    const saveAccount = async () => {
+        try {
+            await axiosInstance.post("/settings/profile/save-account", {
+                bankCode,
+                accountNumber,
+                accountName,
+                bankName,
+            });
+            await getPayoutAccounts();
+            setOpen(false);
+        } catch (error) {
+            console.error("Save account error:", error);
+            alert("Unable to save bank account. Please try again.");
+        }
     };
 
     return (

@@ -18,7 +18,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const { data: collections } = await supabase
         .from('collections')
         .select('id, title')
-        .eq('organizer_id', userId);
+        .eq('user_id', userId);
 
       if (!collections || collections.length === 0) {
         set({ transactions: [], isLoading: false });
@@ -107,7 +107,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const { data: collections } = await supabase
         .from('collections')
         .select('id, amount')
-        .eq('organizer_id', userId);
+        .eq('user_id', userId);
 
       if (!collections || collections.length === 0) {
         const summary = {

@@ -89,7 +89,7 @@ const HowItWorks = () => {
                     <div
                         key={step.id}
                         style={{ backgroundColor: step.backgroundColor }}
-                        className="flex flex-col justify-between items-start  px-6 py-4 rounded-xl min-w-[400px] w-full max-w-[700px] text-left"
+                        className="flex flex-col justify-between items-start px-6 py-4 rounded-xl min-w-0 sm:min-w-[400px] w-full max-w-[700px] text-left"
                     >
                         <div>
                             <div style={{ backgroundColor: step.color }} className={`w-10 h-10 flex items-center justify-center rounded-full text-black font-bold text-lg`}>

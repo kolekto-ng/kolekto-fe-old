@@ -455,6 +455,9 @@ serve(async (req: Request) => {
       });
     }
 
+    // F4: payment-lifecycle correlation log — every line below uses this prefix.
+    console.log(`[verify ref=${reference}] VERIFY_CALLED`);
+
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
     if (!paystackSecretKey) {
       return new Response(JSON.stringify({ error: "Payment service not configured" }), {
@@ -469,12 +472,20 @@ serve(async (req: Request) => {
 
     const data = await response.json();
     if (!response.ok || !data.status) {
+      // F4: Paystack verify rejected the reference
+      console.warn(
+        `[verify ref=${reference}] VERIFY_PAYSTACK_FAILED status=${response.status} message=${data?.message || ""}`
+      );
       return new Response(JSON.stringify({ error: data.message || "Payment verification failed" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const transaction = data.data;
+    // F4: Paystack confirmed
+    console.log(
+      `[verify ref=${reference}] VERIFY_PAYSTACK_OK status=${transaction?.status} amount=${transaction?.amount} channel=${transaction?.channel || ""}`
+    );
     const customer =
       transaction.customer && typeof transaction.customer === "object"
         ? (transaction.customer as Record<string, unknown>)
@@ -527,6 +538,10 @@ serve(async (req: Request) => {
 
       if ((existingContributions || []).length > 0) {
         processedContributions = existingContributions || [];
+        // F4: idempotent return — already-recorded payment, no inserts needed
+        console.log(
+          `[verify ref=${reference}] VERIFY_IDEMPOTENT_HIT existing=${processedContributions.length}`
+        );
       } else {
         const { data: paidRows, error: paidRowsError } = await supabase
           .from("contributions").select("id, amount, contributor_information, contributor_unique_code").eq("collection_id", collectionId).eq("status", "paid");
@@ -607,6 +622,14 @@ serve(async (req: Request) => {
         }
         // Track how many units in the CURRENT batch have used each prefix
         const batchCountByPrefix = new Map<string, number>();
+
+        // F2: bookkeeping for fail-fast + rollback semantics.
+        //   insertedIds  — rows WE inserted this call. Used for rollback if a
+        //                  later unit's insert hits a real error.
+        //   insertErrors — non-duplicate insert errors. Presence triggers
+        //                  rollback + 500 (instead of the old silent `continue`).
+        const insertedIds: string[] = [];
+        const insertErrors: Array<{ index: number; error: unknown }> = [];
 
         for (let index = 0; index < contributionUnits.length; index++) {
           const unit = contributionUnits[index];
@@ -710,6 +733,12 @@ serve(async (req: Request) => {
             payment_reference: String(transaction.reference),
             contributor_unique_code: uniqueCode,
             contributor_information: [infoWithReceipt],
+            // F3: per-unit line index. Combined with (collection_id,
+            // payment_reference) this is unique (enforced by the constraint
+            // added in f3_step2_line_index_constraint.sql). Without this,
+            // two concurrent verify calls for the same reference could each
+            // insert N rows = 2N total rows.
+            line_index: index,
             ...(normalizedPayment.collectionType === "ticket"
               ? { check_in_status: "not_checked_in" }
               : {}),
@@ -719,9 +748,20 @@ serve(async (req: Request) => {
             .from("contributions").insert(contributorPayload).select("*").single();
 
           if (contribError) {
-            // If insert fails with a duplicate-like error (race condition: two verify
-            // calls arrived simultaneously and both passed the idempotency check),
-            // fetch the already-inserted row instead of failing.
+            // F2: classify the error.
+            //
+            // Duplicate (23505 / "duplicate" / "unique") → a concurrent verify
+            // call inserted the rows for this same payment_reference. Fetch
+            // EVERY existing row for this reference (not just [0] — the old
+            // code did that and ended up registering only one row for a
+            // multi-ticket order during a race). Set processedContributions
+            // to the full set and break out of the loop — the concurrent
+            // call has already covered all units.
+            //
+            // Non-duplicate → a real DB / FK / RLS error. Stop the loop and
+            // roll back any rows WE inserted, so the FE/webhook can retry
+            // cleanly. Silently `continue`-ing on these errors is what made
+            // partial-failed inserts hard to detect in production.
             const isDuplicate =
               contribError.code === "23505" || // unique_violation
               String(contribError.message).toLowerCase().includes("duplicate") ||
@@ -733,21 +773,82 @@ serve(async (req: Request) => {
                 .eq("payment_reference", String(transaction.reference))
                 .eq("collection_id", collectionId)
                 .order("created_at", { ascending: true });
-              if (existing && existing.length > 0 && !processedContributions.find(c => c.id === existing[0].id)) {
-                processedContributions.push(existing[0]);
-              }
-            } else {
-              console.error("[verify] ❌ Error recording contribution:", JSON.stringify(contribError));
+              processedContributions = existing || [];
+              console.log(
+                `[verify ref=${reference}] VERIFY_INSERT_RACE_RECOVERED rows=${processedContributions.length}`
+              );
+              break;
             }
-            continue;
+
+            console.error(
+              `[verify ref=${reference}] VERIFY_INSERT_FAILED index=${index}`,
+              {
+                code: contribError.code,
+                message: contribError.message,
+                details: (contribError as any).details,
+                hint: (contribError as any).hint,
+              }
+            );
+            insertErrors.push({ index, error: contribError });
+            break;
           }
+          insertedIds.push(String((contribution as Record<string, unknown>).id));
           processedContributions.push(contribution);
         }
+
+        // F2: if any non-duplicate insert error occurred, roll back the rows
+        // we DID insert this call (don't touch rows inserted by concurrent
+        // callers — they aren't in `insertedIds`). Returning 500 here makes
+        // the FE's PaymentCallback render the "Try Again" screen and makes
+        // the webhook retry. The verify edge function is idempotent so retry
+        // is safe.
+        if (insertErrors.length > 0) {
+          if (insertedIds.length > 0) {
+            console.warn(
+              `[verify ref=${reference}] ROLLING_BACK partial_inserts=${insertedIds.length}`
+            );
+            const { error: rollbackErr } = await supabase
+              .from("contributions")
+              .delete()
+              .in("id", insertedIds);
+            if (rollbackErr) {
+              console.error(
+                `[verify ref=${reference}] ROLLBACK_FAILED — partial data may remain`,
+                rollbackErr
+              );
+            }
+          }
+          const firstErr = insertErrors[0].error as Record<string, unknown>;
+          console.error(
+            `[verify ref=${reference}] VERIFY_FAILED_AFTER_ROLLBACK code=${String(firstErr.code || "")}`
+          );
+          return new Response(
+            JSON.stringify({
+              error:
+                "Failed to record contribution. The payment is recorded on Paystack — please retry; this is safe.",
+              code: String(firstErr.code || "contribution_insert_failed"),
+              details: String(firstErr.message || firstErr),
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
         // Flag as a fresh (non-idempotent) payment so the receipt email is sent below
         isNewPayment = processedContributions.length > 0;
+        // F4: fresh inserts complete
+        console.log(
+          `[verify ref=${reference}] VERIFY_CONTRIBS_INSERTED count=${processedContributions.length}`
+        );
       }
 
       await refreshCollectionAndWallets(supabase, collectionId, collection);
+      // F4: wallet recompute complete (source-of-truth derivation)
+      console.log(
+        `[verify ref=${reference}] WALLET_UPDATED collectionId=${collectionId}`
+      );
 
       // ── Send receipt + organizer email (best-effort, non-blocking) ──────────
       // Primary path: call the backend's /api/payments/send-receipt endpoint
@@ -823,7 +924,9 @@ serve(async (req: Request) => {
                   console.warn("[verify] resend fallback also failed:", (e as Error)?.message)
                 );
               }
-              console.log("[verify] ✅ Backend email sent successfully");
+              console.log(
+                `[verify ref=${reference}] RECEIPT_EMAIL_SENT channel=backend`
+              );
             }).catch((err: unknown) => {
               console.warn("[verify] backend email fetch error, trying Resend:", (err as Error)?.message);
               // Fallback to Resend on network error
@@ -871,6 +974,11 @@ serve(async (req: Request) => {
       transaction, normalizedPayment, collection, contributions: processedContributions, customer,
     });
 
+    // F4: final lifecycle checkpoint — clean filterable end-of-flow marker
+    console.log(
+      `[verify ref=${reference}] PAYMENT_COMPLETED contributions=${processedContributions.length} fresh=${isNewPayment}`
+    );
+
     return new Response(
       JSON.stringify({
         status: transaction.status,
@@ -888,7 +996,9 @@ serve(async (req: Request) => {
 
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
-    console.error("Server error:", msg);
+    // F4: capture unexpected errors with whatever reference we have in scope.
+    // (Best-effort — if the error fired before we parsed the body, ref is unknown.)
+    console.error(`[verify ref=?] VERIFY_UNHANDLED_ERROR ${msg}`);
     return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

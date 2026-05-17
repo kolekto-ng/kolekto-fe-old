@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import React, { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Shield,
   FileText,
@@ -26,38 +26,43 @@ import { axiosInstance } from '@/utils/axios';
 import { toast } from 'sonner';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const config: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
+  const config: Record<
+    string,
+    { icon: React.ReactNode; label: string; className: string }
+  > = {
     verified: {
       icon: <Check className="w-3 h-3" />,
-      label: 'Approved',
-      className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      label: "Approved",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
     },
     pending: {
       icon: <Clock className="w-3 h-3" />,
-      label: 'Under Review',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
+      label: "Under Review",
+      className: "bg-amber-50 text-amber-700 border-amber-200",
     },
     reviewing: {
       icon: <Clock className="w-3 h-3" />,
-      label: 'Under Review',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
+      label: "Under Review",
+      className: "bg-amber-50 text-amber-700 border-amber-200",
     },
     rejected: {
       icon: <X className="w-3 h-3" />,
-      label: 'Rejected',
-      className: 'bg-red-50 text-red-700 border-red-200',
+      label: "Rejected",
+      className: "bg-red-50 text-red-700 border-red-200",
     },
     notStarted: {
       icon: <AlertCircle className="w-3 h-3" />,
-      label: 'Not Submitted',
-      className: 'bg-gray-50 text-gray-500 border-gray-200',
+      label: "Not Submitted",
+      className: "bg-gray-50 text-gray-500 border-gray-200",
     },
   };
 
   const statusConfig = config[status] || config.notStarted;
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.className}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.className}`}
+    >
       {statusConfig.icon}
       {statusConfig.label}
     </span>
@@ -70,7 +75,7 @@ const KYCSection: React.FC = () => {
  
   const [showIdentityUpload, setShowIdentityUpload] = useState(false);
   const [showAddressUpload, setShowAddressUpload] = useState(false);
-  const [ninInput, setNinInput] = useState('');
+  const [ninInput, setNinInput] = useState("");
   const [ninSaving, setNinSaving] = useState(false);
   const [ninSaved, setNinSaved] = useState(false);
 
@@ -84,32 +89,36 @@ const KYCSection: React.FC = () => {
     if (ninInput.length !== 11) return;
     setNinSaving(true);
     try {
-      await axiosInstance.post('/settings/kyc/save-nin', { nin: ninInput });
+      await axiosInstance.post("/settings/kyc/save-nin", {
+        nin: ninInput,
+      });
       setNinSaved(true);
-      setNinInput('');
-      toast.success('NIN submitted successfully — pending admin review');
+      setNinInput("");
+      toast.success("NIN submitted successfully — pending admin review");
     } catch (err: any) {
-      console.error('Failed to save NIN:', err);
+      console.error("Failed to save NIN:", err);
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
         err?.message ||
-        'Failed to save NIN. Please try again.';
+        "Failed to save NIN. Please try again.";
       toast.error(msg);
     } finally {
       setNinSaving(false);
     }
   };
 
-  const identityStatus = kycData?.identityVerification?.status || 'notStarted';
-  const addressStatus = kycData?.addressVerification?.status || 'notStarted';
+  const identityStatus = kycData?.identityVerification?.status || "notStarted";
+  const addressStatus = kycData?.addressVerification?.status || "notStarted";
   const identityDocs = kycData?.identityVerification?.documents || [];
   const addressDocs = kycData?.addressVerification?.documents || [];
 
-  // Calculate overall completeness
-  const identityComplete = identityStatus === 'verified';
-  const addressComplete = addressStatus === 'verified';
-  const overallProgress = [identityComplete, addressComplete].filter(Boolean).length;
+  // "Progress" should reflect what the user has actually submitted,
+  // not only what has been approved by an admin.
+  const identitySubmitted = identityStatus !== "notStarted";
+  const addressSubmitted = addressStatus !== "notStarted";
+  const submittedSteps = [identitySubmitted, addressSubmitted].filter(Boolean)
+    .length;
   const totalSteps = 2;
 
   const handleRefresh = () => {
@@ -134,7 +143,10 @@ const KYCSection: React.FC = () => {
               <Shield className="w-4 h-4 text-[#1B5E20]" />
               Verification Progress
             </CardTitle>
-            <button onClick={handleRefresh} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <button
+              onClick={handleRefresh}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -144,29 +156,42 @@ const KYCSection: React.FC = () => {
             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-[#1B5E20] to-[#2E7D32] rounded-full transition-all duration-500"
-                style={{ width: `${(overallProgress / totalSteps) * 100}%` }}
+                style={{ width: `${(submittedSteps / totalSteps) * 100}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-gray-900">{overallProgress}/{totalSteps}</span>
+            <span className="text-sm font-semibold text-gray-900">
+              {submittedSteps}/{totalSteps}
+            </span>
           </div>
 
-          {overallProgress === totalSteps ? (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-              <Check className="w-5 h-5 text-emerald-600" />
-              <div>
-                <p className="text-sm font-medium text-emerald-800">All Verifications Complete</p>
-                <p className="text-xs text-emerald-600">Your identity has been fully verified.</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <div className="flex items-center gap-2">
+                {identitySubmitted ? (
+                  <Check className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                )}
+                <p className="text-sm font-medium text-gray-900">
+                  Identity Verification
+                </p>
               </div>
+              <StatusBadge status={identityStatus} />
             </div>
-          ) : (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100">
-              <AlertCircle className="w-5 h-5 text-amber-600" />
-              <div>
-                <p className="text-sm font-medium text-amber-800">Verification Incomplete</p>
-                <p className="text-xs text-amber-600">Complete all verification steps to unlock full platform features.</p>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <div className="flex items-center gap-2">
+                {addressSubmitted ? (
+                  <Check className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                )}
+                <p className="text-sm font-medium text-gray-900">
+                  Address Verification
+                </p>
               </div>
+              <StatusBadge status={addressStatus} />
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
@@ -193,7 +218,8 @@ const KYCSection: React.FC = () => {
             </Label>
             {ninSaved ? (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-sm text-emerald-700">
-                <Check className="w-4 h-4" /> NIN submitted successfully — pending admin review
+                <Check className="w-4 h-4" /> NIN submitted successfully —
+                pending admin review
               </div>
             ) : (
               <>
@@ -201,7 +227,9 @@ const KYCSection: React.FC = () => {
                   <Input
                     value={ninInput}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      const val = e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 11);
                       setNinInput(val);
                     }}
                     placeholder="Enter your 11-digit NIN"
@@ -214,10 +242,16 @@ const KYCSection: React.FC = () => {
                     className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white shrink-0"
                     size="sm"
                   >
-                    {ninSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
+                    {ninSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Submit"
+                    )}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400">Dial *346# on your registered phone to retrieve your NIN</p>
+                <p className="text-xs text-gray-400">
+                  Dial *346# on your registered phone to retrieve your NIN
+                </p>
               </>
             )}
           </div>
@@ -233,10 +267,16 @@ const KYCSection: React.FC = () => {
                       <FileText className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{doc.type?.replace(/_/g, ' ')}</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">
+                        {doc.type?.replace(/_/g, " ")}
+                      </p>
                       <p className="text-xs text-gray-400">
-                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-NG') : ''}
-                        {doc.files?.length ? ` • ${doc.files.length} file(s)` : ''}
+                        {doc.uploadedAt
+                          ? new Date(doc.uploadedAt).toLocaleDateString("en-NG")
+                          : ""}
+                        {doc.files?.length
+                          ? ` • ${doc.files.length} file(s)`
+                          : ""}
                       </p>
                     </div>
                   </div>
@@ -247,7 +287,9 @@ const KYCSection: React.FC = () => {
               {/* Rejection reason */}
               {identityDocs[0]?.status === 'rejected' && identityDocs[0]?.rejectionReason && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                  <p className="text-xs font-medium text-red-700 mb-1">Rejection Reason:</p>
+                  <p className="text-xs font-medium text-red-700 mb-1">
+                    Rejection Reason:
+                  </p>
                   <p className="text-xs text-red-600">
                     {identityDocs[0].rejectionReason}
                   </p>
@@ -259,18 +301,23 @@ const KYCSection: React.FC = () => {
           <Button
             onClick={() => setShowIdentityUpload(true)}
             variant="outline"
+            disabled={identityStatus === 'pending' || identityStatus === 'reviewing'}
             className="w-full border-dashed border-gray-300 text-gray-600 hover:border-[#1B5E20] hover:text-[#1B5E20] hover:bg-[#E8F5E9]/30 h-11"
           >
             <Upload className="w-4 h-4 mr-2" />
-            {identityDocs.length > 0 && identityDocs.some((d: any) => d.status === 'rejected')
-              ? 'Re-upload Identity Document'
+            {identityDocs.length > 0 &&
+            identityDocs.some((d: any) => d.status === "rejected")
+              ? "Re-upload Identity Document"
               : identityDocs.length > 0
-              ? 'Upload Additional Document'
-              : 'Upload Identity Document'}
+                ? "Upload Additional Document"
+                : "Upload Identity Document"}
           </Button>
 
           <div className="text-xs text-gray-400 space-y-0.5">
-            <p>Accepted documents: NIN Slip, National ID Card, International Passport, Driver's License, Voter's Card</p>
+            <p>
+              Accepted documents: NIN Slip, National ID Card, International
+              Passport, Driver's License, Voter's Card
+            </p>
             <p>Supported formats: JPG, PNG, PDF (max 5MB)</p>
           </div>
         </CardContent>
@@ -289,7 +336,8 @@ const KYCSection: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-500">
-            Upload a valid proof of address document to verify your residential address.
+            Upload a valid proof of address document to verify your residential
+            address.
           </p>
 
           {/* Uploaded Documents */}
@@ -303,10 +351,16 @@ const KYCSection: React.FC = () => {
                       <FileText className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{doc.type?.replace(/_/g, ' ')}</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">
+                        {doc.type?.replace(/_/g, " ")}
+                      </p>
                       <p className="text-xs text-gray-400">
-                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-NG') : ''}
-                        {doc.files?.length ? ` • ${doc.files.length} file(s)` : ''}
+                        {doc.uploadedAt
+                          ? new Date(doc.uploadedAt).toLocaleDateString("en-NG")
+                          : ""}
+                        {doc.files?.length
+                          ? ` • ${doc.files.length} file(s)`
+                          : ""}
                       </p>
                     </div>
                   </div>
@@ -317,7 +371,9 @@ const KYCSection: React.FC = () => {
               {/* Rejection reason */}
               {addressDocs[0]?.status === 'rejected' && addressDocs[0]?.rejectionReason && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                  <p className="text-xs font-medium text-red-700 mb-1">Rejection Reason:</p>
+                  <p className="text-xs font-medium text-red-700 mb-1">
+                    Rejection Reason:
+                  </p>
                   <p className="text-xs text-red-600">
                     {addressDocs[0].rejectionReason}
                   </p>
@@ -329,18 +385,23 @@ const KYCSection: React.FC = () => {
           <Button
             onClick={() => setShowAddressUpload(true)}
             variant="outline"
+            disabled={addressStatus === 'pending' || addressStatus === 'reviewing'}
             className="w-full border-dashed border-gray-300 text-gray-600 hover:border-[#1B5E20] hover:text-[#1B5E20] hover:bg-[#E8F5E9]/30 h-11"
           >
             <Upload className="w-4 h-4 mr-2" />
-            {addressDocs.length > 0 && addressDocs.some((d: any) => d.status === 'rejected')
-              ? 'Re-upload Address Document'
+            {addressDocs.length > 0 &&
+            addressDocs.some((d: any) => d.status === "rejected")
+              ? "Re-upload Address Document"
               : addressDocs.length > 0
-              ? 'Upload Additional Document'
-              : 'Upload Proof of Address'}
+                ? "Upload Additional Document"
+                : "Upload Proof of Address"}
           </Button>
 
           <div className="text-xs text-gray-400 space-y-0.5">
-            <p>Accepted documents: Utility Bill, Bank Statement, Tenancy Agreement, Government Letter</p>
+            <p>
+              Accepted documents: Utility Bill, Bank Statement, Tenancy
+              Agreement, Government Letter
+            </p>
             <p>Documents must be dated within the last 3 months</p>
           </div>
         </CardContent>
@@ -355,7 +416,7 @@ const KYCSection: React.FC = () => {
           handleRefresh();
         }}
         type="identity"
-        userId={user?.id || ''}
+        userId={user?.id || ""}
       />
       <DocumentUploadForm
         open={showAddressUpload}
@@ -365,7 +426,7 @@ const KYCSection: React.FC = () => {
           handleRefresh();
         }}
         type="address"
-        userId={user?.id || ''}
+        userId={user?.id || ""}
       />
     </div>
   );

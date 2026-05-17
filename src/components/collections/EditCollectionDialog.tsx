@@ -25,6 +25,7 @@ interface ContributionField {
   type: 'text' | 'email' | 'phone' | 'number' | 'textarea' | 'select';
   required: boolean;
   options?: string[];
+  legacy_names?: string[];
 }
 
 interface PriceTier {
@@ -143,6 +144,13 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
   open, onOpenChange, collectionId, initialData, onSuccess,
 }) => {
+  const normalizeContributionFields = (fields: ContributionField[] = []) =>
+    fields.map((field, index) => ({
+      ...field,
+      id: field.id || `field-${index + 1}-${Date.now()}`,
+      legacy_names: Array.isArray(field.legacy_names) ? field.legacy_names : [],
+    }));
+
   const [title, setTitle] = useState(initialData.title || '');
   const [description, setDescription] = useState(initialData.description || '');
   const [ticketAmount, setTicketAmount] = useState<number>(Number(initialData.amount || 0));
@@ -153,7 +161,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
     initialData.max_contributions || undefined
   );
   const [contributionFields, setContributionFields] = useState<ContributionField[]>(
-    initialData.contributions_fields || []
+    normalizeContributionFields(initialData.contributions_fields || [])
   );
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>(initialData.price_tiers || []);
 
@@ -188,7 +196,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
     setTicketAmount(Number(initialData.amount || 0));
     setDeadline(initialData.deadline ? new Date(initialData.deadline) : undefined);
     setMaxContributions(initialData.max_contributions || undefined);
-    setContributionFields(initialData.contributions_fields || []);
+    setContributionFields(normalizeContributionFields(initialData.contributions_fields || []));
     setPriceTiers(initialData.price_tiers || []);
     setBannerUrl(initialData.banner_image || '');
     setBannerFile(null);
@@ -218,11 +226,37 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 
   // ── Form field helpers ───────────────────────────────────────────────────────
   const addContributionField = () => {
-    setContributionFields(f => [...f, { id: Date.now().toString(), name: '', type: 'text', required: false }]);
+    setContributionFields(f => [
+      ...f,
+      { id: Date.now().toString(), name: '', type: 'text', required: false, legacy_names: [] },
+    ]);
   };
 
   const updateField = (id: string, updates: Partial<ContributionField>) => {
-    setContributionFields(f => f.map(field => field.id === id ? { ...field, ...updates } : field));
+    setContributionFields((fields) =>
+      fields.map((field) => {
+        if (field.id !== id) return field;
+
+        const nextName = typeof updates.name === 'string' ? updates.name.trim() : field.name.trim();
+        const currentName = String(field.name || '').trim();
+        const legacyNames = new Set(field.legacy_names || []);
+
+        if (
+          typeof updates.name === 'string' &&
+          currentName &&
+          nextName &&
+          currentName !== nextName
+        ) {
+          legacyNames.add(currentName);
+        }
+
+        return {
+          ...field,
+          ...updates,
+          legacy_names: Array.from(legacyNames),
+        };
+      })
+    );
   };
 
   const removeField = (id: string) => {
@@ -402,7 +436,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
         )}
 
         <Tabs defaultValue="basic">
-          <TabsList className={`grid w-full grid-cols-${tabs.length}`}>
+          <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
             {tabs.map(t => <TabsTrigger key={t} value={t}>{tabLabels[t]}</TabsTrigger>)}
           </TabsList>
 
@@ -536,7 +570,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
 
                 {/* Image grid — existing + pending */}
                 {(storyImageUrls.length > 0 || pendingStoryFiles.length > 0) && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {storyImageUrls.map((src, i) => (
                       <div key={`existing-${i}`} className="relative aspect-square">
                         <img src={src} alt={`Story image ${i + 1}`} className="w-full h-full object-cover rounded-lg border" onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.parentElement!.style.display = 'none'; }} />
