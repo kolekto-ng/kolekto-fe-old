@@ -30,10 +30,6 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  // Persistent inline error message so the user can read what went wrong
-  // even after the toast disappears. Cleared whenever they pick new files
-  // or hit Upload again.
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Camera state
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -144,61 +140,19 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       { value: 'government_letter', label: 'Government Issued Letter' }
     ];
 
-  // File selection: validate each picked file IMMEDIATELY so the user sees
-  // "this file is too big" before they kick off a long upload that the
-  // server would just reject anyway.
+  // File selection
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = Array.from(e.target.files || []);
-    if (picked.length === 0) return;
-
-    const rejected: string[] = [];
-    const accepted: File[] = [];
-    for (const f of picked) {
-      const v = validateFile(f);
-      if (v.ok) accepted.push(f);
-      else if (v.reason) rejected.push(v.reason);
-    }
-
-    setUploadedFiles((prev) => {
-      const combined = [...prev, ...accepted];
-      // Enforce the 5-file cap so the user knows BEFORE submitting.
-      if (combined.length > MAX_FILES_PER_UPLOAD) {
-        rejected.push(
-          `Maximum ${MAX_FILES_PER_UPLOAD} files per upload — the rest were skipped.`
-        );
-        return combined.slice(0, MAX_FILES_PER_UPLOAD);
-      }
-      return combined;
-    });
-
-    if (rejected.length > 0) {
-      const message = rejected.join(" ");
-      setUploadError(message);
-      toast({
-        title: "Some files were rejected",
-        description: message,
-        variant: "destructive",
-      });
-    } else {
-      setUploadError(null);
-    }
-
-    // Reset the input so the same file can be re-picked after removal.
-    if (e.target) e.target.value = "";
-  }, [toast]);
+    const files = Array.from(e.target.files || []);
+    setUploadedFiles(prev => [...prev, ...files]);
+  }, []);
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-    setUploadError(null);
   };
 
   // Upload handler
   const handleUpload = async () => {
-    setUploadError(null);
-
     if (!documentType || uploadedFiles.length === 0) {
-      const msg = "Please select a document type and add at least one file.";
-      setUploadError(msg);
       toast({
         title: "Missing Information",
         description: "Please upload the required documents.",
@@ -216,32 +170,15 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       return;
     }
 
-    // Defence-in-depth: re-validate every file right before the request,
-    // in case state was somehow corrupted.
-    for (const f of uploadedFiles) {
-      const v = validateFile(f);
-      if (!v.ok && v.reason) {
-        setUploadError(v.reason);
-        toast({
-          title: "File rejected",
-          description: v.reason,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-      // Prepare form data for upload
       const formData = new FormData();
       formData.append("userId", userId);
-      formData.append("documentType", type); // "identity" or "address"
+      formData.append("documentType", type);
       formData.append("verificationType", documentType);
       
-      // Append selfie if identity
       if (type === 'identity' && selfieFile) {
         formData.append("files", selfieFile);
       }
@@ -270,36 +207,11 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
         }, 500);
       }
     } catch (error: any) {
-      console.error("KYC upload error:", error);
-
-      // Translate backend error codes into clear, actionable messages.
-      // Backend (routes/settings/kyc.js) returns:
-      //   413 + code: "FILE_TOO_LARGE"
-      //   415 + code: "UNSUPPORTED_MIME"
-      //   400 + code: "TOO_MANY_FILES"
-      const status = error?.response?.status;
-      const code = error?.response?.data?.code;
-      const backendMessage =
-        error?.response?.data?.error ||
-        error?.response?.data?.message;
-
-      let userMessage = backendMessage || "Upload failed. Please try again.";
-      if (code === "FILE_TOO_LARGE" || status === 413) {
-        userMessage = `Each file must be ${MAX_FILE_SIZE_LABEL} or smaller. Please choose a smaller file or compress the image.`;
-      } else if (code === "UNSUPPORTED_MIME" || status === 415) {
-        userMessage = `That file type is not allowed. Use ${ALLOWED_MIME_LABEL}.`;
-      } else if (code === "TOO_MANY_FILES") {
-        userMessage = `You can upload at most ${MAX_FILES_PER_UPLOAD} files per request.`;
-      } else if (!status) {
-        userMessage =
-          "We could not reach the server. Check your internet connection and try again.";
-      }
-
-      setUploadError(userMessage);
+      console.error(error);
       toast({
         title: "Upload Failed",
-        description: userMessage,
-        variant: "destructive",
+        description: error.message || "Something went wrong",
+        variant: "destructive"
       });
       setIsUploading(false);
     }

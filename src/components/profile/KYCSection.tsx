@@ -301,6 +301,7 @@ const KYCSection: React.FC = () => {
           <Button
             onClick={() => setShowIdentityUpload(true)}
             variant="outline"
+            disabled={identityStatus === 'pending' || identityStatus === 'reviewing'}
             className="w-full border-dashed border-gray-300 text-gray-600 hover:border-[#1B5E20] hover:text-[#1B5E20] hover:bg-[#E8F5E9]/30 h-11"
           >
             <Upload className="w-4 h-4 mr-2" />
@@ -384,6 +385,7 @@ const KYCSection: React.FC = () => {
           <Button
             onClick={() => setShowAddressUpload(true)}
             variant="outline"
+            disabled={addressStatus === 'pending' || addressStatus === 'reviewing'}
             className="w-full border-dashed border-gray-300 text-gray-600 hover:border-[#1B5E20] hover:text-[#1B5E20] hover:bg-[#E8F5E9]/30 h-11"
           >
             <Upload className="w-4 h-4 mr-2" />
