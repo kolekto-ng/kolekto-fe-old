@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import { axiosInstance } from "../utils/axios";
+import { axiosInstance } from "@/utils/axios";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -168,33 +168,24 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   requestPasswordOTP: async () => {
     set({ passwordStep: "requesting", passwordError: null });
     try {
-      const sessionStr = localStorage.getItem("kolekto-auth-token");
-      if (!sessionStr) throw new Error("Not authenticated");
-      const session = JSON.parse(sessionStr);
-      const token = session.access_token;
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ action: "request-otp" }),
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to send OTP");
-
+      const res = await axiosInstance.post("/settings/security/request-password-otp");
+      const email = res.data?.email;
       set({
         passwordStep: "otp-sent",
-        otpEmail: result.email,
+        otpEmail: email || null,
         passwordError: null,
       });
       toast.success("OTP sent to your email");
       return true;
     } catch (error: any) {
-      set({ passwordStep: "error", passwordError: error.message });
-      toast.error(error.message || "Failed to send OTP");
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to send OTP";
+      set({ passwordStep: "error", passwordError: msg });
+      toast.error(msg);
       return false;
     }
   },
@@ -202,34 +193,41 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   verifyOTPAndChangePassword: async (otp: string, newPassword: string, confirmPassword: string) => {
     set({ passwordStep: "verifying", passwordError: null });
     try {
-      const sessionStr = localStorage.getItem("kolekto-auth-token");
-      if (!sessionStr) throw new Error("Not authenticated");
-      const session = JSON.parse(sessionStr);
-      const token = session.access_token;
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          action: "verify-and-change",
-          otp,
-          new_password: newPassword,
-          confirm_password: confirmPassword,
-        }),
+      const res = await axiosInstance.post("/settings/security/verify-password-otp", {
+        otp,
+        newPassword,
+        confirmPassword,
       });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Failed to change password");
 
       set({ passwordStep: "success", passwordError: null });
       toast.success("Password changed successfully!");
+
+      // Supabase invalidates active sessions when a password changes.
+      // If the backend confirms this, clear local credentials and route the
+      // user to /login proactively instead of leaving them with a token that
+      // 401s on the next request.
+      if (res?.data?.sessionInvalidated) {
+        try {
+          localStorage.removeItem("kolekto-auth-token");
+        } catch {
+          /* storage may be unavailable; ignore */
+        }
+        // Give the success state a beat so the user sees the confirmation.
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 1200);
+      }
+
       return true;
     } catch (error: any) {
-      set({ passwordStep: "error", passwordError: error.message });
-      toast.error(error.message || "Failed to change password");
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to change password";
+      set({ passwordStep: "error", passwordError: msg });
+      toast.error(msg);
       return false;
     }
   },

@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FUNDRAISING_CATEGORIES } from "@/constants/fundraising";
-import { supabase } from "@/integrations/supabase/client";
+import { getActiveFundraisingCampaigns } from "@/utils/fundraisingCampaigns";
 
 interface ActiveCampaign extends ActiveCampaignCardData {
   keywords?: string[] | null;
@@ -93,22 +93,7 @@ const ActiveCampaignsPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke(
-        "get-all-fundraising-campaigns",
-        {
-          body: {
-            status: "active",
-            onlyLive: true,
-            lightweight: true,
-          },
-        }
-      );
-
-      if (invokeError) {
-        throw new Error(invokeError.message);
-      }
-
-      const rows = Array.isArray(data?.data) ? data.data : [];
+      const rows = await getActiveFundraisingCampaigns();
       writeCampaignsCache(rows);
       setCampaigns(rows.filter(isCampaignCurrentlyActive));
     } catch (err: any) {
@@ -169,9 +154,7 @@ const ActiveCampaignsPage: React.FC = () => {
     event: React.MouseEvent<HTMLButtonElement>
   ) => {
     event.stopPropagation();
-
     const shareUrl = `${window.location.origin}${getCampaignLink(campaign)}`;
-
     try {
       if (navigator.share) {
         await navigator.share({
@@ -190,8 +173,7 @@ const ActiveCampaignsPage: React.FC = () => {
         toast.error("Unable to share this campaign right now.");
       }
     }
-  };
-
+  }
   const clearFilters = () => {
     setSearchTerm("");
     setCategoryFilter("all");

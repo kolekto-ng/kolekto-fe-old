@@ -117,7 +117,7 @@ const customApiCall = async (data: any) => {
 
 ```bash
 # Development
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=http://localhost:5050/api
 
 # Production
 VITE_API_URL=https://api.kolekto.com.ng/api
@@ -304,4 +304,3 @@ This will log authentication events to the console.
 - `transactionAPI.*` - Transaction-related API calls
 - `userAPI.*` - User profile API calls
 - `withdrawalAPI.*` - Withdrawal-related API calls
-

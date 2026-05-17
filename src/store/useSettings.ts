@@ -1,5 +1,4 @@
 import { axiosInstance } from "@/utils/axios";
-import { profile } from "console";
 import { create } from "zustand";
 
 // {
@@ -33,14 +32,14 @@ export const useSettings = create((set, get) => ({
 
   verifyAccount: async ({ accountNumber, bankCode }) => {
     set({ loading: true });
-
-    const res = await axiosInstance.post("/settings/profile/verify-account", {
-      account_number: accountNumber,
-      bank_code: bankCode,
-    });
-    set({ loading: false });
-
-    return res;
+    try {
+      return await axiosInstance.post("/settings/profile/verify-account", {
+        account_number: accountNumber,
+        bank_code: bankCode,
+      });
+    } finally {
+      set({ loading: false });
+    }
   },
 
   getPayoutAccounts: async () => {

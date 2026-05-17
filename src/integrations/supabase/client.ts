@@ -5,6 +5,52 @@ import type { Database } from "./types";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// B-16: dedicated localStorage key for the Supabase client.
+//
+// Background: the Supabase client was sharing the key `kolekto-auth-token`
+// with our Zustand auth store. Both wrote to the same key with slightly
+// different session shapes, which caused intermittent ghost-logouts:
+// the Supabase client would parse the Zustand-written value as invalid,
+// fire `SIGNED_OUT`, AuthContext's listener would auto-navigate the user
+// to /login mid-session.
+//
+// We now give the Supabase client its own key. The Zustand store stays as
+// the source of truth for axios calls; useAuthStore separately calls
+// `supabase.auth.setSession` / `supabase.auth.signOut` so the Supabase
+// client mirrors the session for direct supabase.from(...) queries.
+const SUPABASE_STORAGE_KEY = "kolekto-supabase-session";
+
+// One-time migration shim for users who already have a session at the OLD
+// key. Without this, deploying the new client would silently log every
+// existing user out (Supabase reads new key → empty → null session).
+// Runs at module load; safe to no-op on any failure.
+function migrateLegacyAuthStorage() {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    const newKey = SUPABASE_STORAGE_KEY;
+    const oldKey = "kolekto-auth-token";
+    if (localStorage.getItem(newKey)) return; // already migrated or fresh
+    const oldVal = localStorage.getItem(oldKey);
+    if (!oldVal) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(oldVal);
+    } catch {
+      return; // not JSON — ignore
+    }
+    // Only migrate if it has the shape of a valid Supabase session.
+    // Both Zustand-written sessions (from the backend's signIn response)
+    // and supabase-js's own format have access_token + refresh_token.
+    if (parsed && parsed.access_token && parsed.refresh_token) {
+      localStorage.setItem(newKey, oldVal);
+    }
+  } catch {
+    // Defensive — if anything throws (private browsing, quota, etc.)
+    // just skip migration. Worst case the user re-logs in once.
+  }
+}
+migrateLegacyAuthStorage();
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 export const supabase = createClient<Database>(
@@ -14,7 +60,7 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: false,
-      storageKey: "kolekto-auth-token",
+      storageKey: SUPABASE_STORAGE_KEY,
     },
   }
 );
