@@ -174,13 +174,11 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
     setUploadProgress(0);
 
     try {
-      // Prepare form data for upload
       const formData = new FormData();
       formData.append("userId", userId);
-      formData.append("documentType", type); // "identity" or "address"
+      formData.append("documentType", type);
       formData.append("verificationType", documentType);
       
-      // Append selfie if identity
       if (type === 'identity' && selfieFile) {
         formData.append("files", selfieFile);
       }
