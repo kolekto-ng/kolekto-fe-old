@@ -112,12 +112,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         axiosInstance.get(`/settings/kyc/${userId}`),
         supabase
           .from("kyc_verifications")
-          .select("status, nin_verified, identity_verified, address_verified")
+          .select("status, nin_verified, identity_verified, address_verified, selfie_verified")
           .eq("user_id", userId)
           .maybeSingle(),
       ]);
 
       const documents = res.data?.documents || [];
+
       const identityDocs = documents
         .filter((doc: any) => doc.document_type === "identity")
         .map((doc: any) => ({
@@ -146,6 +147,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           ...res.data?.kycData,
           overallStatus: kycVerification?.status || "not_started",
           ninVerified: kycVerification?.nin_verified || false,
+
           identityVerification: {
             status: identityDocs.length > 0 ? identityDocs[0].status : "notStarted",
             documents: identityDocs,

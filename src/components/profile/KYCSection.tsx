@@ -17,12 +17,13 @@ import {
   CreditCard,
   MapPin,
   RefreshCw,
-} from "lucide-react";
-import { useAuthStore } from "@/store";
-import { useProfileStore } from "@/store/useProfileStore";
-import { DocumentUploadForm } from "./forms/DocumentUploadForm";
-import { axiosInstance } from "@/utils/axios";
-import { toast } from "sonner";
+  Camera,
+} from 'lucide-react';
+import { useAuthStore } from '@/store';
+import { useProfileStore } from '@/store/useProfileStore';
+import { DocumentUploadForm } from './forms/DocumentUploadForm';
+import { axiosInstance } from '@/utils/axios';
+import { toast } from 'sonner';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<
@@ -71,7 +72,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 const KYCSection: React.FC = () => {
   const { user } = useAuthStore() as any;
   const { kycData, kycLoading, fetchKYCStatus } = useProfileStore();
-
+ 
   const [showIdentityUpload, setShowIdentityUpload] = useState(false);
   const [showAddressUpload, setShowAddressUpload] = useState(false);
   const [ninInput, setNinInput] = useState("");
@@ -207,8 +208,7 @@ const KYCSection: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-500">
-            Verify your identity by providing your NIN and uploading a valid
-            government-issued ID.
+            Verify your identity by providing your NIN, capturing a selfie, and uploading a valid government-issued ID.
           </p>
 
           {/* NIN Input */}
@@ -259,14 +259,9 @@ const KYCSection: React.FC = () => {
           {/* Uploaded Documents */}
           {identityDocs.length > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Uploaded Documents
-              </Label>
-              {identityDocs.map((doc: any, i: number) => (
-                <div
-                  key={doc.id || i}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50"
-                >
+              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded Documents</Label>
+              {identityDocs.slice(0, 1).map((doc: any, i: number) => (
+                <div key={doc.id || i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-gray-600" />
@@ -290,18 +285,13 @@ const KYCSection: React.FC = () => {
               ))}
 
               {/* Rejection reason */}
-              {identityDocs.some(
-                (d: any) => d.status === "rejected" && d.rejectionReason,
-              ) && (
+              {identityDocs[0]?.status === 'rejected' && identityDocs[0]?.rejectionReason && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-100">
                   <p className="text-xs font-medium text-red-700 mb-1">
                     Rejection Reason:
                   </p>
                   <p className="text-xs text-red-600">
-                    {
-                      identityDocs.find((d: any) => d.status === "rejected")
-                        ?.rejectionReason
-                    }
+                    {identityDocs[0].rejectionReason}
                   </p>
                 </div>
               )}
@@ -352,14 +342,9 @@ const KYCSection: React.FC = () => {
           {/* Uploaded Documents */}
           {addressDocs.length > 0 && (
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Uploaded Documents
-              </Label>
-              {addressDocs.map((doc: any, i: number) => (
-                <div
-                  key={doc.id || i}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50"
-                >
+              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded Documents</Label>
+              {addressDocs.slice(0, 1).map((doc: any, i: number) => (
+                <div key={doc.id || i} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-gray-600" />
@@ -383,18 +368,13 @@ const KYCSection: React.FC = () => {
               ))}
 
               {/* Rejection reason */}
-              {addressDocs.some(
-                (d: any) => d.status === "rejected" && d.rejectionReason,
-              ) && (
+              {addressDocs[0]?.status === 'rejected' && addressDocs[0]?.rejectionReason && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-100">
                   <p className="text-xs font-medium text-red-700 mb-1">
                     Rejection Reason:
                   </p>
                   <p className="text-xs text-red-600">
-                    {
-                      addressDocs.find((d: any) => d.status === "rejected")
-                        ?.rejectionReason
-                    }
+                    {addressDocs[0].rejectionReason}
                   </p>
                 </div>
               )}
@@ -425,7 +405,7 @@ const KYCSection: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Document Upload Dialogs */}
+
       <DocumentUploadForm
         open={showIdentityUpload}
         onOpenChange={setShowIdentityUpload}
