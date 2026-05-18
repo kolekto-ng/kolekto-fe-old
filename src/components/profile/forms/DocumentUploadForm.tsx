@@ -5,6 +5,8 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Upload, FileText, CheckCircle, X, Loader2, Camera, RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { axiosInstance } from '@/utils/axios';
 
@@ -26,6 +28,7 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [documentType, setDocumentType] = useState('');
+  const [nin, setNin] = useState('');
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,6 +76,7 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
     if (open) {
       setStep(1);
       setDocumentType('');
+      setNin('');
       setUploadedFiles([]);
       setSelfieFile(null);
       setCapturedImage(null);
@@ -179,8 +183,13 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       formData.append("documentType", type);
       formData.append("verificationType", documentType);
       
-      if (type === 'identity' && selfieFile) {
-        formData.append("files", selfieFile);
+      if (type === 'identity') {
+        if (selfieFile) {
+          formData.append("files", selfieFile);
+        }
+        if (nin) {
+          formData.append("nin", nin);
+        }
       }
       
       // Append ID/address files
@@ -247,8 +256,21 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
               ))}
             </SelectContent>
           </Select>
+          {type === 'identity' && (
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="nin">National Identification Number (NIN)</Label>
+              <Input
+                id="nin"
+                value={nin}
+                onChange={(e) => setNin(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                placeholder="Enter your 11-digit NIN"
+                maxLength={11}
+              />
+              <p className="text-xs text-muted-foreground">Dial *346# on your registered phone to retrieve your NIN</p>
+            </div>
+          )}
           <div className="mt-6 flex justify-end">
-            <Button disabled={!documentType} onClick={() => setStep(2)}>
+            <Button disabled={!documentType || (type === 'identity' && nin.length !== 11)} onClick={() => setStep(2)}>
               Next
             </Button>
           </div>
