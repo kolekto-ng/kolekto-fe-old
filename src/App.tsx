@@ -25,14 +25,12 @@ const TermsPage = lazy(() => import("./pages/TermsPage"));
 const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
-import { AuthProvider } from "./context/AuthContext";
 const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import "aos/dist/aos.css";
 import WhatsAppButton from "./components/WhatsappFloatButton";
-import { supabase } from "./integrations/supabase/client";
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -147,35 +145,21 @@ const App = () => {
       });
   }, []);
 
-  useEffect(() => {
-    const syncSession = (session: any) => {
-      if (session?.access_token && session?.user) {
-        localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
-        useAuthStore.setState({
-          user: session.user,
-          session,
-          isLoading: false,
-          error: null,
-        } as any);
-      }
-    };
-
-    void supabase.auth.getSession().then(({ data }) => {
-      syncSession(data.session);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      syncSession(session);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-
+  // NOTE: this component used to subscribe to supabase.auth.onAuthStateChange
+  // and overwrite `kolekto-auth-token` with the Supabase session shape on
+  // every event. That re-introduced the exact dual-writer bug commit B-16
+  // (src/integrations/supabase/client.ts) tried to eliminate by giving
+  // Supabase its own storage key. Symptoms: random "logged out" mid-session,
+  // ghost SIGNED_OUT events triggering a hard navigate to /login, and the
+  // 401-interceptor wiping the token before useAuthStore noticed.
+  //
+  // Source-of-truth split is now:
+  //   - `kolekto-auth-token`            → useAuthStore (custom backend JWT)
+  //   - `kolekto-supabase-session`      → supabase client (RLS queries)
+  // useAuthStore mirrors into the Supabase client via
+  // `mirrorSetSessionOnSupabase` on signIn/signUp/signOut. No reverse mirror
+  // is needed: nothing else should be invalidating the user's session
+  // out-of-band from a non-user event.
 
   return (
     <TooltipProvider>

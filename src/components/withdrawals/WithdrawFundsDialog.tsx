@@ -11,9 +11,9 @@ import WithdrawForm from './WithdrawForm';
 import { toast } from 'sonner';
 import { useWithdrawalStore } from '@/store';
 import { useAuthStore } from '@/store';
+import { useActivities } from '@/store/useDashboard';
 import { axiosInstance } from '@/utils/axios';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { Loader2, ArrowLeft } from 'lucide-react';
 
 interface WithdrawFundsDialogProps {
@@ -36,6 +36,10 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const { createWithdrawal } = useWithdrawalStore();
   const { user } = useAuthStore();
+  // Refreshing the activities feed immediately after submit makes the new
+  // pending row appear without the user having to navigate. Without this
+  // the user would only see the row on the next page load.
+  const { getActivities } = useActivities() as any;
   const [step, setStep] = useState(collectionId ? 2 : 1);
   const [selectedCollectionId, setSelectedCollectionId] = useState(collectionId);
   const [selectedCollectionTitle, setSelectedCollectionTitle] = useState(collectionTitle);
@@ -62,20 +66,18 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     if (!user) return;
     setLoadingCols(true);
     try {
-      const { data } = await supabase
-        .from('collections')
-        .select('id, title, wallets(available_balance)')
-        .eq('user_id', user.id);
-      
-      if (data) {
-        const withBal = data.filter((c: any) => {
-          const w = Array.isArray(c.wallets) ? c.wallets[0] : c.wallets;
-          return w && Number(w.available_balance) > 0;
-        });
-        setCollections(withBal);
-      }
+      // Single source of truth: the backend refreshes each wallet from
+      // contributions + withdrawals (source-of-truth math) and returns the
+      // strict withdrawable cap (available_balance − sum of pending
+      // withdrawal requests). Reading wallets directly via Supabase would
+      // show a cached/drifted available_balance and let the user attempt
+      // amounts the BE will then reject — the exact mismatch this picker
+      // used to surface as "Insufficient balance" mid-flow.
+      const { data } = await axiosInstance.get('/withdrawals/eligible-collections');
+      setCollections(Array.isArray(data?.collections) ? data.collections : []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load eligible collections:', err);
+      setCollections([]);
     } finally {
       setLoadingCols(false);
     }
@@ -116,8 +118,30 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
         organizer_id: user.id
       });
 
+      // Close the dialog first so the user gets immediate feedback. The
+      // post-submit refreshes run in the background; serialize them via
+      // requestIdleCallback (falling back to setTimeout) so they don't
+      // race the BE's cookie-based token refresh — three parallel calls
+      // on a stale Bearer token could each try to refresh and one would
+      // lose, causing a spurious 401 → logout.
       onOpenChange(false);
       if (onComplete) onComplete();
+
+      const runRefreshes = () => {
+        void (async () => {
+          try {
+            await fetchCollections();
+          } catch (e) { /* non-fatal */ }
+          try {
+            await getActivities?.();
+          } catch (e) { /* non-fatal */ }
+        })();
+      };
+      if (typeof (window as any).requestIdleCallback === 'function') {
+        (window as any).requestIdleCallback(runRefreshes, { timeout: 1500 });
+      } else {
+        setTimeout(runRefreshes, 0);
+      }
     } catch (error: any) {
       // Surface the actual error from the backend instead of a generic
       // "Please try again later" message. createWithdrawal already shows a
@@ -184,21 +208,34 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
           ) : (
             <div className="space-y-2 mt-2 max-h-[300px] overflow-y-auto pr-2">
               {collections.map(c => {
-                 const w = Array.isArray(c.wallets) ? c.wallets[0] : c.wallets;
-                 const bal = Number(w?.available_balance || 0);
+                 // `withdrawable_amount` is the strict cap returned by
+                 // GET /withdrawals/eligible-collections (= refreshed
+                 // available_balance − sum of pending withdrawal requests).
+                 // This is the same number the BE validates against in
+                 // POST /withdrawals/request, so the picker and the
+                 // submitter cannot disagree.
+                 const cap = Number(c.withdrawable_amount || 0);
+                 const pendingBlocked = Number(c.pending_withdrawal_requests || 0);
                  return (
-                   <div 
-                     key={c.id} 
+                   <div
+                     key={c.id}
                      onClick={() => {
                         setSelectedCollectionId(c.id);
                         setSelectedCollectionTitle(c.title);
-                        setSelectedAvailableBalance(bal);
+                        setSelectedAvailableBalance(cap);
                         setStep(2);
                      }}
                      className="p-3 border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 cursor-pointer flex justify-between items-center transition-colors"
                    >
-                     <p className="font-medium text-sm text-gray-900">{c.title}</p>
-                     <p className="font-bold text-green-700">₦{bal.toLocaleString('en-NG')}</p>
+                     <div>
+                       <p className="font-medium text-sm text-gray-900">{c.title}</p>
+                       {pendingBlocked > 0 && (
+                         <p className="text-xs text-gray-500 mt-0.5">
+                           ₦{pendingBlocked.toLocaleString('en-NG')} pending approval
+                         </p>
+                       )}
+                     </div>
+                     <p className="font-bold text-green-700">₦{cap.toLocaleString('en-NG')}</p>
                    </div>
                  );
               })}
