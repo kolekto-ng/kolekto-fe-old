@@ -6,8 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { useCollectionStore, useWithdrawalStore } from '@/store';
+import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
 import { Wallet, TrendingUp, Clock, AlertCircle, CheckCircle, XCircle, Info, Search, X } from 'lucide-react';
+import {
+    isCompletedWithdrawal,
+    isPendingWithdrawal,
+    isRejectedWithdrawal,
+    withdrawalStatusBucket,
+    withdrawalStatusLabel,
+} from '@/utils/withdrawalStatus';
 
 const formatCurrency = (amount: number) =>
     '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 0 });
@@ -41,7 +48,11 @@ interface RecentTransaction {
     collection: string;
     amount: number;
     date: string;
-    status: 'pending' | 'completed' | 'failed';
+    // Bucketed status — `withdrawalStatusBucket()` collapses approved/
+    // completed/successful into `completed`, rejected/declined/failed
+    // /reversed into `rejected`, and pending/processing into `pending`.
+    status: 'pending' | 'completed' | 'rejected' | 'unknown';
+    rawStatus?: string;
     description: string;
 }
 
@@ -54,8 +65,23 @@ const PwaWallet: React.FC = () => {
     const [transactionSearch, setTransactionSearch] = useState('');
     const [transactionStatusFilter, setTransactionStatusFilter] = useState<string>('all');
 
-    const { collections } = useCollectionStore();
-    const { withdrawals } = useWithdrawalStore();
+    const { collections, fetchCollections } = useCollectionStore() as any;
+    const { withdrawals, fetchWithdrawals } = useWithdrawalStore() as any;
+    const { user } = useAuthStore() as any;
+
+    // Bootstrap the page from a cold start: load BOTH collections and
+    // withdrawals in parallel. Previously this page only read from stores
+    // that were assumed to be pre-populated by other pages — when the user
+    // navigated directly to /pwa/wallet (or reloaded), the "Collection
+    // Earnings" table and the "Total Withdrawn" totals were empty until
+    // something else happened to fill the stores.
+    useEffect(() => {
+        if (!user?.id) return;
+        void Promise.allSettled([
+            fetchCollections?.(user.id),
+            fetchWithdrawals?.(user.id),
+        ]);
+    }, [user?.id]);
 
     useEffect(() => {
         // Calculate wallet overview
@@ -106,10 +132,17 @@ const PwaWallet: React.FC = () => {
 
         setCollectionEarnings(earnings);
 
-        // Calculate total withdrawn from withdrawals
+        // Calculate total withdrawn from withdrawals. Uses the shared
+        // helper that treats "approved" (manual flow) and "completed/
+        // successful/success" (legacy Paystack flow) as equivalent.
         const withdrawalsArray = Array.isArray(withdrawals) ? withdrawals : withdrawals ? [withdrawals] : [];
-        const completedWithdrawals = withdrawalsArray.filter(w => w.status === 'completed');
+        const completedWithdrawals = withdrawalsArray.filter(w => isCompletedWithdrawal(w.status));
         totalWithdrawn = completedWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
+        // Pending withdrawals reduce the user's effective available
+        // balance. Surface as "Pending Debits".
+        pendingDebits = withdrawalsArray
+            .filter(w => isPendingWithdrawal(w.status))
+            .reduce((sum, w) => sum + (w.amount || 0), 0);
 
         setWalletOverview({
             availableBalance: totalAvailable,
@@ -129,12 +162,15 @@ const PwaWallet: React.FC = () => {
             return dateB - dateA;
         });
 
+        // Map every raw status into the coarse bucket the UI styling
+        // helpers know — so an "approved" row no longer renders as "Unknown".
         const withdrawalTransactions = sortedWithdrawals.map((w) => ({
             id: w.id,
             collection: w.collections ? w.collections.title : 'Unknown Collection',
             amount: w.amount,
             date: w.created_at ? new Date(w.created_at).toLocaleDateString('en-NG') : '',
-            status: w.status || 'pending',
+            status: withdrawalStatusBucket(w.status),
+            rawStatus: w.status,
             description: w.destination_account
                 ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
                 : 'Withdrawal',
@@ -149,7 +185,7 @@ const PwaWallet: React.FC = () => {
                 return <CheckCircle className="h-4 w-4 text-green-600" />;
             case 'pending':
                 return <Clock className="h-4 w-4 text-yellow-600" />;
-            case 'failed':
+            case 'rejected':
                 return <XCircle className="h-4 w-4 text-red-600" />;
             default:
                 return <AlertCircle className="h-4 w-4 text-gray-600" />;
@@ -159,11 +195,11 @@ const PwaWallet: React.FC = () => {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'completed':
-                return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+                return <Badge className="bg-green-100 text-green-800">Approved</Badge>;
             case 'pending':
                 return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
-            case 'failed':
-                return <Badge className="bg-red-100 text-red-800">Failed</Badge>;
+            case 'rejected':
+                return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
             default:
                 return <Badge className="bg-gray-100 text-gray-800">Unknown</Badge>;
         }
@@ -454,9 +490,9 @@ const PwaWallet: React.FC = () => {
                                         className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                     >
                                         <option value="all">All Status</option>
-                                        <option value="completed">Completed</option>
                                         <option value="pending">Pending</option>
-                                        <option value="failed">Failed</option>
+                                        <option value="completed">Approved</option>
+                                        <option value="rejected">Rejected</option>
                                     </select>
                                 </div>
                             </div>
