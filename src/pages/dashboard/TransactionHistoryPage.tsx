@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Tooltip } from 'react-tooltip';
-import { useCollectionStore, useWithdrawalStore } from '@/store';
+import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Wallet, History } from 'lucide-react';
+import {
+  isCompletedWithdrawal,
+  isPendingWithdrawal,
+  isRejectedWithdrawal,
+  withdrawalStatusBucket,
+} from '@/utils/withdrawalStatus';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
@@ -36,7 +42,17 @@ const TransactionHistoryPage: React.FC = () => {
 
   const { collections } = useCollectionStore()
 
-  const { withdrawals } = useWithdrawalStore()
+  const { withdrawals, fetchWithdrawals } = useWithdrawalStore() as any;
+  const { user } = useAuthStore() as any;
+
+  // Fetch the user's withdrawals on mount. Previously this page just read
+  // `withdrawals` from the store — if nothing else had triggered the
+  // fetch, the user's "Recent Transactions" list was always empty.
+  useEffect(() => {
+    if (user?.id) {
+      void fetchWithdrawals(user.id);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     // Sort collections by created_at descending (newest first)
@@ -58,7 +74,11 @@ const TransactionHistoryPage: React.FC = () => {
       const wallet = col.wallets ? (Array.isArray(col.wallets) ? col.wallets[0] || {} : col.wallets) : {};
 
       // Compute withdrawn amount for this collection specifically from the withdrawals store
-      const colWithdrawals = withdrawalsArray.filter((w: any) => w.collection_id === col.id && (w.status === 'completed' || w.status === 'successful'));
+      // Withdrawn = anything paid out: approved (manual flow),
+      // completed/successful/success (legacy Paystack transfer flow).
+      const colWithdrawals = withdrawalsArray.filter(
+        (w: any) => w.collection_id === col.id && isCompletedWithdrawal(w.status)
+      );
       const withdrawnTotal = colWithdrawals.reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
       
       const totalRaised = wallet.gross_payment || col.total_amount || 0;
@@ -85,8 +105,15 @@ const TransactionHistoryPage: React.FC = () => {
     });
 
     const withdrawalTransactions: RecentTransaction[] = sortedWithdrawals.map((w: any) => {
-      // Map 'completed' back into 'successful' if needed visually
-      const mappedStatus = (w.status === 'completed') ? 'successful' : w.status;
+      // Normalise raw DB status (approved/completed/successful/etc) into the
+      // coarse bucket the UI styling logic looks for. Avoids the previous
+      // bug where an "approved" row was rendered as "Unknown".
+      const bucketedStatus = withdrawalStatusBucket(w.status);
+      const mappedStatus =
+        bucketedStatus === 'completed' ? 'successful'
+        : bucketedStatus === 'pending' ? 'pending'
+        : bucketedStatus === 'rejected' ? 'failed'
+        : (w.status || 'pending');
 
       return {
         id: w.id,
@@ -94,7 +121,7 @@ const TransactionHistoryPage: React.FC = () => {
         collection: w.collections ? w.collections.title : 'Unknown Collection',
         amount: w.amount,
         date: w.created_at ? new Date(w.created_at).toLocaleString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-        status: mappedStatus || 'pending',
+        status: mappedStatus,
         description: w.destination_account
           ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
           : 'Withdrawal',

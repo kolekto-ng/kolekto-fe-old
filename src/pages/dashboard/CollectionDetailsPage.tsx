@@ -155,6 +155,8 @@ const CollectionDetailsPage: React.FC = () => {
     totalBalance: number;
     availableBalance: number;
     pendingBalance: number;
+    withdrawn: number;
+    pendingWithdrawalRequests: number;
   } | null>(null);
 
   const colType: string = col?.collection_type || (col?.type === 'tiered' ? 'tiered' : 'fixed');
@@ -168,6 +170,13 @@ const CollectionDetailsPage: React.FC = () => {
   const ledgerBalance = Number(balanceStats?.totalBalance ?? wallet?.ledger_balance ?? 0);
   const availableBalance = Number(balanceStats?.availableBalance ?? wallet?.available_balance ?? 0);
   const pendingBalance = Number(balanceStats?.pendingBalance ?? wallet?.pending_balance ?? 0);
+  // `withdrawn` is the running total of all completed/approved withdrawals
+  // for this collection — sourced from /dashboard/collections/:id/stats so
+  // it stays consistent with the same source-of-truth math the wallet
+  // refresher uses. Falls back to wallets.withdrawn for legacy rows that
+  // haven't been hit by a stats fetch yet.
+  const withdrawnAmount = Number(balanceStats?.withdrawn ?? wallet?.withdrawn ?? 0);
+  const pendingWithdrawalRequests = Number(balanceStats?.pendingWithdrawalRequests ?? 0);
   const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
 
   // ── Fetch helpers ───────────────────────────────────────────────────────────
@@ -205,6 +214,8 @@ const CollectionDetailsPage: React.FC = () => {
         totalBalance: Number(stats.totalBalance || 0),
         availableBalance: Number(stats.availableBalance || 0),
         pendingBalance: Number(stats.pendingBalance || 0),
+        withdrawn: Number(stats.withdrawn || 0),
+        pendingWithdrawalRequests: Number(stats.pendingWithdrawalRequests || 0),
       });
     } catch (err) {
       console.error('Collection stats load error:', err);
@@ -775,7 +786,7 @@ const CollectionDetailsPage: React.FC = () => {
               )}
 
               {/* Wallet Summary Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="bg-white border border-gray-200 rounded-xl p-4">
                   <p className="text-xs font-medium text-gray-500 mb-1">Total Balance</p>
                   <p className="text-xl font-bold text-gray-900">{fmtCurrency(ledgerBalance)}</p>
@@ -784,6 +795,11 @@ const CollectionDetailsPage: React.FC = () => {
                   <div>
                     <p className="text-xs font-medium text-green-700 mb-1">Available to Withdraw</p>
                     <p className="text-xl font-bold text-green-700">{fmtCurrency(availableBalance)}</p>
+                    {pendingWithdrawalRequests > 0 && (
+                      <p className="text-[10px] text-green-700/70 mt-0.5">
+                        {fmtCurrency(pendingWithdrawalRequests)} awaiting approval
+                      </p>
+                    )}
                   </div>
                   <Button
                     size="sm"
@@ -797,6 +813,10 @@ const CollectionDetailsPage: React.FC = () => {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                   <p className="text-xs font-medium text-yellow-700 mb-1">Pending Balance</p>
                   <p className="text-xl font-bold text-yellow-700">{fmtCurrency(pendingBalance)}</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-gray-600 mb-1">Withdrawn</p>
+                  <p className="text-xl font-bold text-gray-800">{fmtCurrency(withdrawnAmount)}</p>
                 </div>
               </div>
             </>
@@ -1223,7 +1243,15 @@ const CollectionDetailsPage: React.FC = () => {
         collectionId={id}
         collectionTitle={col.title}
         availableBalance={availableBalance}
-        onComplete={() => { setIsWithdrawOpen(false); toast.success('Withdrawal submitted!'); }}
+        onComplete={() => {
+          setIsWithdrawOpen(false);
+          // Re-fetch the wallet row + stats so the "Available", "Pending
+          // approval" annotation, and "Withdrawn" tile reflect the new
+          // pending request without requiring a manual reload.
+          loadWallet();
+          loadBalanceStats();
+          toast.success('Withdrawal submitted!');
+        }}
       />
 
       {/* Share / QR */}
