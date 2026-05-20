@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useActivities } from '@/store/useDashboard';
-import { useCollectionStore } from '@/store';
-import { Loader2, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, ArrowDownLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
 
 function relativeTime(dateStr: string): string {
   try {
@@ -90,7 +89,6 @@ function getActivityMeta(activity: any) {
 type Tab = 'all' | 'contributions' | 'wallet';
 
 const ActivitiesPage: React.FC = () => {
-  const { collections } = useCollectionStore();
   const { activities, isLoading, getActivities } = useActivities() as any;
   const [tab, setTab] = useState<Tab>('all');
 
@@ -100,24 +98,49 @@ const ActivitiesPage: React.FC = () => {
   // — the user couldn't see their pending/approved/rejected withdrawals.
   useEffect(() => {
     getActivities();
-  }, []);
+  }, [getActivities]);
 
-  const filtered = useMemo(() => {
+  const { filtered, walletCount, contribCount, totalCount } = useMemo(() => {
     const rows = Array.isArray(activities) ? activities : [];
-    if (tab === 'all') return rows;
-    if (tab === 'contributions') {
-      return rows.filter((r: any) => (r.category || 'contribution') === 'contribution');
+    const walletRows: any[] = [];
+    const contributionRows: any[] = [];
+
+    for (const row of rows) {
+      if (row.category === 'wallet') walletRows.push(row);
+      else contributionRows.push(row);
     }
-    return rows.filter((r: any) => r.category === 'wallet');
+
+    return {
+      filtered:
+        tab === 'all'
+          ? rows
+          : tab === 'contributions'
+            ? contributionRows
+            : walletRows,
+      walletCount: walletRows.length,
+      contribCount: contributionRows.length,
+      totalCount: rows.length,
+    };
   }, [activities, tab]);
 
-  const walletCount = useMemo(
-    () => (Array.isArray(activities) ? activities.filter((r: any) => r.category === 'wallet').length : 0),
-    [activities]
-  );
-  const contribCount = useMemo(
-    () => (Array.isArray(activities) ? activities.filter((r: any) => (r.category || 'contribution') === 'contribution').length : 0),
-    [activities]
+  const activityCards = useMemo(
+    () =>
+      filtered.map((activity: any) => {
+        const collectionName = activity.collection_title || activity.collection?.title || '';
+        const meta = getActivityMeta(activity);
+        const isWithdrawal = activity.category === 'wallet';
+        const primaryLabel = isWithdrawal ? meta.title : (activity.name || 'Anonymous Contributor');
+
+        return {
+          id: activity.id,
+          meta,
+          collectionName,
+          primaryLabel,
+          amount: activity.amount,
+          createdAt: activity.created_at ? relativeTime(activity.created_at) : '',
+        };
+      }),
+    [filtered]
   );
 
   const Pill = ({ id, label, count }: { id: Tab; label: string; count: number }) => (
@@ -144,7 +167,7 @@ const ActivitiesPage: React.FC = () => {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Pill id="all" label="All" count={(activities as any[] | undefined)?.length || 0} />
+        <Pill id="all" label="All" count={totalCount} />
         <Pill id="contributions" label="Contributions" count={contribCount} />
         <Pill id="wallet" label="Wallet" count={walletCount} />
       </div>
@@ -159,45 +182,36 @@ const ActivitiesPage: React.FC = () => {
             {filtered.length === 0 && (
               <p className="text-sm text-muted-foreground">No activity in this category yet.</p>
             )}
-            {filtered.map((activity: any) => {
-              const matchedCollection = collections.find((c: any) => c.id === activity.collection_id);
-              const collectionName =
-                activity.collection_title || activity.collection?.title || matchedCollection?.title || '';
-              const meta = getActivityMeta(activity);
-              const isWithdrawal = activity.category === 'wallet';
-              const primaryLabel = isWithdrawal
-                ? meta.title
-                : (activity.name || 'Anonymous Contributor');
-
+            {activityCards.map((activity: any) => {
               return (
                 <div
                   key={activity.id}
                   className="flex items-center bg-gray-50 hover:bg-gray-100 transition-colors py-4 px-4 rounded-xl justify-between gap-4 border border-gray-100"
                 >
                   <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <div className={`p-2 rounded-full shrink-0 ${meta.iconBg}`}>{meta.icon}</div>
+                    <div className={`p-2 rounded-full shrink-0 ${activity.meta.iconBg}`}>{activity.meta.icon}</div>
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{primaryLabel}</p>
+                      <p className="font-medium text-gray-900 truncate">{activity.primaryLabel}</p>
                       <p className="text-sm text-gray-500 truncate flex items-center gap-1.5 mt-0.5">
-                        <span className={`font-semibold ${meta.amountColor}`}>
-                          {meta.amountPrefix}{formatCurrency(activity.amount)}
+                        <span className={`font-semibold ${activity.meta.amountColor}`}>
+                          {activity.meta.amountPrefix}{formatCurrency(activity.amount)}
                         </span>
-                        {collectionName && (
+                        {activity.collectionName && (
                           <>
                             <span className="text-gray-300">•</span>
                             <span className="text-gray-600 font-medium truncate min-w-0">
-                              {collectionName}
+                              {activity.collectionName}
                             </span>
                           </>
                         )}
                       </p>
-                      {meta.statusLabel && (
-                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">{meta.statusLabel}</p>
+                      {activity.meta.statusLabel && (
+                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activity.meta.statusLabel}</p>
                       )}
                     </div>
                   </div>
                   <span className="text-xs font-medium text-gray-400 shrink-0 whitespace-nowrap bg-white px-2.5 py-1 rounded-md shadow-sm border border-gray-100">
-                    {activity.created_at ? relativeTime(activity.created_at) : ''}
+                    {activity.createdAt}
                   </span>
                 </div>
               );

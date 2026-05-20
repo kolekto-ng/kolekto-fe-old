@@ -9,24 +9,45 @@ export const useWithdrawalStore = create((set, get) => ({
   withdrawals: [],
   isLoading: false,
   error: null,
+  inFlight: null as Promise<any> | null,
+  lastFetchedAt: 0,
+  lastFetchKey: "",
 
   fetchWithdrawals: async (userId?: string, collectionId?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const res = await axiosInstance.get("/withdrawals", {
-        params: { userId, collectionId },
-      });
+    const key = `${userId || "all"}:${collectionId || "all"}`;
+    const { inFlight, lastFetchedAt, lastFetchKey, withdrawals } = get();
+    const isFresh =
+      lastFetchKey === key && Date.now() - Number(lastFetchedAt || 0) < 30_000;
 
-      set({
-        withdrawals: res.data.withdrawals,
-        isLoading: false,
-      });
+    if (inFlight && lastFetchKey === key) return inFlight;
+    if (isFresh && Array.isArray(withdrawals)) return { withdrawals };
 
-      return res.data;
-    } catch (error: any) {
-      set({ error: error.message, isLoading: false });
-      throw error;
-    }
+    const request = (async () => {
+      set({ isLoading: true, error: null, lastFetchKey: key });
+      try {
+        const res = await axiosInstance.get("/withdrawals", {
+          params: { userId, collectionId },
+        });
+
+        set({
+          withdrawals: Array.isArray(res?.data?.withdrawals)
+            ? res.data.withdrawals
+            : [],
+          isLoading: false,
+          lastFetchedAt: Date.now(),
+        });
+
+        return res.data;
+      } catch (error: any) {
+        set({ error: error.message, isLoading: false });
+        throw error;
+      } finally {
+        set({ inFlight: null });
+      }
+    })();
+
+    set({ inFlight: request });
+    return request;
   },
 
   createWithdrawal: async (withdrawalData) => {

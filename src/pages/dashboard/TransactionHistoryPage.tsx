@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, History } from 'lucide-react';
+import { Wallet, History, Loader2 } from 'lucide-react';
 import {
   isCompletedWithdrawal,
-  isPendingWithdrawal,
-  isRejectedWithdrawal,
   withdrawalStatusBucket,
 } from '@/utils/withdrawalStatus';
 
@@ -37,99 +35,122 @@ interface RecentTransaction {
 
 const TransactionHistoryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('collections');
-  const [collectionEarnings, setCollectionEarnings] = useState<CollectionEarning[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
-
-  const { collections } = useCollectionStore()
-
-  const { withdrawals, fetchWithdrawals } = useWithdrawalStore() as any;
+  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore() as any;
+  const { withdrawals, fetchWithdrawals, isLoading: withdrawalsLoading } = useWithdrawalStore() as any;
   const { user } = useAuthStore() as any;
 
-  // Fetch the user's withdrawals on mount. Previously this page just read
-  // `withdrawals` from the store — if nothing else had triggered the
-  // fetch, the user's "Recent Transactions" list was always empty.
+  // Ensure collections are available when user lands directly on this page.
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && (!Array.isArray(collections) || collections.length === 0)) {
+      void fetchCollections(user.id);
+    }
+  }, [user?.id, collections?.length, fetchCollections]);
+
+  // Defer withdrawals fetch until the withdrawals tab is opened.
+  // This keeps initial wallet page render fast for Collection Overview.
+  useEffect(() => {
+    if (activeTab === 'withdrawals' && user?.id) {
       void fetchWithdrawals(user.id);
     }
-  }, [user?.id]);
+  }, [activeTab, user?.id, fetchWithdrawals]);
 
-  useEffect(() => {
-    // Sort collections by created_at descending (newest first)
-    const sortedCollections = [...collections].sort((a, b) => {
+  const withdrawalsArray = useMemo(
+    () =>
+      Array.isArray(withdrawals)
+        ? withdrawals
+        : withdrawals
+          ? [withdrawals]
+          : [],
+    [withdrawals],
+  );
+
+  const completedByCollection = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const w of withdrawalsArray) {
+      if (!isCompletedWithdrawal(w?.status)) continue;
+      const collectionId = w?.collection_id;
+      if (!collectionId) continue;
+      totals[collectionId] = (totals[collectionId] || 0) + Number(w.amount || 0);
+    }
+    return totals;
+  }, [withdrawalsArray]);
+
+  const collectionEarnings: CollectionEarning[] = useMemo(() => {
+    const sortedCollections = [...(collections || [])].sort((a, b) => {
       const dateA = new Date(a.created_at).getTime();
       const dateB = new Date(b.created_at).getTime();
       return dateB - dateA;
     });
 
-    // Map sorted collections to CollectionEarning format
-    const withdrawalsArray = Array.isArray(withdrawals)
-      ? withdrawals
-      : withdrawals
-        ? [withdrawals]
-        : [];
-
-    const earnings = sortedCollections.map((col) => {
-      // Supabase 1-to-1 relationships return an object, 1-to-many return an array
-      const wallet = col.wallets ? (Array.isArray(col.wallets) ? col.wallets[0] || {} : col.wallets) : {};
-
-      // Compute withdrawn amount for this collection specifically from the withdrawals store
-      // Withdrawn = anything paid out: approved (manual flow),
-      // completed/successful/success (legacy Paystack transfer flow).
-      const colWithdrawals = withdrawalsArray.filter(
-        (w: any) => w.collection_id === col.id && isCompletedWithdrawal(w.status)
+    return sortedCollections.map((col: any) => {
+      const wallet = col.wallets
+        ? (Array.isArray(col.wallets) ? col.wallets[0] || {} : col.wallets)
+        : {};
+      const walletWithdrawn = Number(wallet.withdrawn || 0);
+      const withdrawnFromRows = Number(completedByCollection[col.id] || 0);
+      const withdrawnTotal = Math.max(walletWithdrawn, withdrawnFromRows);
+      const totalRaised = Number(wallet.gross_payment || col.total_amount || 0);
+      const currentBalance = Number(
+        wallet.ledger_balance !== undefined
+          ? wallet.ledger_balance
+          : Math.max(0, totalRaised - withdrawnTotal),
       );
-      const withdrawnTotal = colWithdrawals.reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
-      
-      const totalRaised = wallet.gross_payment || col.total_amount || 0;
-      const currentBalance = wallet.ledger_balance || Math.max(0, totalRaised - withdrawnTotal);
 
       return {
         id: col.id,
-        name: col.title || "",
+        name: col.title || '',
         type: col.collection_type || col.type || 'Fixed',
-        totalRaised: totalRaised,
-        currentBalance: currentBalance,
-        amountWithdrawn: withdrawnTotal || 0,
-        availableBalance: wallet.available_balance !== undefined ? wallet.available_balance : currentBalance,
-        pendingBalance: wallet.pending_withdrawals ?? 0,
+        totalRaised,
+        currentBalance,
+        amountWithdrawn: withdrawnTotal,
+        availableBalance:
+          wallet.available_balance !== undefined
+            ? Number(wallet.available_balance)
+            : currentBalance,
+        pendingBalance: Number(wallet.pending_withdrawals ?? 0),
       };
     });
-    setCollectionEarnings(earnings);
+  }, [collections, completedByCollection]);
 
-    // Sort withdrawals by created_at descending (newest first)
+  const recentTransactions: RecentTransaction[] = useMemo(() => {
     const sortedWithdrawals = [...withdrawalsArray].sort((a, b) => {
       const dateA = new Date(a.created_at).getTime();
       const dateB = new Date(b.created_at).getTime();
       return dateB - dateA;
     });
 
-    const withdrawalTransactions: RecentTransaction[] = sortedWithdrawals.map((w: any) => {
-      // Normalise raw DB status (approved/completed/successful/etc) into the
-      // coarse bucket the UI styling logic looks for. Avoids the previous
-      // bug where an "approved" row was rendered as "Unknown".
+    return sortedWithdrawals.map((w: any) => {
       const bucketedStatus = withdrawalStatusBucket(w.status);
       const mappedStatus =
-        bucketedStatus === 'completed' ? 'successful'
-        : bucketedStatus === 'pending' ? 'pending'
-        : bucketedStatus === 'rejected' ? 'failed'
-        : (w.status || 'pending');
+        bucketedStatus === 'completed'
+          ? 'successful'
+          : bucketedStatus === 'pending'
+            ? 'pending'
+            : bucketedStatus === 'rejected'
+              ? 'failed'
+              : (w.status || 'pending');
 
       return {
         id: w.id,
         type: 'withdrawal',
         collection: w.collections ? w.collections.title : 'Unknown Collection',
-        amount: w.amount,
-        date: w.created_at ? new Date(w.created_at).toLocaleString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        amount: Number(w.amount || 0),
+        date: w.created_at
+          ? new Date(w.created_at).toLocaleString('en-NG', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '',
         status: mappedStatus,
         description: w.destination_account
           ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
           : 'Withdrawal',
       };
     });
-
-    setRecentTransactions(withdrawalTransactions);
-  }, [collections, withdrawals]);
+  }, [withdrawalsArray]);
 
   const handleWithdraw = async (collectionId: string) => {
     alert(`Withdraw from collection ${collectionId} (dummy action)`);
@@ -181,6 +202,29 @@ const TransactionHistoryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {collectionsLoading && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-3 py-10 text-sm text-gray-500 text-center"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading collection earnings...
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {!collectionsLoading && collectionEarnings.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-3 py-8 text-sm text-gray-500 text-center"
+                  >
+                    No collections found.
+                  </td>
+                </tr>
+              )}
               {collectionEarnings.map((earning, idx) => (
                 <tr key={earning.id} className={idx % 2 === 1 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}>
                   <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{earning.name}</td>
@@ -215,6 +259,29 @@ const TransactionHistoryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {withdrawalsLoading && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-3 py-10 text-sm text-gray-500 text-center"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading withdrawal transactions...
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {!withdrawalsLoading && recentTransactions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-3 py-8 text-sm text-gray-500 text-center"
+                  >
+                    No withdrawal transactions yet.
+                  </td>
+                </tr>
+              )}
               {recentTransactions.map(transaction => (
                 <tr key={transaction.id} className="hover:bg-gray-50">
                   <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{transaction.collection}</td>
