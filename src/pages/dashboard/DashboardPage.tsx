@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -149,6 +149,8 @@ const STATUS_COLORS: Record<string, string> = {
   deleted: "bg-gray-300 text-gray-600",
   pending_review: "bg-amber-100 text-amber-700",
 };
+const RECENT_COLLECTION_LIMIT = 6;
+const RECENT_ACTIVITY_LIMIT = 5;
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -167,6 +169,7 @@ interface Activity {
   amount: number;
   created_at: string;
   collection_title: string;
+  relative_time: string;
 }
 
 interface CollectionPreview {
@@ -203,14 +206,18 @@ const DashboardPage: React.FC = () => {
   >([]);
   const [loading, setLoading] = useState(true);
   const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
+  const isLoadingRef = useRef(false);
+  const queuedReloadRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     const userId = user?.id || getStoredUserId();
 
-    const load = async () => {
+    const loadOnce = async () => {
       try {
         if (!userId) {
-          setLoading(false);
+          if (isMountedRef.current) setLoading(false);
           return;
         }
 
@@ -219,16 +226,32 @@ const DashboardPage: React.FC = () => {
           .from("collections")
           .select("id, title, status, collection_type, deadline, created_at")
           .eq("user_id", userId)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(RECENT_COLLECTION_LIMIT);
 
         if (colErr) console.error("Collections fetch error:", colErr.message);
 
         const cols: any[] = collectionsRaw || [];
-        const totalCollections = cols.length;
-        const activeCollections = cols.filter(
-          (c: any) => c.status === "active",
-        ).length;
+        const [
+          { count: totalCollectionsCount },
+          { count: activeCollectionsCount },
+        ] = await Promise.all([
+          supabase
+            .from("collections")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId),
+          supabase
+            .from("collections")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("status", "active"),
+        ]);
+        const totalCollections = Number(totalCollectionsCount || 0);
+        const activeCollections = Number(activeCollectionsCount || 0);
         const collectionIds: string[] = cols.map((c: any) => c.id);
+        const recentCollectionIds: string[] = cols
+          .slice(0, RECENT_COLLECTION_LIMIT)
+          .map((c: any) => c.id);
         const titleMap: Record<string, string> = {};
         for (const c of cols) titleMap[c.id] = c.title;
 
@@ -236,22 +259,36 @@ const DashboardPage: React.FC = () => {
            The backend applies the 5AM WAT settlement cutoff consistently
            across home and collection pages, so we consume those figures
            directly instead of re-deriving them from wallet rows. ───────── */
-        const { data: statsRes } = await axiosInstance.get("/dashboard/stats");
-        console.log("Stats response:", statsRes);
-        const statsData =
-          statsRes?.data?.data || statsRes?.data || statsRes || {};
+        const statsPromise = axiosInstance
+          .get("/dashboard/stats")
+          .then((res) => res?.data?.data || res?.data || res || {})
+          .catch(() => ({}));
+
+        const paidContribsPromise =
+          recentCollectionIds.length > 0
+            ? supabase
+                .from("contributions")
+                .select("amount, collection_id")
+                .in("collection_id", recentCollectionIds)
+                .eq("status", "paid")
+                .then((res) => res.data || [])
+                .catch(() => [])
+            : Promise.resolve([]);
+
+        const activitiesPromise = axiosInstance
+          .get(`/dashboard/activities?limit=${RECENT_ACTIVITY_LIMIT}`)
+          .then((res) => res?.data?.data || res?.data || res || [])
+          .catch(() => null);
+
+        const [statsData, paidContribs, activitiesData] = await Promise.all([
+          statsPromise,
+          paidContribsPromise,
+          activitiesPromise,
+        ]);
+
         const totalBalance = Number(statsData.totalBalance || 0);
         const availableBalance = Number(statsData.availableBalance || 0);
         const pendingBalance = Number(statsData.pendingBalance || 0);
-
-        const { data: paidContribs } = await supabase
-          .from("contributions")
-          .select("amount, collection_id")
-          .in(
-            "collection_id",
-            collectionIds.length > 0 ? collectionIds : ["_none_"],
-          )
-          .eq("status", "paid");
 
         /* ── 4. Build per-collection preview data ─────────────────────── */
         const contribsByCol: Record<string, any[]> = {};
@@ -262,7 +299,7 @@ const DashboardPage: React.FC = () => {
         }
 
         setRecentCollections(
-          cols.slice(0, 6).map((c: any) => {
+          cols.slice(0, RECENT_COLLECTION_LIMIT).map((c: any) => {
             const cList = contribsByCol[c.id] || [];
             // totalRaised: sum contributions.amount (authoritative net figure, no fees).
             // Do NOT use wallet.net_payment — wallet may be zero if upsert failed.
@@ -284,30 +321,33 @@ const DashboardPage: React.FC = () => {
         );
 
         /* ── 5. Recent activity feed ──────────────────────────────────── */
-        try {
-          const { data: activitiesRes } = await axiosInstance.get(
-            "/dashboard/activities",
-          );
-          const activitiesData =
-            activitiesRes?.data?.data ||
-            activitiesRes?.data ||
-            activitiesRes ||
-            [];
-
+        if (activitiesData) {
           setActivities(
-            (activitiesData || []).map((cn: any) => ({
-              id: cn.id,
-              name: cn.name || "",
-              email: cn.email || "",
-              // Activity section shows full checkout amount (including fees) per spec.
-              // gross_amount = totalPayable; fallback to amount for legacy rows.
-              amount: Number(cn.gross_amount || cn.amount) || 0,
-              created_at: cn.created_at,
-              collection_title:
-                titleMap[cn.collection_id] || cn.collection_title || "Unknown",
-            })),
+            (activitiesData || []).map((cn: any) => {
+              const createdAt = cn.created_at;
+              let relativeTime = fmtDateTime(createdAt);
+              try {
+                relativeTime = formatDistanceToNow(new Date(createdAt), {
+                  addSuffix: true,
+                });
+              } catch {
+                // Keep fallback text from fmtDateTime above.
+              }
+              return {
+                id: cn.id,
+                name: cn.name || "",
+                email: cn.email || "",
+                // Activity section shows full checkout amount (including fees) per spec.
+                // gross_amount = totalPayable; fallback to amount for legacy rows.
+                amount: Number(cn.gross_amount || cn.amount) || 0,
+                created_at: createdAt,
+                collection_title:
+                  titleMap[cn.collection_id] || cn.collection_title || "Unknown",
+                relative_time: relativeTime,
+              };
+            }),
           );
-        } catch {
+        } else {
           const { data: contribs } = await supabase
             .from("contributions")
             .select(
@@ -316,19 +356,31 @@ const DashboardPage: React.FC = () => {
             .in("collection_id", collectionIds)
             .eq("status", "paid")
             .order("created_at", { ascending: false })
-            .limit(10);
+            .limit(RECENT_ACTIVITY_LIMIT);
 
           setActivities(
-            (contribs || []).map((cn: any) => ({
-              id: cn.id,
-              name: cn.name || "",
-              email: cn.email || "",
-              // Activity section shows full checkout amount (including fees) per spec.
-              // gross_amount = totalPayable; fallback to amount for legacy rows.
-              amount: Number(cn.gross_amount || cn.amount) || 0,
-              created_at: cn.created_at,
-              collection_title: titleMap[cn.collection_id] || "Unknown",
-            })),
+            (contribs || []).map((cn: any) => {
+              const createdAt = cn.created_at;
+              let relativeTime = fmtDateTime(createdAt);
+              try {
+                relativeTime = formatDistanceToNow(new Date(createdAt), {
+                  addSuffix: true,
+                });
+              } catch {
+                // Keep fallback text from fmtDateTime above.
+              }
+              return {
+                id: cn.id,
+                name: cn.name || "",
+                email: cn.email || "",
+                // Activity section shows full checkout amount (including fees) per spec.
+                // gross_amount = totalPayable; fallback to amount for legacy rows.
+                amount: Number(cn.gross_amount || cn.amount) || 0,
+                created_at: createdAt,
+                collection_title: titleMap[cn.collection_id] || "Unknown",
+                relative_time: relativeTime,
+              };
+            }),
           );
         }
 
@@ -342,7 +394,24 @@ const DashboardPage: React.FC = () => {
       } catch (err) {
         console.error("Dashboard load error:", err);
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) setLoading(false);
+      }
+    };
+
+    const load = async () => {
+      if (isLoadingRef.current) {
+        queuedReloadRef.current = true;
+        return;
+      }
+
+      isLoadingRef.current = true;
+      try {
+        do {
+          queuedReloadRef.current = false;
+          await loadOnce();
+        } while (queuedReloadRef.current);
+      } finally {
+        isLoadingRef.current = false;
       }
     };
 
@@ -378,6 +447,7 @@ const DashboardPage: React.FC = () => {
       .subscribe();
 
     return () => {
+      isMountedRef.current = false;
       supabase.removeChannel(rtChannel);
     };
   }, [user?.id]);
@@ -700,15 +770,7 @@ const DashboardPage: React.FC = () => {
                         +{fmt(a.amount)}
                       </p>
                       <p className="text-[11px] text-gray-400">
-                        {(() => {
-                          try {
-                            return formatDistanceToNow(new Date(a.created_at), {
-                              addSuffix: true,
-                            });
-                          } catch {
-                            return fmtDateTime(a.created_at);
-                          }
-                        })()}
+                        {a.relative_time}
                       </p>
                     </div>
                   </div>
