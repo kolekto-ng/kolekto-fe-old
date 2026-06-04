@@ -8,14 +8,22 @@ interface Props {
 }
 
 const WizardStepper: React.FC<Props> = ({ steps, currentIndex }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+    const container = containerRef.current;
+    const active = activeRef.current;
+    if (!container || !active) return;
+
+    container.scrollTo({
+      left: active.offsetLeft - (container.clientWidth - active.clientWidth) / 2,
+      behavior: 'smooth',
+    });
   }, [currentIndex]);
 
   return (
-    <div className="w-full overflow-x-auto pb-2">
+    <div ref={containerRef} className="w-full overflow-x-auto pb-2">
       <div className="flex items-center min-w-max mx-auto px-2">
         {steps.map((stepId, i) => {
           const isCompleted = i < currentIndex;
