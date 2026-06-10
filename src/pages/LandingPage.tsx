@@ -39,7 +39,6 @@ import {
   Zap,
   LayoutDashboard,
   LogOut,
-  PlusCircle,
   CalendarDays,
   Heart,
   Sparkles,
@@ -677,7 +676,7 @@ const Navbar = () => {
               </>
             )}
             <Link to="/create-collection" className="nav-btn-primary">
-              <PlusCircle size={18} /> Create Collection
+              Create Collection
             </Link>
           </div>
 
@@ -817,9 +816,9 @@ const Navbar = () => {
                 <Link
                   to="/create-collection"
                   onClick={() => setMenuOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 p-4 bg-gradient-to-br from-green-800 to-green-700 text-white rounded-2xl font-bold shadow-lg shadow-green-900/20"
+                  className="w-full flex items-center justify-center p-4 bg-gradient-to-br from-green-800 to-green-700 text-white rounded-2xl font-bold shadow-lg shadow-green-900/20"
                 >
-                  <PlusCircle size={20} /> Create Collection
+                  Create Collection
                 </Link>
                 {!user && (
                   <Link

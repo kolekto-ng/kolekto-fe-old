@@ -17,11 +17,13 @@ import PwaCollections from './pages/pwa/pages/Collections'
 import PwaProfile from './pages/pwa/pages/Profile'
 import PwaCollectionDetails from './pages/pwa/pages/CollectionDetails'
 import PwaWallet from './pages/pwa/pages/Wallet'
+import ScrollToTop from './components/ScrollToTop'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <TooltipProvider>
       <BrowserRouter basename="/pwa">
+        <ScrollToTop />
         <Routes>
           <Route path="/login" element={<PwaLogin />} />
           <Route path="/register" element={<PwaRegister />} />

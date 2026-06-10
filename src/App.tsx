@@ -31,6 +31,7 @@ import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import "aos/dist/aos.css";
 import WhatsAppButton from "./components/WhatsappFloatButton";
+import ScrollToTop from "./components/ScrollToTop";
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -114,7 +115,9 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   const location = useLocation();
-  const shouldShowWhatsAppButton = !location.pathname.startsWith("/dashboard");
+  const shouldShowWhatsAppButton =
+    !location.pathname.startsWith("/dashboard") &&
+    location.pathname !== "/create-collection";
 
   useEffect(() => {
     // Supabase recovery links may land on the site root depending on allowed redirect URLs.
@@ -165,6 +168,7 @@ const App = () => {
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ScrollToTop />
       <AuthenticatedApp />
       {shouldShowWhatsAppButton && <WhatsAppButton />}
       {/* <AuthSessionWatcher /> */}
