@@ -1,6 +1,39 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import { authAPI, axiosInstance } from "../utils/axios";
+import { supabase } from "@/integrations/supabase/client";
+
+// B-16: after the auth store completes a sign-in/sign-up/sign-out via our
+// backend (axios), mirror the session state into the Supabase client so
+// direct `supabase.from(...)` queries are authenticated against RLS.
+//
+// Before this change the Supabase client and the Zustand store both wrote
+// to the same `kolekto-auth-token` localStorage key, which caused shape
+// drift and the occasional "SIGNED_OUT mid-session" ghost-logout. The
+// Supabase client now uses its own key (see integrations/supabase/client.ts)
+// and these helpers keep the two stores aligned at the action boundary.
+//
+// All three helpers are wrapped so a failure in the supabase mirror NEVER
+// breaks the primary Zustand auth flow.
+async function mirrorSetSessionOnSupabase(session: any) {
+  try {
+    if (!session?.access_token || !session?.refresh_token) return;
+    await supabase.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+  } catch (err) {
+    console.warn("[useAuthStore] supabase setSession mirror failed:", (err as any)?.message);
+  }
+}
+
+async function mirrorSignOutOnSupabase() {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn("[useAuthStore] supabase signOut mirror failed:", (err as any)?.message);
+  }
+}
 
 interface SessionData {
   user: any;
@@ -100,10 +133,20 @@ export const useAuthStore = create((set, get) => ({
         isLoading: false,
       });
 
+      // B-16: mirror into supabase client so direct `supabase.from(...)`
+      // queries are authenticated. Awaited so subsequent calls see the
+      // session, but its failure is logged-and-swallowed inside the helper
+      // — sign-in does not regress if mirroring breaks.
+      await mirrorSetSessionOnSupabase(session);
+
       return { user, error: null };
     } catch (error: any) {
       console.log(error, "sign in error");
-      const errorMessage = error.response.data.message || "Sign in failed";
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Sign in failed";
       console.log(errorMessage);
 
       set({ error: errorMessage, isLoading: false });
@@ -118,7 +161,8 @@ export const useAuthStore = create((set, get) => ({
     lastName: string,
     phoneNumber?: string,
     recaptcherToken?: string,
-    recatcherType?: string
+    recatcherType?: string,
+    emailRedirectTo?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -131,21 +175,42 @@ export const useAuthStore = create((set, get) => ({
         phoneNumber,
         recaptcherToken,
         recatcherType,
+        emailRedirectTo,
       });
       const { data } = res;
       console.log(data, "Sign up data");
 
-      // Save to localStorage if session is returned
+      const hasSession = Boolean(data?.session?.access_token);
+
+      if (hasSession) {
+        localStorage.setItem("kolekto-auth-token", JSON.stringify(data.session));
+      }
+
       set({
-        // user: data.user,
-        // session: data.session,
+        user: data?.requireV2 || !hasSession ? null : data?.user ?? null,
+        session: data?.requireV2 || !hasSession ? null : data?.session ?? null,
         isLoading: false,
       });
 
-      return { user: data?.user ?? data, error: null };
+      // B-16: mirror session into supabase client when one is returned.
+      // (signup often returns no session — email verification flow — in
+      // which case we skip the mirror; user will sign in later.)
+      if (hasSession) {
+        await mirrorSetSessionOnSupabase(data.session);
+      }
+
+      return {
+        user: data?.user ?? null,
+        session: hasSession ? data?.session ?? null : null,
+        verificationRequired: Boolean(data?.requiresEmailVerification || (!hasSession && data?.user)),
+        error: null,
+      };
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.message || error.message || "Sign up failed";
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Sign up failed";
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }
@@ -158,12 +223,20 @@ export const useAuthStore = create((set, get) => ({
       await axiosInstance.post("auth/signout");
       localStorage.removeItem("kolekto-auth-token");
       set({ user: null, session: null, isLoading: false });
+      // B-16: mirror sign-out into the supabase client so its persisted
+      // session is also cleared. Awaited so the SIGNED_OUT event from
+      // supabase has fired before this function returns — useful for
+      // callers that immediately navigate.
+      await mirrorSignOutOnSupabase();
     } catch (error: any) {
       const errorMessage = error.message || "Sign out failed";
       set({ error: errorMessage, isLoading: false });
       // Still clear local state even if server call fails
       localStorage.removeItem("kolekto-auth-token");
       set({ user: null, session: null, isLoading: false });
+      // Mirror the sign-out on the supabase client even on backend error
+      // so the user is fully signed out client-side regardless.
+      await mirrorSignOutOnSupabase();
     }
   },
 
@@ -193,7 +266,10 @@ export const useAuthStore = create((set, get) => ({
   forgotPassword: async (email: string) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await axiosInstance.post("/auth/forgot-password", { email });
+      const res = await axiosInstance.post("/auth/forgot-password", {
+        email,
+        emailRedirectTo: `${window.location.origin}/reset-password`,
+      });
       if (res.status !== 200) {
         throw new Error("Failed to send password reset email");
       }

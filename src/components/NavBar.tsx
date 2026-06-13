@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Logo from "./Logo";
 import { Button } from "@/components/ui/button";
 
-import { LogIn, LogOut, LayoutDashboard, User, BookOpen } from "lucide-react";
+import { LogIn, LogOut, LayoutDashboard, User, PlusCircle } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -35,6 +35,12 @@ const NavBar: React.FC = () => {
           <div className="flex flex-col gap-2 mt-4">
             {isAuthenticated ? (
               <>
+                <Link to="/create-collection">
+                  <Button className="w-full justify-start bg-green-900 text-white hover:bg-green-800">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Create Collection
+                  </Button>
+                </Link>
                 <Link to="/dashboard">
                   <Button variant="ghost" className="w-full justify-start">
                     <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -54,14 +60,21 @@ const NavBar: React.FC = () => {
               </>
             ) : (
               <>
+                <Link to="/create-collection">
+                  <Button className="w-full justify-start bg-green-900 text-white hover:bg-green-800">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Create Collection
+                  </Button>
+                </Link>
 
-                <Link
+                {/* Kolekto on Campus entry point temporarily disabled */}
+                {/* <Link
                   to='/kolekto-campus'
                   className='bg-green-900 text-white w-full max-w-s text-center px-4 py-3 rounded-md text-base font-medium hover:bg-green-700 transition-colors duration-200'
 
                 >
                   Kolekto Campus
-                </Link>
+                </Link> */}
                 <Link to="/login">
                   <Button variant="ghost" className="w-full justify-start">
                     <LogIn className="mr-2 h-4 w-4" />
@@ -86,14 +99,15 @@ const NavBar: React.FC = () => {
           <Logo size="md" />
         </Link>
         <div>
-          <Link
+          {/* Kolekto on Campus entry point temporarily disabled */}
+          {/* <Link
             to='/kolekto-campus'
             className='bg-green-900 inline md:hidden text-white w-full max-w-fit text-center px-3 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition-colors duration-200'
           >
             <BookOpen className="mr-2 h-4 w-4 inline" />
 
             Kolekto On campus
-          </Link>
+          </Link> */}
           <MobileNav />
         </div>
 
@@ -102,6 +116,12 @@ const NavBar: React.FC = () => {
             <div className="h-10 w-20 bg-gray-100 animate-pulse rounded-md"></div>
           ) : isAuthenticated ? (
             <>
+              <Link to="/create-collection">
+                <Button className="bg-green-900 text-white hover:bg-green-800">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create Collection
+                </Button>
+              </Link>
               <Link to="/dashboard">
                 <Button variant="ghost">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -121,12 +141,19 @@ const NavBar: React.FC = () => {
             </>
           ) : (
             <>
-              <Link to="/kolekto-campus">
+              <Link to="/create-collection">
+                <Button className="bg-green-900 text-white hover:bg-green-800 transition-colors duration-200">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Create Collection
+                </Button>
+              </Link>
+              {/* Kolekto on Campus entry point temporarily disabled */}
+              {/* <Link to="/kolekto-campus">
                 <Button className="bg-green-900 text-white hover:bg-green-700 transition-colors duration-200 ">
                   <BookOpen className="mr-2 h-4 w-4" />
                   Kolekto On Campus
                 </Button>
-              </Link>
+              </Link> */}
 
               <Link to="/login">
                 <Button variant="ghost">

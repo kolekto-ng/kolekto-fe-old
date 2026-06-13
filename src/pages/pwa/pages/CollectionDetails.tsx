@@ -31,6 +31,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import CollectionManagementMenu from '@/components/collections/CollectionManagementMenu';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
+import {
+    getCollectionContributorFields,
+    getContributorFieldValue,
+} from '@/utils/contributions';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -103,6 +108,7 @@ const PwaCollectionDetails: React.FC = () => {
     const [isShareDrawerOpen, setIsShareDrawerOpen] = useState(false);
     const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isFlierOpen, setIsFlierOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState<Record<string, string>>({});
     const [selectedTiers, setSelectedTiers] = useState<Set<string>>(new Set());
@@ -159,7 +165,9 @@ const PwaCollectionDetails: React.FC = () => {
         toast.success('Collection updated successfully');
     };
 
-    const availableTiers = currentCollection?.price_tiers || [];
+    const colType: string = (currentCollection as any)?.collection_type || currentCollection?.type || 'fixed';
+    const availableTiers = currentCollection?.price_tiers || (currentCollection as any)?.pricing_tiers || [];
+    const visibleContributorFields = getCollectionContributorFields(currentCollection as any);
 
     const getTierNameFromAmount = (amount: number) => {
         const tier = availableTiers.find(t => t.price === amount);
@@ -215,7 +223,7 @@ const PwaCollectionDetails: React.FC = () => {
         return filteredData;
     };
 
-    const exportToCSV = () => {
+    const exportToPDF = async () => {
         const paidContributions = (contributions || []).filter(c => c.status === "paid");
         const filteredData = applyFilters(paidContributions);
 
@@ -224,49 +232,106 @@ const PwaCollectionDetails: React.FC = () => {
             return;
         }
 
-        const allDynamicFields = Array.from(
-            new Set(
-                filteredData.flatMap(contributor =>
-                    (contributor.contributor_information || []).flatMap(info =>
-                        Object.keys(info)
-                    )
-                )
-            )
-        ).filter(field => field !== "TierAmount");
-
-        const hasUniqueCode = filteredData.some(c => c.contributor_unique_code);
+        const exportFields = visibleContributorFields;
+        const hasUniqueCode = filteredData.some((c: any) => c.contributor_unique_code);
+        const tierColumnVisible = colType === 'tiered' || colType === 'ticket';
+        if (exportFields.length === 0 && !tierColumnVisible && !hasUniqueCode) {
+            toast.info('No host-defined contributor fields to export for this collection');
+            return;
+        }
 
         const headers = [
-            ...allDynamicFields,
-            ...(currentCollection?.type === 'tiered' ? ['Tier'] : []),
+            ...exportFields.map((field: any) => field.name),
+            ...(tierColumnVisible ? ['Tier'] : []),
             ...(hasUniqueCode ? ['Unique Code'] : []),
         ];
 
-        let csvContent = headers.join(',') + '\n';
+        const rows = filteredData.map((contribution: any) => [
+            ...exportFields.map((field: any) =>
+                getContributorFieldValue(contribution, field) || ''
+            ),
+            ...(tierColumnVisible ? [getTierNameFromAmount(contribution.amount)] : []),
+            ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+        ]);
 
-        filteredData.forEach((contribution) => {
-            const row = [
-                ...allDynamicFields.map(field =>
-                    (contribution.contributor_information || [])[0]?.[field] || ''
-                ),
-                ...(currentCollection?.type === 'tiered' ? [getTierNameFromAmount(contribution.amount)] : []),
-                ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
-            ];
-            csvContent += row.map(val =>
-                typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-            ).join(',') + '\n';
+        const exportDate = new Date().toLocaleDateString('en-NG', {
+            day: 'numeric', month: 'long', year: 'numeric',
         });
+        const totalAmount = filteredData.reduce((s: number, c: any) => s + (c.amount || 0), 0);
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${currentCollection?.title || 'collection'}-contributors.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const tableRows = rows.map((row: string[]) =>
+            `<tr>${row.map((cell: string) => `<td style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;color:#374151;">${cell}</td>`).join('')}</tr>`
+        ).join('');
 
-        toast.success('Contributor data exported successfully!');
+        const html = `
+            <div style="font-family:'Inter',Arial,sans-serif;padding:32px;background:#fff;min-height:100vh;">
+                <!-- Header brand bar -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #16a34a;margin-bottom:24px;">
+                    <div>
+                        <div style="font-size:26px;font-weight:900;color:#16a34a;letter-spacing:-0.5px;">Kolekto</div>
+                        <div style="font-size:11px;color:#6B7280;margin-top:2px;">Contributors Export Report</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:12px;color:#6B7280;">Generated on</div>
+                        <div style="font-size:12px;font-weight:600;color:#111827;">${exportDate}</div>
+                    </div>
+                </div>
+
+                <!-- Collection info -->
+                <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+                    <div style="font-size:18px;font-weight:800;color:#14532D;margin-bottom:4px;">${currentCollection?.title || 'Collection'}</div>
+                    <div style="display:flex;gap:24px;margin-top:8px;">
+                        <div>
+                            <span style="font-size:11px;color:#6B7280;display:block;">Total Contributors</span>
+                            <span style="font-size:15px;font-weight:700;color:#166534;">${filteredData.length}</span>
+                        </div>
+                        <div>
+                            <span style="font-size:11px;color:#6B7280;display:block;">Total Collected</span>
+                            <span style="font-size:15px;font-weight:700;color:#166534;">₦${totalAmount.toLocaleString('en-NG')}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <table style="width:100%;border-collapse:collapse;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;">
+                    <thead>
+                        <tr style="background:#16a34a;">
+                            ${headers.map((h: string) => `<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:0.05em;">${h}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+
+                <!-- Footer -->
+                <div style="margin-top:32px;padding-top:16px;border-top:1px solid #E5E7EB;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:11px;color:#9CA3AF;">Powered by Kolekto · kolekto.com.ng</span>
+                    <span style="font-size:11px;color:#9CA3AF;">Confidential — For authorized use only</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            const html2pdf = (await import('html2pdf.js')).default;
+            const element = document.createElement('div');
+            element.innerHTML = html;
+            document.body.appendChild(element);
+
+            await html2pdf().set({
+                margin: 0,
+                filename: `${currentCollection?.title || 'collection'}-contributors.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            }).from(element).save();
+
+            document.body.removeChild(element);
+            toast.success('PDF exported successfully!');
+        } catch (err) {
+            console.error('PDF export error:', err);
+            toast.error('Failed to export PDF');
+        }
     };
 
     const handleWithdraw = () => {
@@ -332,28 +397,23 @@ const PwaCollectionDetails: React.FC = () => {
     const paidContributions = (contributions || []).filter(c => c.status === "paid") || [];
     const filteredContributors = applyFilters(paidContributions);
 
-    const allDynamicFields = Array.from(
-        new Set(
-            paidContributions.flatMap(contributor => {
-                return (contributor.contributor_information || []).flatMap(info =>
-                    Object.keys(info)
-                )
-            })
-        )
-    ).filter(field => field !== "TierAmount");
-
     const hasUniqueCode = paidContributions.some(c => c.contributor_unique_code);
+    const tierColumnVisible = colType === 'tiered' || colType === 'ticket';
+    const contributorColumnCount =
+        visibleContributorFields.length +
+        (tierColumnVisible ? 1 : 0) +
+        (hasUniqueCode ? 1 : 0);
 
     const totalCollected = contributions?.reduce((sum, contribution) => {
         return contribution.status === 'paid' ? sum + (contribution.amount || 0) : sum;
     }, 0) || 0;
 
     const contributorsCount = contributions?.filter((c) => c.status === 'paid').length || 0;
-    const withdrawableAmount = currentCollection?.wallets[0].available_balance || 0;
+    const withdrawableAmount = currentCollection?.wallets?.[0]?.available_balance || 0;
 
     const totalRaised = paidContributions.reduce((sum, c) => sum + (c.amount || 0), 0);
     const deadlineDate = currentCollection?.deadline ? new Date(currentCollection.deadline) : new Date();
-    const targetAmount = currentCollection?.amount * currentCollection?.max_participants;
+    const targetAmount = (currentCollection?.amount || 0) * (currentCollection?.max_participants || 0);
 
     const computedStatus: Status = computeStatus({
         statusFlag: currentCollection?.status as Status,
@@ -400,6 +460,16 @@ const PwaCollectionDetails: React.FC = () => {
                         <Wallet className="mr-2 h-4 w-4" />
                         <span className="hidden sm:inline">Withdraw</span>
                     </Button>
+                    {colType === 'fundraising' && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsFlierOpen(true)}
+                            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center"
+                        >
+                            <Download className="mr-2 h-4 w-4" />
+                            <span className="hidden sm:inline">Campaign Flyer</span>
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -422,7 +492,7 @@ const PwaCollectionDetails: React.FC = () => {
 
                 <TabsContent value="overview" className="mt-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {currentCollection.type === "fixed" && (
+                        {colType === "fixed" && (
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium">Amount</CardTitle>
@@ -434,7 +504,7 @@ const PwaCollectionDetails: React.FC = () => {
                             </Card>
                         )}
 
-                        {currentCollection.type === "tiered" && (
+                        {colType === "tiered" && (
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium">Tiers</CardTitle>
@@ -499,12 +569,12 @@ const PwaCollectionDetails: React.FC = () => {
                                 </div>
                             </div>
                             <Button
-                                onClick={exportToCSV}
+                                onClick={exportToPDF}
                                 variant="outline"
                                 className="w-full"
                             >
                                 <Download className="mr-2 h-4 w-4" />
-                                Export Data
+                                Export PDF
                             </Button>
                         </CardContent>
                     </Card>
@@ -516,13 +586,21 @@ const PwaCollectionDetails: React.FC = () => {
                             <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                                 <CardTitle>Contributors</CardTitle>
                                 <div className="flex gap-2 flex-wrap">
+                                    <Button
+                                        onClick={exportToPDF}
+                                        size="sm"
+                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                                        Export PDF
+                                    </Button>
                                     <Input
                                         placeholder="Search..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         className="w-full sm:w-48"
                                     />
-                                    {currentCollection?.type === 'tiered' && availableTiers.length > 0 && (
+                                    {colType === 'tiered' && availableTiers.length > 0 && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="outline" size="sm">
@@ -562,22 +640,42 @@ const PwaCollectionDetails: React.FC = () => {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                {allDynamicFields.map(field => (
-                                                    <TableHead key={field}>{field}</TableHead>
+                                                {visibleContributorFields.map((field: any) => (
+                                                    <TableHead key={field.id || field.name}>{field.name}</TableHead>
                                                 ))}
-                                                {hasUniqueCode && <TableHead>Code</TableHead>}
+                                                {tierColumnVisible && (
+                                                    <TableHead>Tier</TableHead>
+                                                )}
+                                                {hasUniqueCode && <TableHead>Unique Code</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {filteredContributors.map(contributor => (
+                                            {contributorColumnCount === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={1} className="text-center py-8 text-gray-500">
+                                                        No host-defined contributor fields were requested for this collection
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : filteredContributors.map(contributor => (
                                                 <TableRow key={contributor.id}>
-                                                    {allDynamicFields.map(field => (
-                                                        <TableCell key={field}>
-                                                            {(contributor.contributor_information || [])[0]?.[field] || ''}
+                                                    {visibleContributorFields.map((field: any) => (
+                                                        <TableCell key={field.id || field.name}>
+                                                            {getContributorFieldValue(contributor, field) || '-'}
                                                         </TableCell>
                                                     ))}
+                                                    {tierColumnVisible && (
+                                                        <TableCell>
+                                                            <span className="text-xs font-medium bg-gray-100 px-2 py-0.5 rounded">
+                                                                {getTierNameFromAmount(contributor.amount)}
+                                                            </span>
+                                                        </TableCell>
+                                                    )}
                                                     {hasUniqueCode && (
-                                                        <TableCell>{contributor.contributor_unique_code || ''}</TableCell>
+                                                        <TableCell>
+                                                            <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
+                                                                {contributor.contributor_unique_code || '—'}
+                                                            </span>
+                                                        </TableCell>
                                                     )}
                                                 </TableRow>
                                             ))}
@@ -680,15 +778,29 @@ const PwaCollectionDetails: React.FC = () => {
                 initialData={{
                     title: currentCollection.title,
                     description: currentCollection.description || '',
+                    amount: Number(currentCollection.amount || 0),
                     deadline: currentCollection.deadline,
-                    type: currentCollection.type,
+                    type: colType,
                     max_contributions: currentCollection.max_contributions,
                     price_tiers: currentCollection.price_tiers,
                     code_prefix: currentCollection.code_prefix || '',
                     contributions_fields: currentCollection.contributions_fields || [],
+                    total_contributions: currentCollection.total_contributions || 0,
+                    collection_type: currentCollection.collection_type || currentCollection.type || colType,
                 }}
                 onSuccess={handleEditSuccess}
             />
+
+            {colType === 'fundraising' && (
+                <FundraisingShareDialog
+                    open={isFlierOpen}
+                    onOpenChange={setIsFlierOpen}
+                    collection={currentCollection as any}
+                    totalRaised={totalCollected}
+                    donorCount={contributorsCount}
+                    shareUrl={shareUrl}
+                />
+            )}
         </div>
     );
 };

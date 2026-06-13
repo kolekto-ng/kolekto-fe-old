@@ -16,9 +16,11 @@ interface WithdrawFormProps {
   availableBalance: number;
   onSubmit: (data: {
     amount: number;
+    payoutAccountId?: string;
     accountName: string;
     accountNumber: string;
     bankName: string;
+    bankCode?: string;
   }) => void;
   isLoading: boolean;
 }
@@ -191,29 +193,43 @@ const BANKS = [
 ];
 
 
+import { useSettings } from "@/store/useSettings";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertCircle, PlusCircle, CreditCard } from "lucide-react";
+import { useProfileStore } from "@/store/useProfileStore";
+
 const WithdrawForm: React.FC<WithdrawFormProps> = ({
   availableBalance,
   onSubmit,
   isLoading
 }) => {
   const [amount, setAmount] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [bankName, setBankName] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const { payoutAccounts, getPayoutAccounts } = useSettings() as any;
+  const { setActiveSection } = useProfileStore();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    getPayoutAccounts();
+  }, []);
+
+  // Set default account if available
+  React.useEffect(() => {
+    if (payoutAccounts?.length > 0 && !selectedAccountId) {
+      const defaultAcc = payoutAccounts.find((acc: any) => acc.is_default) || payoutAccounts[0];
+      setSelectedAccountId(defaultAcc.id);
+    }
+  }, [payoutAccounts, selectedAccountId]);
 
   const [errors, setErrors] = useState<{
     amount?: string;
-    accountName?: string;
-    accountNumber?: string;
-    bankName?: string;
+    account?: string;
   }>({});
 
   const validate = () => {
     const newErrors: {
       amount?: string;
-      accountName?: string;
-      accountNumber?: string;
-      bankName?: string;
+      account?: string;
     } = {};
 
     // Amount validation
@@ -226,24 +242,9 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
       newErrors.amount = 'Amount exceeds available balance';
     }
 
-    // Account name validation
-    if (!accountName.trim()) {
-      newErrors.accountName = 'Account name is required';
-    } else if (accountName.trim().length < 3) {
-      newErrors.accountName = 'Please enter a valid account name';
-    }
-
-    // Account number validation
-    const accountNumberRegex = /^\d{10}$/;
-    if (!accountNumber) {
-      newErrors.accountNumber = 'Account number is required';
-    } else if (!accountNumberRegex.test(accountNumber)) {
-      newErrors.accountNumber = 'Account number must be 10 digits';
-    }
-
-    // Bank name validation
-    if (!bankName) {
-      newErrors.bankName = 'Please select a bank';
+    // Account validation
+    if (!selectedAccountId) {
+      newErrors.account = 'Please select a withdrawal account';
     }
 
     setErrors(newErrors);
@@ -254,89 +255,131 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
     e.preventDefault();
 
     if (validate()) {
-      onSubmit({
-        amount: parseFloat(amount),
-        accountName,
-        accountNumber,
-        bankName
-      });
+      const selectedAccount = payoutAccounts.find((acc: any) => acc.id === selectedAccountId);
+      if (selectedAccount) {
+        const accountName = selectedAccount.account_name || selectedAccount.accountName || '';
+        const accountNumber = selectedAccount.account_number || selectedAccount.accountNumber || '';
+        const bankName = selectedAccount.bank_name || selectedAccount.bankName || '';
+        const bankCode = selectedAccount.bank_code || selectedAccount.bankCode || '';
+
+        if (!accountName || !bankName) {
+          setErrors((prev) => ({
+            ...prev,
+            account: 'Selected payout account is incomplete. Please re-add it in settings.',
+          }));
+          return;
+        }
+
+        onSubmit({
+          amount: parseFloat(amount),
+          payoutAccountId: selectedAccount.id,
+          accountName,
+          accountNumber,
+          bankName,
+          bankCode,
+        });
+      }
     }
   };
 
+  const handleNavigateToBankSettings = () => {
+    setActiveSection('bank');
+    navigate('/dashboard/settings');
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor="amount">Amount to Withdraw (₦)</Label>
         <Input
           id="amount"
           type="number"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
           placeholder="Enter amount"
-          className={errors.amount ? "border-red-500" : ""}
+          className={errors.amount ? "border-red-500" : "border-gray-200"}
         />
         {errors.amount && (
           <p className="text-sm text-red-500">{errors.amount}</p>
         )}
-        <p className="text-sm text-gray-500">Available balance: ₦{availableBalance.toLocaleString()}</p>
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-gray-500">Available balance: <span className="font-semibold text-gray-900">₦{availableBalance.toLocaleString()}</span></span>
+          <button 
+            type="button" 
+            onClick={() => setAmount(availableBalance.toString())}
+            className="text-[#1B5E20] font-medium hover:underline"
+          >
+            Withdraw Max
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="accountName">Account Name</Label>
-        <Input
-          id="accountName"
-          value={accountName}
-          onChange={(e) => setAccountName(e.target.value)}
-          placeholder="Enter account name"
-          className={errors.accountName ? "border-red-500" : ""}
-        />
-        {errors.accountName && (
-          <p className="text-sm text-red-500">{errors.accountName}</p>
+        <div className="flex justify-between items-center">
+          <Label htmlFor="account">Withdrawal Account</Label>
+          <button 
+            type="button"
+            onClick={handleNavigateToBankSettings}
+            className="text-xs font-semibold flex items-center text-[#1B5E20] hover:underline"
+          >
+            <PlusCircle className="w-3 h-3 mr-1" />
+            Add New Mode
+          </button>
+        </div>
+
+        {payoutAccounts && payoutAccounts.length > 0 ? (
+          <div className="space-y-1">
+            <Select
+              value={selectedAccountId}
+              onValueChange={setSelectedAccountId}
+            >
+              <SelectTrigger id="account" className={errors.account ? "border-red-500 h-14" : "h-14 border-gray-200"}>
+                <SelectValue placeholder="Select a saved bank account" />
+              </SelectTrigger>
+              <SelectContent>
+                {payoutAccounts.map((account: any) => (
+                  <SelectItem key={account.id} value={account.id} className="py-3">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-gray-900 leading-none mb-1">{account.account_name || account.accountName}</span>
+                      <div className="flex items-center text-xs text-gray-500">
+                        <span>{account.bank_name || account.bankName}</span>
+                        <span className="mx-1.5">•</span>
+                        <span>••••{account.account_last4}</span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.account && (
+              <p className="text-sm text-red-500">{errors.account}</p>
+            )}
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <CreditCard className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">No linked bank accounts</p>
+              <p className="text-xs text-gray-600 mt-0.5">Please add a bank account before withdrawing.</p>
+            </div>
+            <Button
+              type="button"
+              onClick={handleNavigateToBankSettings}
+              className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs h-9"
+            >
+              Go to Account Settings
+            </Button>
+          </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="accountNumber">Account Number</Label>
-        <Input
-          id="accountNumber"
-          value={accountNumber}
-          onChange={(e) => setAccountNumber(e.target.value)}
-          placeholder="Enter 10-digit account number"
-          className={errors.accountNumber ? "border-red-500" : ""}
-          maxLength={10}
-        />
-        {errors.accountNumber && (
-          <p className="text-sm text-red-500">{errors.accountNumber}</p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="bankName">Bank</Label>
-        <Select
-          value={bankName}
-          onValueChange={setBankName}
-        >
-          <SelectTrigger id="bankName" className={errors.bankName ? "border-red-500" : ""}>
-            <SelectValue placeholder="Select bank" />
-          </SelectTrigger>
-          <SelectContent>
-            {BANKS.map((bank) => (
-              <SelectItem key={bank} value={bank}>
-                {bank}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {errors.bankName && (
-          <p className="text-sm text-red-500">{errors.bankName}</p>
-        )}
-      </div>
-
-      <div className="pt-2">
+      <div className="pt-2 space-y-3">
         <Button
           type="submit"
-          className="w-full bg-kolekto hover:bg-kolekto/90"
-          disabled={isLoading}
+          className="w-full bg-kolekto hover:bg-kolekto/90 h-11"
+          disabled={isLoading || !payoutAccounts || payoutAccounts.length === 0}
         >
           {isLoading ? (
             <>Processing Withdrawal...</>
@@ -347,6 +390,9 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
             </>
           )}
         </Button>
+        <p className="text-xs text-center text-gray-500">
+          Withdrawals are subject to a T+1 settlement period. Funds will arrive in your bank account by the end of the next business day.
+        </p>
       </div>
     </form>
   );

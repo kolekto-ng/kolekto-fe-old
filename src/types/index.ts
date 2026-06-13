@@ -36,26 +36,47 @@ export interface PriceTier {
   price: number;
   description?: string;
   quantity?: number | null;
+  prefix?: string | null;
 }
 
 export interface Collection {
   id: string;
   organizer_id: string;
+  user_id?: string;
   title: string;
   description?: string;
   amount: number;
   deadline?: string;
   max_participants?: number | null;
+  max_contributions?: number | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
   total_amount?: number | null;
+  total_contributions?: number;
   form_fields: FormField[];
   pricing_tiers: PriceTier[];
+  price_tiers?: PriceTier[];
+  contributions_fields?: FormField[];
   status: string;
+  type?: string;
+  collection_type?: string;
+  slug?: string;
   participants_count?: number;
+  fee_bearer?: string;
+  target_amount?: number | null;
+  min_contribution?: number | null;
+  banner_url?: string;
+  campaign_summary?: string;
+  event_date?: string;
+  code_prefix?: string;
+  wallets?: any[];
+  contributions?: any[];
+  story?: { what?: string; why?: string; impact?: string };
+  story_images?: string[];
   formattedAmount?: string;
   formattedDate?: string;
+  [key: string]: any;
 }
 
 export interface Contribution {
@@ -153,9 +174,11 @@ export interface WithdrawalState {
   createWithdrawal: (withdrawalData: {
     amount: number;
     collection_id?: string;
-    account_name: string;
-    account_number: string;
-    bank_name: string;
+    payout_account_id?: string;
+    account_name?: string;
+    account_number?: string;
+    bank_name?: string;
+    bank_code?: string;
     organizer_id: string;
   }) => Promise<Withdrawal>;
 }

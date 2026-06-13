@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PersonalInfoTab from "@/components/profile/PersonalInfoTab";
 import KYCVerificationTab from "@/components/profile/KYCVerificationTab";
 import { useAuthStore } from "@/store";
+import { useProfileStore } from "@/store/useProfileStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +12,15 @@ import { Badge } from "@/components/ui/badge";
 const PwaProfile: React.FC = () => {
     const navigate = useNavigate();
     const { user, signOut } = useAuthStore() as any;
+    const { kycData, fetchKYCStatus } = useProfileStore();
 
-    const kycStatus = user?.verification_status || "not_started";
+    React.useEffect(() => {
+        if (user?.id) {
+            fetchKYCStatus(user.id);
+        }
+    }, [user?.id, fetchKYCStatus]);
+
+    const kycStatus = kycData?.overallStatus || user?.verification_status || "not_started";
     const kycComplete = kycStatus === "verified";
 
     const handleSignOut = async () => {

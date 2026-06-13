@@ -10,30 +10,34 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: [
-        "https://i.imgur.com/Lb0KU2l.png",
-        "kelekto_logo-removebg-preview.png",
-      ],
+      includeAssets: ["kelekto_logo-removebg-preview.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
         description: "Simplify group payments and collections with Kolekto",
-        start_url: "/pwa/login",
-        scope: "/pwa/",
+        start_url: "/",
+        scope: "/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#f9fafb",
-        theme_color: "#f9fafb",
+        background_color: "#1B5E20",
+        theme_color: "#1B5E20",
+        categories: ["finance", "business"],
         icons: [
           {
-            src: "https://i.imgur.com/Lb0KU2l.png",
+            src: "/kelekto_logo-removebg-preview.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/kelekto_logo-removebg-preview.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "https://i.imgur.com/Lb0KU2l.png",
-            sizes: "192x192",
+            src: "/kelekto_logo-removebg-preview.png",
+            sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
           },
@@ -50,11 +54,9 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
 
         // CRITICAL: Navigation fallback for SPA routing
-        navigateFallback: "/pwa.html",
-        navigateFallbackAllowlist: [/^\/pwa\/.*/], // Match /pwa/* (with trailing slash)
+        navigateFallback: "/index.html",
         navigateFallbackDenylist: [
           /^\/api/, // API routes
-          /^\/$/, // Root
           /\/[^/?]+\.[^/]+$/, // Files with extensions (e.g., .js, .css, .png)
         ],
 
@@ -84,23 +86,31 @@ export default defineConfig({
               },
             },
           },
-          // API calls (network first, fallback to cache)
+          // B-18: API calls MUST NOT be cached by the service worker.
+          //
+          // Previously this used NetworkFirst with maxAgeSeconds=300 (5 min).
+          // For a payments product that is wrong: a user could refresh their
+          // wallet page and see a 5-minute-stale `available_balance`, request
+          // a withdrawal believing funds were there, then get rejected by the
+          // backend. Same risk for collection lists, contributions, KYC.
+          //
+          // We now ALWAYS go to the network for /api/* — no SW caching at
+          // all on financial paths. Workbox still falls through to the
+          // network without caching when no rule matches.
+          //
+          // (Direct calls to *.supabase.co/functions/v1/* are also uncached
+          // because they don't match any rule above.)
           {
             urlPattern: /^https:\/\/.*\/api\/.*/i,
-            handler: "NetworkFirst",
+            handler: "NetworkOnly",
             options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5, // 5 minutes
-              },
+              cacheName: "api-no-cache",
             },
           },
         ],
       },
       devOptions: {
-        enabled: true, // Enable PWA in dev mode for testing
+        enabled: false, // Disabled in dev — service worker was caching old code
       },
     }),
   ],

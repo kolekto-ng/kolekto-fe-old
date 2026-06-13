@@ -1,108 +1,156 @@
-// src/pages/dashboard/TransactionHistoryPage.tsx
-import React, { useState, useEffect } from 'react';
-import DashboardLayout from '../../components/dashboard/DashboardLayout';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
-import { useCollectionStore, useWithdrawalStore } from '@/store';
-import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
+import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Wallet, History, Loader2 } from 'lucide-react';
+import {
+  isCompletedWithdrawal,
+  withdrawalStatusBucket,
+} from '@/utils/withdrawalStatus';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
   '₦' + amount.toLocaleString('en-NG', { minimumFractionDigits: 0 });
 
-interface WalletOverview {
-  availableBalance: number;
-  bookBalance: number;
-  ledgerBalance: number;
-  pendingDebits: number;
-  pendingCredits: number;
-  totalGrossEarnings: number;
-  totalNetEarnings: number;
-  totalWithdrawn: number;
-}
-
 interface CollectionEarning {
   id: string;
   name: string;
-  amount: number;
-  participants: number;
-  totalCollected: number;
-  grossEarnings: number;
-  netEarnings: number;
-  balance: number;
-  withdrawable: number;
-  pendingWithdrawals: number;
+  type: string;
+  totalRaised: number;
+  currentBalance: number;
+  amountWithdrawn: number;
+  availableBalance: number;
+  pendingBalance: number;
 }
 
 interface RecentTransaction {
   id: string;
   type: 'deposit' | 'withdrawal';
+  collection: string;
   amount: number;
   date: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'successful' | 'failed' | string;
   description: string;
 }
 
 const TransactionHistoryPage: React.FC = () => {
-  const [walletOverview, setWalletOverview] = useState<WalletOverview | null>(null);
-  const [collectionEarnings, setCollectionEarnings] = useState<CollectionEarning[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [activeTab, setActiveTab] = useState('collections');
+  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore() as any;
+  const { withdrawals, fetchWithdrawals, isLoading: withdrawalsLoading } = useWithdrawalStore() as any;
+  const { user } = useAuthStore() as any;
 
-  const { collections } = useCollectionStore()
-
-  const { withdrawals } = useWithdrawalStore()
-
+  // Ensure collections are available when user lands directly on this page.
   useEffect(() => {
-    // Sort collections by created_at descending (newest first)
-    const sortedCollections = [...collections].sort((a, b) => {
+    if (user?.id && (!Array.isArray(collections) || collections.length === 0)) {
+      void fetchCollections(user.id);
+    }
+  }, [user?.id, collections?.length, fetchCollections]);
+
+  // Defer withdrawals fetch until the withdrawals tab is opened.
+  // This keeps initial wallet page render fast for Collection Overview.
+  useEffect(() => {
+    if (activeTab === 'withdrawals' && user?.id) {
+      void fetchWithdrawals(user.id);
+    }
+  }, [activeTab, user?.id, fetchWithdrawals]);
+
+  const withdrawalsArray = useMemo(
+    () =>
+      Array.isArray(withdrawals)
+        ? withdrawals
+        : withdrawals
+          ? [withdrawals]
+          : [],
+    [withdrawals],
+  );
+
+  const completedByCollection = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const w of withdrawalsArray) {
+      if (!isCompletedWithdrawal(w?.status)) continue;
+      const collectionId = w?.collection_id;
+      if (!collectionId) continue;
+      totals[collectionId] = (totals[collectionId] || 0) + Number(w.amount || 0);
+    }
+    return totals;
+  }, [withdrawalsArray]);
+
+  const collectionEarnings: CollectionEarning[] = useMemo(() => {
+    const sortedCollections = [...(collections || [])].sort((a, b) => {
       const dateA = new Date(a.created_at).getTime();
       const dateB = new Date(b.created_at).getTime();
       return dateB - dateA;
     });
 
-    // Map sorted collections to CollectionEarning format
-    const earnings = sortedCollections.map((col) => {
-      const wallet = Array.isArray(col.wallets) && col.wallets.length > 0 ? col.wallets[0] : {};
+    return sortedCollections.map((col: any) => {
+      const wallet = col.wallets
+        ? (Array.isArray(col.wallets) ? col.wallets[0] || {} : col.wallets)
+        : {};
+      const walletWithdrawn = Number(wallet.withdrawn || 0);
+      const withdrawnFromRows = Number(completedByCollection[col.id] || 0);
+      const withdrawnTotal = Math.max(walletWithdrawn, withdrawnFromRows);
+      const totalRaised = Number(wallet.gross_payment || col.total_amount || 0);
+      const currentBalance = Number(
+        wallet.ledger_balance !== undefined
+          ? wallet.ledger_balance
+          : Math.max(0, totalRaised - withdrawnTotal),
+      );
+
       return {
         id: col.id,
-        name: col.title || "",
-        amount: col.amount || 0,
-        participants: col.total_contributions || 0,
-        totalCollected: col.amount || 0,
-        grossEarnings: wallet.gross_payment || 0,
-        netEarnings: wallet.net_payment || 0,
-        balance: wallet.ledger_balance || 0,
-        withdrawable: wallet.available_balance || 0,
-        pendingWithdrawals: wallet.pending_withdrawals ?? 0,
+        name: col.title || '',
+        type: col.collection_type || col.type || 'Fixed',
+        totalRaised,
+        currentBalance,
+        amountWithdrawn: withdrawnTotal,
+        availableBalance:
+          wallet.available_balance !== undefined
+            ? Number(wallet.available_balance)
+            : currentBalance,
+        pendingBalance: Number(wallet.pending_withdrawals ?? 0),
       };
     });
-    setCollectionEarnings(earnings);
+  }, [collections, completedByCollection]);
 
-    // Sort withdrawals by created_at descending (newest first)
-    const withdrawalsArray = Array.isArray(withdrawals)
-      ? withdrawals
-      : withdrawals
-        ? [withdrawals]
-        : [];
-
+  const recentTransactions: RecentTransaction[] = useMemo(() => {
     const sortedWithdrawals = [...withdrawalsArray].sort((a, b) => {
       const dateA = new Date(a.created_at).getTime();
       const dateB = new Date(b.created_at).getTime();
       return dateB - dateA;
     });
 
-    const withdrawalTransactions = sortedWithdrawals.map((w) => ({
-      id: w.id,
-      collection: w.collections ? w.collections.title : 'Unknown Collection',
-      amount: w.amount,
-      date: w.created_at ? w.created_at.split('T')[0] : '',
-      status: w.status || 'pending',
-      description: w.destination_account
-        ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
-        : 'Withdrawal',
-    }));
+    return sortedWithdrawals.map((w: any) => {
+      const bucketedStatus = withdrawalStatusBucket(w.status);
+      const mappedStatus =
+        bucketedStatus === 'completed'
+          ? 'successful'
+          : bucketedStatus === 'pending'
+            ? 'pending'
+            : bucketedStatus === 'rejected'
+              ? 'failed'
+              : (w.status || 'pending');
 
-    setRecentTransactions(withdrawalTransactions);
-  }, [collections, withdrawals]);
+      return {
+        id: w.id,
+        type: 'withdrawal',
+        collection: w.collections ? w.collections.title : 'Unknown Collection',
+        amount: Number(w.amount || 0),
+        date: w.created_at
+          ? new Date(w.created_at).toLocaleString('en-NG', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '',
+        status: mappedStatus,
+        description: w.destination_account
+          ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
+          : 'Withdrawal',
+      };
+    });
+  }, [withdrawalsArray]);
 
   const handleWithdraw = async (collectionId: string) => {
     alert(`Withdraw from collection ${collectionId} (dummy action)`);
@@ -110,183 +158,152 @@ const TransactionHistoryPage: React.FC = () => {
 
   return (
     <div>
-      {/* <h1 className="text-3xl font-semibold text-gray-800 mb-2">Wallet Overview</h1> */}
-      <p className="text-gray-600 mb-4">Manage and track your funds effectively.</p>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Wallet & Transactions</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage your collections balance and track withdrawals.</p>
+      </div>
 
-      {walletOverview && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-          <div className="card p-6 flex flex-col justify-between border-l-4 border-green-500">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-500">Available Balance</h3>
-                <span data-tip="The total amount you can withdraw right now.">
-                  <span className="material-icons info-icon">info_outline</span>
-                </span>
-              </div>
-              <p className="text-3xl font-bold text-green-600 mt-1">{formatCurrency(walletOverview.availableBalance)}</p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-500">Book Balance</h3>
-                <span data-tip="Expected balance after pending transactions clear.">
-                  <span className="material-icons info-icon">info_outline</span>
-                </span>
-              </div>
-              <p className="text-xl font-semibold text-gray-700 mt-1">{formatCurrency(walletOverview.bookBalance)}</p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-500">Ledger Balance</h3>
-                <span data-tip="Total confirmed funds in your wallet.">
-                  <span className="material-icons info-icon">info_outline</span>
-                </span>
-              </div>
-              <p className="text-xl font-semibold text-gray-700 mt-1">{formatCurrency(walletOverview.ledgerBalance)}</p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-500">Pending Debits</h3>
-                <span data-tip="Withdrawals currently being processed.">
-                  <span className="material-icons info-icon">info_outline</span>
-                </span>
-              </div>
-              <p className="text-xl font-semibold text-yellow-600 mt-1">{formatCurrency(walletOverview.pendingDebits)} <span
-                className="material-icons text-sm align-middle text-yellow-500">hourglass_empty</span></p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-gray-500">Pending Credits</h3>
-                <span data-tip="Incoming funds yet to be confirmed.">
-                  <span className="material-icons info-icon">info_outline</span>
-                </span>
-              </div>
-              <p className="text-xl font-semibold text-blue-600 mt-1">{formatCurrency(walletOverview.pendingCredits)} <span
-                className="material-icons text-sm align-middle text-blue-500">pending</span></p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Total Gross Earnings</h3>
-              <p className="text-xl font-semibold text-gray-700 mt-1">{formatCurrency(walletOverview.totalGrossEarnings)}</p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Total Net Earnings</h3>
-              <p className="text-xl font-semibold text-gray-700 mt-1">{formatCurrency(walletOverview.totalNetEarnings)}</p>
-            </div>
-          </div>
-          <div className="card p-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Total Withdrawn</h3>
-              <p className="text-xl font-semibold text-gray-700 mt-1">{formatCurrency(walletOverview.totalWithdrawn)}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="bg-gray-100/80 p-1 w-full sm:w-auto inline-flex h-auto rounded-xl">
+          <TabsTrigger 
+            value="collections" 
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all"
+          >
+            <Wallet className="w-4 h-4" />
+            Collections Overview
+          </TabsTrigger>
+          <TabsTrigger 
+            value="withdrawals"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all"
+          >
+            <History className="w-4 h-4" />
+            Withdrawal Transactions
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="collections" className="m-0 focus-visible:outline-none focus-visible:ring-0">
 
       <div className="bg-white w-full max-w-full shadow-md rounded-lg mb-8">
         <div className="px-4 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-700">Collection Earnings</h2>
         </div>
-        {/* Responsive table: horizontal scroll on small screens, compact columns */}
-        <div className="overflow-x-auto w-full">
-          <table className="min-w-full w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        {/* Responsive table: horizontal and vertical scroll with sticky header */}
+        <div className="overflow-auto w-full max-h-[600px] relative">
+          <table className="min-w-[1000px] w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10 outline outline-1 outline-gray-200">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Amount</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Participants</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">
-                  Earnings
-                  <span data-tooltip-id="earnings-tip" data-tooltip-content="Gross: Total before deductions. Net: After fees.">
-                    <span className="material-icons info-icon text-xs">info_outline</span>
-                  </span>
-                  <Tooltip id="earnings-tip" place="top" />
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">
-                  Funds
-                  <span data-tip="Balance: Current funds. Withdrawable: Available for withdrawal.">
-                    <span className="material-icons info-icon text-xs">info_outline</span>
-                  </span>
-                </th>
-                {/* <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Actions</th> */}
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Name</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Type</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Total Amount Raised</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Current Balance</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Amount Withdrawn</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Available Balance</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Pending Balance</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {collectionsLoading && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-3 py-10 text-sm text-gray-500 text-center"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading collection earnings...
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {!collectionsLoading && collectionEarnings.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-3 py-8 text-sm text-gray-500 text-center"
+                  >
+                    No collections found.
+                  </td>
+                </tr>
+              )}
               {collectionEarnings.map((earning, idx) => (
-                <tr key={earning.id} className={idx % 2 === 1 ? "bg-gray-50" : ""}>
+                <tr key={earning.id} className={idx % 2 === 1 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}>
                   <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{earning.name}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.amount)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{earning.participants}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm">
-                    <div className="text-gray-900 font-medium">{formatCurrency(earning.grossEarnings)} <span className="text-xs text-gray-500">(Gross)</span></div>
-                    <div className="text-gray-500">{formatCurrency(earning.netEarnings)} <span className="text-xs text-gray-500">(Net)</span></div>
-                  </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm">
-                    <div className="text-gray-900 font-medium">{formatCurrency(earning.balance)} <span className="text-xs text-gray-500">(Balance)</span></div>
-                    <div className="text-green-600 font-semibold">{formatCurrency(earning.withdrawable)} <span className="text-xs text-gray-500">(Withdrawable)</span></div>
-                  </td>
-                  {/* <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      className="flex items-center text-green-600 hover:text-green-800 bg-green-100 hover:bg-green-200 px-2 py-1 rounded-md text-xs"
-                      onClick={() => handleWithdraw(earning.id)}
-                    >
-                      <span className="material-icons text-sm mr-1">account_balance_wallet</span> Withdraw
-                    </button>
-                  </td> */}
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{earning.type}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(earning.totalRaised)}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.currentBalance)}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.amountWithdrawn)}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">{formatCurrency(earning.availableBalance)}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-yellow-600 font-medium">{formatCurrency(earning.pendingBalance)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+      </TabsContent>
 
-      <div className="bg-white w-full max-w-full shadow-md rounded-lg">
+      <TabsContent value="withdrawals" className="m-0 focus-visible:outline-none focus-visible:ring-0">
+      <div className="bg-white w-full max-w-full shadow-sm border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-4 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-700">Withdrawal Transactions</h2>
         </div>
-        {/* Responsive table: horizontal scroll on small screens, compact columns */}
-        <div className="overflow-x-auto w-full">
-          <table className="min-w-full w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        {/* Responsive table: horizontal and vertical scroll with sticky header */}
+        <div className="overflow-auto w-full max-h-[600px] relative">
+          <table className="min-w-[800px] w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10 outline outline-1 outline-gray-200">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Date</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Description</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Title</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Amount</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Status</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Date & Time</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {withdrawalsLoading && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-3 py-10 text-sm text-gray-500 text-center"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading withdrawal transactions...
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {!withdrawalsLoading && recentTransactions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-3 py-8 text-sm text-gray-500 text-center"
+                  >
+                    No withdrawal transactions yet.
+                  </td>
+                </tr>
+              )}
               {recentTransactions.map(transaction => (
-                <tr key={transaction.id}>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{transaction.date}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.collection}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.description}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(transaction.amount)}</td>
+                <tr key={transaction.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{transaction.collection}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(transaction.amount)}</td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${transaction.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                    <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${
+                      transaction.status === 'successful' || transaction.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
+                      transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                        'bg-red-100 text-red-800 border border-red-200'
                       }`}>
                       {transaction.status}
                     </span>
                   </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.date}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+      </TabsContent>
+      </Tabs>
 
       {/* {currentCollection && (
         <WithdrawFundsDialog

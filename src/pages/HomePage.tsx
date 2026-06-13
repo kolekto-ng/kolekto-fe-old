@@ -1,38 +1,25 @@
-
-import React from 'react';
-import NavBar from '@/components/NavBar';
-import Features from "@/components/lpMain/features/Features";
-import Footer from "@/components/Footer/Footer";
-import Hero from "@/components/lpMain/hero/Hero";
-import SimplifyCollection from "@/components/lpMain/simCol/SimplifyCollection";
-import WhyKolekto from "@/components/lpMain/whyKolekto/whyKolekto";
-import FAQSection from "@/components/FAQSection/FAQSection";
-import HowItWorks from "@/components/lpMain/hwWorks/HowItWorks";
-import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-
+import React, { Suspense, lazy } from "react";
+import { Loader2 } from "lucide-react";
+const LandingPage = lazy(() => import("./LandingPage"));
+const PWAInstallPrompt = lazy(() => import("@/components/PWAInstallPrompt"));
 
 const HomePage: React.FC = () => {
   return (
-    <div className="min-h-screen flex flex-col overflow-hidden">
-      <div className='bg-[#E3FFE6] text-center text-[14px] md:text-[18px] py-[12px]'>Be part of the leaders shaping <a className='text-green-950 font-semibold' href="/kolekto-campus#form-section">Kolekto on campus</a></div>
-      <NavBar />
-
-      <main className="flex-grow bg-[#FAFAFA] overflow-hidden">
-        {/* Hero Section */}
-        <Hero />
-
-        {/* Features Section */}
-        <Features />
-        <HowItWorks />
-        <WhyKolekto />
-        <FAQSection />
-        <SimplifyCollection />
-      </main>
-      <Footer />
-
-      {/* PWA Install Prompt - Shows when installable */}
-      <PWAInstallPrompt variant="banner" />
-    </div>
+    <>
+      <Suspense
+        fallback={
+          <div className="flex justify-center items-center h-[60vh]">
+            <Loader2 className="h-7 w-7 animate-spin text-kolekto" />
+          </div>
+        }
+      >
+        <LandingPage />
+      </Suspense>
+      <Suspense fallback={null}>
+        {/* PWA Install Prompt - Shows when installable */}
+        <PWAInstallPrompt variant="banner" />
+      </Suspense>
+    </>
   );
 };
 

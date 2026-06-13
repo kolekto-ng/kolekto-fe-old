@@ -79,13 +79,14 @@ const PwaCollections: React.FC = () => {
                                 key={collection.id}
                                 id={collection.id}
                                 title={collection.title}
-                                description={collection.description || undefined}
                                 amount={collection.amount}
                                 deadline={collection.deadline || new Date().toISOString()}
                                 status={collection.status as "active" | "paused" | "expired" | "completed"}
-                                type={collection.type as "flat" | "tier"}
+                                type={collection.collection_type || collection.type || 'fixed'}
                                 participantsCount={collection.total_contributions || 0}
                                 maxParticipants={collection.max_contributions || undefined}
+                                totalRaised={collection.total_amount || 0}
+                                goalAmount={collection.target_amount || undefined}
                                 dateCreated={collection.created_at}
                                 tiers={tiers}
                                 onShare={() => handleShare(collection.id)}

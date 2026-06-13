@@ -12,7 +12,11 @@ import ReCAPTCHA from "react-google-recaptcha";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import { Eye, EyeOff } from "lucide-react"; // Add this import for icons
 
-const RegisterForm: React.FC = () => {
+interface RegisterFormProps {
+  redirectTo?: string;
+}
+
+const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }) => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -32,6 +36,10 @@ const RegisterForm: React.FC = () => {
   const navigate = useNavigate();
 
   const { executeRecaptcha } = useGoogleReCaptcha();
+  const resolvedRedirect = redirectTo === "/create-collection"
+    ? "/create-collection?resumePublish=1"
+    : redirectTo;
+
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://www.google.com/recaptcha/api.js";
@@ -112,7 +120,8 @@ const RegisterForm: React.FC = () => {
         lastName,
         phoneNumber,
         recaptcherToken,
-        recaptchaType
+        recaptchaType,
+        `${window.location.origin}${resolvedRedirect}`
       );
 
       if (error) {
@@ -120,10 +129,7 @@ const RegisterForm: React.FC = () => {
         toast.error("Registration failed");
       } else {
         setIsSignupComplete(true);
-        toast.success(
-          "Registration successful! Check your email to confirm your account."
-        );
-        // If user is returned, they might be auto-signed in, so redirect to dashboard
+        toast.success("Account created. Check your email to verify your account.");
       }
     } catch (error: any) {
       console.log(error, 'error');
@@ -216,14 +222,15 @@ const RegisterForm: React.FC = () => {
     }
 
     try {
-      let { user, error } = await signUp(
+      let { user, session, verificationRequired, error } = await signUp(
         email,
         password,
         firstName,
         lastName,
         phoneNumber,
         recaptcherToken,
-        recaptchaType
+        recaptchaType,
+        `${window.location.origin}${resolvedRedirect}`
       );
       console.log(user, 'user');
 
@@ -240,11 +247,16 @@ const RegisterForm: React.FC = () => {
         setError(error?.message);
         toast.error("Registration failed");
       } else {
-        setIsSignupComplete(true);
-        toast.success(
-          "Registration successful! Check your email to confirm your account."
-        );
-        // If user is returned, they might be auto-signed in, so redirect to dashboard
+        if (session?.access_token) {
+          toast.success("Account created successfully!");
+          navigate(resolvedRedirect);
+        } else if (verificationRequired) {
+          setIsSignupComplete(true);
+          toast.success("Check your email to verify your account.");
+        } else {
+          setIsSignupComplete(true);
+          toast.success("Registration successful!");
+        }
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
@@ -267,16 +279,12 @@ const RegisterForm: React.FC = () => {
         <div className="bg-green-50 text-green-700 p-4 rounded-md">
           <h3 className="font-medium">Registration successful!</h3>
           <p className="text-sm mt-1">
-            Please check your email inbox or <span className="font-semibold">spam</span> folder to confirm your
-            account.
+            Your account has been created. Check your email, verify your account, and we will resume your saved collection publishing flow when you return.
           </p>
         </div>
-        <p className="text-sm text-gray-600">
-          A confirmation link has been sent to <strong>{email}</strong>
-        </p>
         <div className="mt-4">
-          <Link to="/login" className="text-kolekto hover:underline">
-            Back to login
+          <Link to={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`} className="text-kolekto hover:underline">
+            Continue to sign in
           </Link>
         </div>
       </div>
@@ -461,7 +469,7 @@ const RegisterForm: React.FC = () => {
         </Link>
       </div>
       {showV2 && (
-        <div className="mt-4">
+        <div className="mt-4 overflow-x-auto -mx-4 px-4 flex justify-center">
           <ReCAPTCHA
             sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}
@@ -471,7 +479,7 @@ const RegisterForm: React.FC = () => {
 
       {isLoading && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 shadow-lg flex items-center">
+          <div className="bg-white rounded-lg p-4 shadow-lg flex items-center max-w-[calc(100vw-2rem)] mx-4">
             <span className="loader mr-2"></span>
             <span className="text-kolekto font-semibold">Creating Account...</span>
           </div>

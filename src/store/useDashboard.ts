@@ -41,24 +41,51 @@
 // }
 
 import { create } from "zustand";
-import { toast } from "sonner";
 import { axiosInstance } from "../utils/axios";
 
 export const useActivities = create((set, get) => ({
   activities: [],
   isLoading: false, // loading if no activities yet
   error: null,
+  lastFetchedAt: 0,
+  inFlight: null as Promise<void> | null,
 
   // get activities
-  getActivities: async () => {
-    set({ isLoading: true });
-    try {
-      const activities = await axiosInstance.get("/dashboard/activities");
-      set({ activities: activities.data.data, isLoading: false });
-      console.log(activities, "activities/me");
-    } catch (error) {
-      console.error("Auth check error:", error);
-      set({ user: null, session: null, isLoading: false, error: error });
-    }
+  getActivities: async (
+    opts: { force?: boolean; limit?: number } = {},
+  ): Promise<void> => {
+    const { activities, inFlight, lastFetchedAt } = get();
+    const { force = false, limit } = opts;
+    const isFresh = Date.now() - Number(lastFetchedAt || 0) < 30_000;
+
+    if (!force && inFlight) return inFlight;
+    if (!force && isFresh && Array.isArray(activities) && activities.length > 0)
+      return;
+
+    const request = (async () => {
+      set({
+        isLoading: !Array.isArray(activities) || activities.length === 0,
+        error: null,
+      });
+      try {
+        const query = typeof limit === "number" ? `?limit=${limit}` : "";
+        const response = await axiosInstance.get(`/dashboard/activities${query}`);
+        const rows = response?.data?.data || response?.data || [];
+        set({
+          activities: Array.isArray(rows) ? rows : [],
+          isLoading: false,
+          error: null,
+          lastFetchedAt: Date.now(),
+        });
+      } catch (error) {
+        console.error("Activities fetch error:", error);
+        set({ isLoading: false, error });
+      } finally {
+        set({ inFlight: null });
+      }
+    })();
+
+    set({ inFlight: request });
+    return request;
   },
 }));

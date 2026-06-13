@@ -1,70 +1,93 @@
-import React from 'react'
-import { Input } from '@/components/ui/input';
+import React, { useEffect } from 'react'
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store';
-import { Bell, Search, ChevronDown, Users } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { SidebarTrigger } from '../ui/sidebar';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import Logo from '../Logo';
+import { useActivities } from '@/store/useDashboard';
+
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Home',
+  '/dashboard/collections': 'Collections',
+  '/dashboard/create-collection': 'Create Collection',
+  '/dashboard/settings': 'Profile',
+  '/dashboard/transactions': 'Wallet',
+  '/dashboard/activities': 'Activity',
+};
 
 const DashboardNavbar: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const user = useAuthStore((state) => state.user);
+  const { activities, getActivities } = useActivities();
+
+  useEffect(() => {
+    getActivities();
+  }, []);
+
+  const activityCount = (activities as any[]).length;
+
   const getPageTitle = () => {
-    switch (location.pathname) {
-      case '/dashboard':
-        return 'Home';
-      case '/dashboard/collections':
-        return 'Collections';
-      case '/dashboard/create-collection':
-        return 'Create Collection';
-      case '/dashboard/settings':
-        return 'Profile';
-      case '/dashboard/transactions':
-        return 'Wallet';
-      default:
-        if (location.pathname.startsWith('/dashboard/collections/')) {
-          return 'Collection Details';
-        }
-        return 'Dashboard';
-    }
+    if (location.pathname.startsWith('/dashboard/collections/')) return 'Collection Details';
+    return PAGE_TITLES[location.pathname] ?? 'Dashboard';
   };
 
+  const firstName = user?.user_metadata?.full_name?.split(' ')[0]
+    || user?.user_metadata?.firstName
+    || user?.email?.split('@')[0]
+    || 'there';
+
+  const BellButton = () => (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="relative h-9 w-9"
+      onClick={() => navigate('/dashboard/activities')}
+      aria-label={`Activities${activityCount > 0 ? ` (${activityCount})` : ''}`}
+    >
+      <Bell className="h-5 w-5 text-gray-600" />
+      {activityCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 ring-2 ring-white">
+          {activityCount > 99 ? '99+' : activityCount}
+        </span>
+      )}
+    </Button>
+  );
+
+  if (isMobile) {
+    return (
+      <header
+        className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-2">
+            <Logo size="sm" />
+          </div>
+          <div className="flex items-center gap-2">
+            <BellButton />
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
-    <div className='space-y-6 mt-3 mx-[24px]'>
-      {/* Header Section */}
-      <div className="flex flex-row items-center justify-between gap-4">
+    <div className="sticky top-0 z-30 bg-gray-50 border-b border-gray-100">
+      <div className="flex items-center justify-between px-6 h-14">
         <div className="flex items-center gap-3">
-          <SidebarTrigger className="md:hidden" />
-          <div className="ml-2 md:ml-0 text-2xl font-bold">{getPageTitle()}</div>
+          <SidebarTrigger className="hidden md:flex" />
+          <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
         </div>
-
-        <div className="flex items-center gap-3">
-          {/* Search Bar */}
-          {/* <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search for a collection"
-              className="pl-10 pr-4 bg-[#D9D9D9] placeholder:font-semibold"
-            />
-          </div> */}
-
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
-          </Button>
-
-          {/* Account Dropdown */}
-          {/* <Button variant="outline" className="flex items-center gap-2">
-            <Users />
-            <span className="text-sm">{user?.name || 'User'}</span>
-            <ChevronDown className="h-4 w-4" />
-          </Button> */}
+        <div className="flex items-center gap-2">
+          <BellButton />
         </div>
-
       </div>
     </div>
-  )
+  );
 };
 
-export default DashboardNavbar
+export default DashboardNavbar;

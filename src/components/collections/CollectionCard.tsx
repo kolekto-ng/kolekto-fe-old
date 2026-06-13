@@ -1,168 +1,70 @@
 import React from "react";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  CalendarDays,
+  Heart,
+  Layers,
+  Lock,
+  Share2,
+  Target,
+  Ticket,
+  TrendingUp,
+  Users,
+  Waves,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Eye, Share, Wallet } from "lucide-react";
 
-// ---------------------------
-// Types
-// ---------------------------
-type Status =
-  | "active"
-  | "paused"
-  | "expired"
-  | "completed"
-  | "closed"
-  | "deleted";
+type Status = "active" | "paused" | "expired" | "completed" | "closed" | "deleted" | "pending_review" | string;
+type CollectionType = "fixed" | "tiered" | "open_pool" | "ticket" | "fundraising" | "flat" | string;
 
 interface CollectionCardProps {
   id: string;
   title: string;
-  description?: string;
   amount: number;
-  deadline: string;
+  deadline?: string;
   status: Status;
-  type: "fixed" | "tiered";
+  type: CollectionType;
   participantsCount: number;
   maxParticipants?: number;
   dateCreated?: string;
   tiers?: { amount: number; name: string }[];
-  onShare: () => void;
+  totalRaised?: number;
+  goalAmount?: number;
+  onShare: (e: React.MouseEvent) => void;
   onViewDetails: () => void;
 }
 
-// ---------------------------
-// Rule-based Status Engine
-// ---------------------------
-interface StatusRule {
-  name: Status;
-  priority: number;
-  check: (ctx: {
-    statusFlag?: Status;
-    totalRaised: number;
-    targetAmount: number;
-    deadlineDate: Date;
-    now: Date;
-  }) => boolean;
+function fmt(n: number) {
+  return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
 }
 
-const statusRules: StatusRule[] = [
-  {
-    name: "deleted",
-    priority: 100,
-    check: ({ statusFlag }) => statusFlag === "deleted",
-  },
-  {
-    name: "closed",
-    priority: 90,
-    check: ({ statusFlag }) => statusFlag === "closed",
-  },
-  {
-    name: "paused",
-    priority: 80,
-    check: ({ statusFlag }) => statusFlag === "paused",
-  },
-  {
-    name: "completed",
-    priority: 70,
-    check: ({ totalRaised, targetAmount }) => totalRaised >= targetAmount,
-  },
-  {
-    name: "expired",
-    priority: 60,
-    check: ({ deadlineDate, now }) => deadlineDate <= now,
-  },
-  {
-    name: "active",
-    priority: 10,
-    check: () => true, // fallback
-  },
-];
-
-function computeStatus(ctx: {
-  statusFlag?: Status;
-  totalRaised: number;
-  targetAmount: number;
-  deadlineDate: Date;
-  now?: Date;
-}): Status {
-  const now = ctx.now ?? new Date();
-
-  return statusRules
-    .sort((a, b) => b.priority - a.priority)
-    .find((rule) => rule.check({ ...ctx, now }))!.name;
+function fmtDate(d?: string) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ---------------------------
-// Hooks & Helpers
-// ---------------------------
-function useCollectionStatus(
-  initialStatus: Status,
-  deadline: string,
-  totalRaised: number,
-  targetAmount: number
-) {
-  const deadlineDate = React.useMemo(() => new Date(deadline), [deadline]);
-  const computedStatus = React.useMemo(
-    () =>
-      computeStatus({
-        statusFlag: initialStatus,
-        totalRaised,
-        targetAmount,
-        deadlineDate,
-      }),
-    [initialStatus, totalRaised, targetAmount, deadlineDate]
-  );
+const TYPE_ICON: Record<string, { label: string; description: string; icon: React.ElementType }> = {
+  fixed: { label: "Fixed", description: "Everyone contributes the same amount", icon: Lock },
+  flat: { label: "Fixed", description: "Everyone contributes the same amount", icon: Lock },
+  tiered: { label: "Tiered", description: "Multiple options for different contributor levels", icon: Layers },
+  open_pool: { label: "Open Pool", description: "Supporters choose what they want to give", icon: Waves },
+  ticket: { label: "Ticketing", description: "Track sales and attendees from one place", icon: Ticket },
+  fundraising: { label: "Fundraising", description: "Campaign-first collections with donor momentum", icon: Heart },
+};
 
-  return { computedStatus, deadlineDate };
-}
+const DEFAULT_TYPE = { label: "Collection", description: "Track contributions and payout activity", icon: Target };
 
-function useFormattedDate(dateString?: string) {
-  return React.useMemo(() => {
-    if (!dateString) return "N/A";
-    const d = new Date(dateString);
-    return d.toLocaleDateString("en-NG", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  }, [dateString]);
-}
-
-function formatCurrency(amount: number) {
-  return `₦${amount.toLocaleString()}`;
-}
-
-function calcTotalRaised(amount: number, participants: number) {
-  return amount * participants;
-}
-
-
-
-
-// ---------------------------
-// Components
-// ---------------------------
-const statusColors: Record<Status, string> = {
-  active: "bg-green-100 text-green-800",
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-700",
   paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  closed: "bg-gray-200 text-gray-800",
-  deleted: "bg-gray-400 text-gray-900",
+  expired: "bg-red-100 text-red-700",
+  completed: "bg-blue-100 text-blue-700",
+  closed: "bg-slate-200 text-slate-700",
+  deleted: "bg-slate-300 text-slate-600",
+  pending_review: "bg-amber-100 text-amber-700",
 };
 
-const StatusBadge: React.FC<{ status: Status }> = ({ status }) => {
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
-  return <Badge className={statusColors[status]}>{label}</Badge>;
-};
-
-// ---------------------------
-// Main Component
-// ---------------------------
 const CollectionCard: React.FC<CollectionCardProps> = ({
   title,
-  description,
   amount,
   deadline,
   status,
@@ -171,109 +73,125 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   maxParticipants,
   dateCreated,
   tiers,
+  totalRaised = 0,
+  goalAmount,
   onShare,
   onViewDetails,
 }) => {
-  const totalRaised = calcTotalRaised(amount, participantsCount);
-  const targetAmount = calcTotalRaised(amount, maxParticipants);
-
-  const { computedStatus } = useCollectionStatus(
-    status,
-    deadline,
-    totalRaised,
-    targetAmount // using amount as target (if you support tier goals, swap logic here)
-  );
-
-  const formattedDeadline = useFormattedDate(deadline);
-  const formattedCreatedDate = useFormattedDate(dateCreated);
+  const cfg = TYPE_ICON[type] ?? DEFAULT_TYPE;
+  const Icon = cfg.icon;
+  const sCls = STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700";
+  const sLabel = status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
+  const progress = goalAmount && goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0;
+  const lowestTier = tiers?.length ? Math.min(...tiers.map(t => t.amount)) : 0;
+  const isFundraising = type === "fundraising";
+  const isTicket = type === "ticket";
+  const isTiered = type === "tiered";
+  const isOpenPool = type === "open_pool";
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <h3 className="font-semibold text-lg">{title}</h3>
-          <div className="flex gap-1">
-            <Badge className="bg-purple-100 text-purple-800">
-              {type === "fixed" ? "Fixed" : "Tier"}
-            </Badge>
-            <StatusBadge status={computedStatus} />
-          </div>
-        </div>
-        {description && (
-          <p className="text-sm text-gray-600 mt-1">{description}</p>
-        )}
-      </CardHeader>
-
-      <CardContent className="py-2 flex-grow">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="text-sm text-gray-600">Amount</p>
-            <p className="font-medium">
-              {(() => {
-                const displayAmount = type === "tier" ? getLowestTierAmount(tiers) : amount;
-                  console.log("Type:", type);
-                  console.log("Amount prop:", amount);
-                  console.log("Tiers:", tiers);
-                  console.log("Display amount:", displayAmount);
-
-                return displayAmount > 0 ? formatCurrency(displayAmount) : "__";
-              }) ()}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Deadline</p>
-            <p className="font-medium">{formattedDeadline}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Contributors</p>
-            <p className="font-medium">
-              {participantsCount}
-              {maxParticipants && ` / ${maxParticipants}`}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">Total Raised</p>
-            <p className="font-medium">{formatCurrency(totalRaised)}</p>
-          </div>
-          {dateCreated && (
-            <div className="col-span-2 flex items-center gap-1 text-sm text-gray-500 mt-1">
-              <CalendarDays size={12} />
-              <span>Created: {formattedCreatedDate}</span>
+    <article
+      className="group overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg flex flex-col"
+      style={{ minHeight: '320px' }}
+      onClick={onViewDetails}
+    >
+      {/* Header */}
+      <div className="px-5 py-4" style={{ backgroundColor: '#f5ce42' }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-2xl bg-white/30 p-3 text-gray-900 backdrop-blur-sm">
+              <Icon className="h-5 w-5" />
             </div>
-          )}
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-800/70">{cfg.label}</span>
+              <h3 className="mt-1 text-base font-semibold leading-snug text-gray-900 line-clamp-1">{title}</h3>
+              <p className="mt-0.5 text-xs leading-5 text-gray-800/60 line-clamp-1">{cfg.description}</p>
+            </div>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${sCls}`}>{sLabel}</span>
         </div>
-      </CardContent>
+      </div>
 
-      <CardFooter className="pt-2">
-        <div className="w-full grid grid-cols-3 gap-2">
+      {/* Body */}
+      <div className="border-t border-gray-200 px-5 py-5 bg-gray-50/50 flex-1 flex flex-col">
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 truncate">Raised</p>
+            <p className="mt-2 text-base font-bold text-green-700 truncate">{fmt(totalRaised)}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 truncate">
+              {isTicket ? "Ticket price" : isTiered ? "Starts at" : isOpenPool ? "Minimum" : isFundraising ? "Target" : "Amount"}
+            </p>
+            <p className="mt-2 text-base font-bold text-slate-900 truncate">
+              {isFundraising
+                ? fmt(goalAmount || 0)
+                : isTiered
+                  ? lowestTier > 0 ? fmt(lowestTier) : "—"
+                  : isOpenPool
+                    ? amount > 0 ? fmt(amount) : "Any"
+                    : fmt(amount)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400 truncate">
+              {isTicket ? "Tickets sold" : "Contributors"}
+            </p>
+            <p className="mt-2 text-base font-bold text-slate-900 truncate">
+              {participantsCount}
+              {maxParticipants ? <span className="text-sm font-medium text-slate-400"> / {maxParticipants}</span> : null}
+            </p>
+          </div>
+        </div>
+
+        {(isFundraising || isOpenPool) && (
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span>Progress</span>
+              </div>
+              {goalAmount && goalAmount > 0 ? (
+                <span className="font-semibold text-green-700">{progress.toFixed(1)}%</span>
+              ) : (
+                <span className="font-semibold text-green-700">{fmt(totalRaised)} raised</span>
+              )}
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-green-600"
+                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? '100%' : '0%' }}
+              />
+            </div>
+            {goalAmount && goalAmount > 0 && (
+              <p className="mt-1.5 text-[11px] text-slate-400 text-right">of {fmt(goalAmount)} target</p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-auto pt-4 flex items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              {participantsCount} {isFundraising ? "donor" : "participant"}{participantsCount === 1 ? "" : "s"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {fmtDate(deadline || dateCreated)}
+            </span>
+          </div>
           <Button
-            variant="outline"
             size="sm"
+            variant="ghost"
+            className="h-8 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-700 hover:bg-gray-100"
             onClick={onShare}
-            className="flex items-center justify-center"
           >
-            <Share className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Share</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onViewDetails}
-            className="flex items-center justify-center"
-          >
-            <Eye className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">View</span>
-          </Button>
-          <Button
-            size="sm"
-            className="bg-kolekto hover:bg-kolekto/90 flex items-center justify-center"
-          >
-            <Wallet className="mr-1 h-4 w-4" />
-            <span className="hidden sm:inline">Withdraw</span>
+            <Share2 className="mr-1.5 h-3.5 w-3.5" />
+            Share
           </Button>
         </div>
-      </CardFooter>
-    </Card>
+      </div>
+    </article>
   );
 };
 

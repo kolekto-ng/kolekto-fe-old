@@ -1,167 +1,804 @@
-import React, { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
-import { formatCurrency } from '@/utils/formatters';
+import React, { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Lock,
+  Layers,
+  Waves,
+  Ticket,
+  Heart,
+  Target,
+  TrendingUp,
+  Wallet,
+  BarChart3,
+  Loader2,
+  ChevronRight,
+  Plus,
+  Share2,
+  Users,
+  CalendarDays,
+  WalletCards,
+  History,
+  Banknote,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { axiosInstance } from "@/utils/axios";
+import { formatDistanceToNow } from "date-fns";
+import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialog";
+import { useAuthStore } from "@/store/useAuthStore";
 
-import { useDashboard, useDashboardStore } from '@/store/useDashboardStore';
-import { useCollectionStore } from '@/store/useCollectionStore';
-import { useContributionStore } from '@/store/useContributionStore';
-import { useWithdrawalStore } from '@/store/useWithdrawalStore';
-import { Loader2, Plus, TrendingUp, Users, DollarSign, Eye } from 'lucide-react';
-import { useAuthStore } from '@/store';
-import { ContributionTransactions } from '@/components/dashboard/ContributionTransactions';
-import { useSettings } from '@/store/useSettings';
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
+}
+
+function fmtDateTime(d: string) {
+  try {
+    return new Date(d).toLocaleString("en-NG", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return d;
+  }
+}
+
+function fmtDate(d?: string) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-NG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getStoredUserId(): string | null {
+  try {
+    const raw = localStorage.getItem("kolekto-auth-token");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user?.id || parsed?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Collection-type visual config ────────────────────────────────────────────
+
+const TYPE_META: Record<
+  string,
+  {
+    label: string;
+    description: string;
+    IconEl: React.ElementType;
+    gradient: string;
+    accentBorder: string;
+    amountCls: string;
+    iconColor: string;
+    bgColor: string;
+    borderColor: string;
+  }
+> = {
+  fixed: {
+    label: "Fixed",
+    description: "One fixed amount per contributor",
+    IconEl: Lock,
+    gradient: "from-blue-500 to-blue-700",
+    accentBorder: "border-l-blue-500",
+    amountCls: "text-blue-700",
+    iconColor: "text-blue-600",
+    bgColor: "bg-blue-50",
+    borderColor: "border-blue-200",
+  },
+  tiered: {
+    label: "Tiered",
+    description: "Multiple pricing tiers",
+    IconEl: Layers,
+    gradient: "from-purple-500 to-purple-700",
+    accentBorder: "border-l-purple-500",
+    amountCls: "text-purple-700",
+    iconColor: "text-purple-600",
+    bgColor: "bg-purple-50",
+    borderColor: "border-purple-200",
+  },
+  open_pool: {
+    label: "Open Pool",
+    description: "Contributors choose their amount",
+    IconEl: Waves,
+    gradient: "from-cyan-500 to-cyan-700",
+    accentBorder: "border-l-cyan-500",
+    amountCls: "text-cyan-700",
+    iconColor: "text-cyan-600",
+    bgColor: "bg-cyan-50",
+    borderColor: "border-cyan-200",
+  },
+  ticket: {
+    label: "Ticket",
+    description: "Event tickets with QR codes",
+    IconEl: Ticket,
+    gradient: "from-orange-500 to-orange-600",
+    accentBorder: "border-l-orange-500",
+    amountCls: "text-orange-700",
+    iconColor: "text-orange-600",
+    bgColor: "bg-orange-50",
+    borderColor: "border-orange-200",
+  },
+  fundraising: {
+    label: "Fundraising",
+    description: "Campaign-style crowdfunding",
+    IconEl: Heart,
+    gradient: "from-rose-500 to-rose-700",
+    accentBorder: "border-l-rose-500",
+    amountCls: "text-rose-700",
+    iconColor: "text-rose-600",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-200",
+  },
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-100 text-green-700",
+  paused: "bg-yellow-100 text-yellow-800",
+  expired: "bg-red-100 text-red-700",
+  completed: "bg-blue-100 text-blue-700",
+  closed: "bg-gray-200 text-gray-600",
+  deleted: "bg-gray-300 text-gray-600",
+  pending_review: "bg-amber-100 text-amber-700",
+};
+const RECENT_COLLECTION_LIMIT = 6;
+const RECENT_ACTIVITY_LIMIT = 5;
+
+// ── Interfaces ───────────────────────────────────────────────────────────────
+
+interface DashStats {
+  totalCollections: number;
+  activeCollections: number;
+  totalBalance: number;
+  availableBalance: number;
+  pendingBalance: number;
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  email: string;
+  amount: number;
+  created_at: string;
+  collection_title: string;
+  relative_time: string;
+}
+
+interface CollectionPreview {
+  id: string;
+  title: string;
+  status: string;
+  collection_type: string;
+  totalRaised: number;
+  participants: number;
+  deadline?: string;
+  created_at: string;
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
-  const { user, isLoading: authloading } = useAuthStore();
-  const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore();
-  const { contributions, fetchContributions } = useContributionStore();
-  const { withdrawals, fetchWithdrawals } = useWithdrawalStore();
-
-  const { stats, recentPayments, isLoading } = useDashboard(collections, contributions, user?.id);
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const firstName =
+    user?.user_metadata?.full_name?.split(" ")[0] ||
+    user?.user_metadata?.firstName ||
+    user?.email?.split("@")[0] ||
+    "there";
+  const [stats, setStats] = useState<DashStats>({
+    totalCollections: 0,
+    activeCollections: 0,
+    totalBalance: 0,
+    availableBalance: 0,
+    pendingBalance: 0,
+  });
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [recentCollections, setRecentCollections] = useState<
+    CollectionPreview[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
+  const isLoadingRef = useRef(false);
+  const queuedReloadRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchCollections(user.id);
-      fetchWithdrawals(user.id);
-    }
-  }, [user?.id, fetchCollections, fetchWithdrawals]);
+    isMountedRef.current = true;
+    const userId = user?.id || getStoredUserId();
 
-  // Show loader if any relevant data is loading
-  if (authloading || collectionsLoading || isLoading) {
+    const loadOnce = async () => {
+      try {
+        if (!userId) {
+          if (isMountedRef.current) setLoading(false);
+          return;
+        }
+
+        /* ── 1. Fetch user collections (light query) ─────────────────────── */
+        const { data: collectionsRaw, error: colErr } = await supabase
+          .from("collections")
+          .select("id, title, status, collection_type, deadline, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(RECENT_COLLECTION_LIMIT);
+
+        if (colErr) console.error("Collections fetch error:", colErr.message);
+
+        const cols: any[] = collectionsRaw || [];
+        const [
+          { count: totalCollectionsCount },
+          { count: activeCollectionsCount },
+        ] = await Promise.all([
+          supabase
+            .from("collections")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId),
+          supabase
+            .from("collections")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("status", "active"),
+        ]);
+        const totalCollections = Number(totalCollectionsCount || 0);
+        const activeCollections = Number(activeCollectionsCount || 0);
+        const collectionIds: string[] = cols.map((c: any) => c.id);
+        const recentCollectionIds: string[] = cols
+          .slice(0, RECENT_COLLECTION_LIMIT)
+          .map((c: any) => c.id);
+        const titleMap: Record<string, string> = {};
+        for (const c of cols) titleMap[c.id] = c.title;
+
+        /* ── 2. Authoritative balance stats from backend ───────────────────
+           The backend applies the 5AM WAT settlement cutoff consistently
+           across home and collection pages, so we consume those figures
+           directly instead of re-deriving them from wallet rows. ───────── */
+        const statsPromise = axiosInstance
+          .get("/dashboard/stats")
+          .then((res) => res?.data?.data || res?.data || res || {})
+          .catch(() => ({}));
+
+        const paidContribsPromise =
+          recentCollectionIds.length > 0
+            ? supabase
+                .from("contributions")
+                .select("amount, collection_id")
+                .in("collection_id", recentCollectionIds)
+                .eq("status", "paid")
+                .then((res) => res.data || [])
+                .catch(() => [])
+            : Promise.resolve([]);
+
+        const activitiesPromise = axiosInstance
+          .get(`/dashboard/activities?limit=${RECENT_ACTIVITY_LIMIT}`)
+          .then((res) => res?.data?.data || res?.data || res || [])
+          .catch(() => null);
+
+        const [statsData, paidContribs, activitiesData] = await Promise.all([
+          statsPromise,
+          paidContribsPromise,
+          activitiesPromise,
+        ]);
+
+        const totalBalance = Number(statsData.totalBalance || 0);
+        const availableBalance = Number(statsData.availableBalance || 0);
+        const pendingBalance = Number(statsData.pendingBalance || 0);
+
+        /* ── 4. Build per-collection preview data ─────────────────────── */
+        const contribsByCol: Record<string, any[]> = {};
+        for (const c of paidContribs || []) {
+          if (!contribsByCol[c.collection_id])
+            contribsByCol[c.collection_id] = [];
+          contribsByCol[c.collection_id].push(c);
+        }
+
+        setRecentCollections(
+          cols.slice(0, RECENT_COLLECTION_LIMIT).map((c: any) => {
+            const cList = contribsByCol[c.id] || [];
+            // totalRaised: sum contributions.amount (authoritative net figure, no fees).
+            // Do NOT use wallet.net_payment — wallet may be zero if upsert failed.
+            const totalRaised = cList.reduce(
+              (s: number, contrib: any) => s + Number(contrib.amount || 0),
+              0,
+            );
+            return {
+              id: c.id,
+              title: c.title,
+              status: c.status,
+              collection_type: c.collection_type || "fixed",
+              totalRaised,
+              participants: cList.length,
+              deadline: c.deadline,
+              created_at: c.created_at,
+            };
+          }),
+        );
+
+        /* ── 5. Recent activity feed ──────────────────────────────────── */
+        if (activitiesData) {
+          setActivities(
+            (activitiesData || []).map((cn: any) => {
+              const createdAt = cn.created_at;
+              let relativeTime = fmtDateTime(createdAt);
+              try {
+                relativeTime = formatDistanceToNow(new Date(createdAt), {
+                  addSuffix: true,
+                });
+              } catch {
+                // Keep fallback text from fmtDateTime above.
+              }
+              return {
+                id: cn.id,
+                name: cn.name || "",
+                email: cn.email || "",
+                // Activity section shows full checkout amount (including fees) per spec.
+                // gross_amount = totalPayable; fallback to amount for legacy rows.
+                amount: Number(cn.gross_amount || cn.amount) || 0,
+                created_at: createdAt,
+                collection_title:
+                  titleMap[cn.collection_id] || cn.collection_title || "Unknown",
+                relative_time: relativeTime,
+              };
+            }),
+          );
+        } else {
+          const { data: contribs } = await supabase
+            .from("contributions")
+            .select(
+              "id, name, email, amount, gross_amount, created_at, collection_id",
+            )
+            .in("collection_id", collectionIds)
+            .eq("status", "paid")
+            .order("created_at", { ascending: false })
+            .limit(RECENT_ACTIVITY_LIMIT);
+
+          setActivities(
+            (contribs || []).map((cn: any) => {
+              const createdAt = cn.created_at;
+              let relativeTime = fmtDateTime(createdAt);
+              try {
+                relativeTime = formatDistanceToNow(new Date(createdAt), {
+                  addSuffix: true,
+                });
+              } catch {
+                // Keep fallback text from fmtDateTime above.
+              }
+              return {
+                id: cn.id,
+                name: cn.name || "",
+                email: cn.email || "",
+                // Activity section shows full checkout amount (including fees) per spec.
+                // gross_amount = totalPayable; fallback to amount for legacy rows.
+                amount: Number(cn.gross_amount || cn.amount) || 0,
+                created_at: createdAt,
+                collection_title: titleMap[cn.collection_id] || "Unknown",
+                relative_time: relativeTime,
+              };
+            }),
+          );
+        }
+
+        setStats({
+          totalCollections,
+          activeCollections,
+          totalBalance,
+          availableBalance,
+          pendingBalance,
+        });
+      } catch (err) {
+        console.error("Dashboard load error:", err);
+      } finally {
+        if (isMountedRef.current) setLoading(false);
+      }
+    };
+
+    const load = async () => {
+      if (isLoadingRef.current) {
+        queuedReloadRef.current = true;
+        return;
+      }
+
+      isLoadingRef.current = true;
+      try {
+        do {
+          queuedReloadRef.current = false;
+          await loadOnce();
+        } while (queuedReloadRef.current);
+      } finally {
+        isLoadingRef.current = false;
+      }
+    };
+
+    load();
+
+    // ── Real-time: re-run load() whenever a contribution or wallet changes ──
+    // This ensures the host dashboard updates automatically after every payment
+    // without requiring a manual refresh.
+    const userId2 = userId; // capture for closure
+    const rtChannel = supabase
+      .channel(`dashboard-rt-${userId2}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "contributions" },
+        () => {
+          load();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "contributions" },
+        () => {
+          load();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "wallets" },
+        () => {
+          load();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      isMountedRef.current = false;
+      supabase.removeChannel(rtChannel);
+    };
+  }, [user?.id]);
+
+  /* ── Loading state ────────────────────────────────────────────────────────── */
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
-  // Sort collections by created_at ascending (oldest first)
-  const sortedCollections = [...collections].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return dateB - dateA; // Newest first
-  });
+  /* ── Render ───────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button asChild className="bg-kolekto hover:bg-kolekto/90">
-          <Link to="/dashboard/create-collection">
-            <Plus className="mr-2 h-4 w-4" />
-            New Collection
-          </Link>
-        </Button>
+    <div className="space-y-8 pb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">Good day,</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 capitalize">
+            {firstName} 👋
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setIsGlobalWithdrawOpen(true)}
+            className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
+          >
+            <Banknote className="w-4 h-4" />
+            Withdrawal
+          </Button>
+          <Button
+            size="sm"
+            className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm hidden md:flex"
+            onClick={() => navigate("/dashboard/create-collection")}
+          >
+            <Plus className="w-4 h-4" /> Create Collection
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Collections</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+      {/* ── Wallet Summary ──────────────────────────────────────────────────────── */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <Card className="border-gray-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-gray-500">
+              Total Balance
+            </CardTitle>
+            <div className="p-1.5 bg-gray-100 rounded-lg">
+              <WalletCards className="h-4 w-4 text-gray-500" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_collections || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-gray-900">
+              {fmt(stats.totalBalance)}
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              across all collections
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Collections</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-green-200 bg-green-50/40 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-green-700">
+              Available Balance
+            </CardTitle>
+            <div className="p-1.5 bg-green-100 rounded-lg">
+              <Wallet className="h-4 w-4 text-green-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.active_collections || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-green-700">
+              {fmt(stats.availableBalance)}
+            </div>
+            <p className="text-xs text-green-600/70 mt-0.5">
+              ready to withdraw
+            </p>
           </CardContent>
         </Card>
 
-        {/* <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Contributions</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+        <Card className="border-yellow-200 bg-yellow-50/40 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-yellow-700">
+              Pending Balance
+            </CardTitle>
+            <div className="p-1.5 bg-yellow-100 rounded-lg">
+              <History className="h-4 w-4 text-yellow-600" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_contributions || 0}</div>
+          <CardContent className="px-4 pb-4">
+            <div className="text-xl font-bold text-yellow-700">
+              {fmt(stats.pendingBalance)}
+            </div>
+            <p className="text-xs text-yellow-600/70 mt-0.5">
+              awaiting settlement
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+        <Card
+          className="border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between group cursor-pointer"
+          onClick={() => navigate("/dashboard/collections")}
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Target className="w-16 h-16 text-kolekto" />
+          </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4 relative z-10">
+            <CardTitle className="text-xs font-medium text-gray-500">
+              Your Collections
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats?.total_amount || 0)}</div>
+          <CardContent className="px-4 pb-4 relative z-10">
+            <div className="text-2xl font-bold text-gray-900">
+              {stats.totalCollections}
+            </div>
+            <p className="text-xs text-kolekto font-medium mt-0.5 flex items-center gap-1 hover:underline">
+              {stats.activeCollections} active{" "}
+              <ChevronRight className="w-3 h-3" />
+            </p>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
 
-      {/* Recent Activity */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Collections</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {collections.length > 0 ? (
-              <div className="space-y-4">
-                {sortedCollections.slice(0, 5).map(collection => (
-                  <div key={collection.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{collection.title}</p>
-                      <p className="text-sm text-gray-500">{collection.formattedAmount}</p>
+      {/* ── Quick Actions — Create a Collection ──────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Create a Collection
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Choose a type to get started
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-1">
+          {Object.entries(TYPE_META).map(([key, m]) => {
+            const Icon = m.IconEl;
+            return (
+              <Link
+                key={key}
+                to={`/dashboard/create-collection?type=${key}`}
+                state={{ skipToBasicInfo: true }}
+                className="flex flex-col items-center gap-2 flex-1 min-w-0 py-2 px-1 rounded-2xl active:scale-95 transition-transform hover:opacity-80"
+              >
+                <div
+                  className={`flex items-center justify-center w-[50px] h-[50px] rounded-2xl ${m.bgColor} shadow-sm`}
+                >
+                  <Icon className={`h-6 w-6 ${m.iconColor}`} />
+                </div>
+                <span
+                  className={`text-[11px] font-semibold ${m.iconColor} text-center leading-tight`}
+                >
+                  {m.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── My Collections ────────────────────────────────────────────────────── */}
+      {recentCollections.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">
+              My Collections
+            </h2>
+            <Link
+              to="/dashboard/collections"
+              className="text-xs font-medium text-kolekto hover:underline flex items-center gap-1"
+            >
+              View all <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {recentCollections.map((col) => {
+              const m = TYPE_META[col.collection_type] ?? TYPE_META.fixed;
+              const Icon = m.IconEl;
+              const sCls =
+                STATUS_COLORS[col.status] ?? "bg-gray-100 text-gray-700";
+              const sLabel = col.status
+                ? col.status
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase())
+                : "—";
+
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => navigate(`/dashboard/collections/${col.id}`)}
+                  className={`bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md
+                    transition-all cursor-pointer flex flex-col overflow-hidden
+                    border-l-4 ${m.accentBorder}`}
+                >
+                  {/* Coloured header */}
+                  <div
+                    className={`bg-gradient-to-r ${m.gradient} px-4 py-2.5 flex items-center justify-between`}
+                  >
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide">
+                        {m.label}
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{collection.total_contributions || 0} Contributions</p>
-                      <p className="text-xs text-gray-500">
-                        {collection.status === "completed"
-                          ? "completed"
-                          : collection.deadline && new Date(collection.deadline) > new Date()
-                            ? "active"
-                            : "expired"}
+                    <span
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${sCls}`}
+                    >
+                      {sLabel}
+                    </span>
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-4 py-3 flex-1">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-snug line-clamp-1 mb-2">
+                      {col.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span className={`font-bold ${m.amountCls}`}>
+                        {fmt(col.totalRaised)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {col.participants}
+                      </span>
+                    </div>
+                    {col.deadline && (
+                      <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-1.5">
+                        <CalendarDays className="w-3 h-3" />
+                        {fmtDate(col.deadline)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div
+                    className="px-4 pb-3 pt-1.5 flex items-center justify-between border-t border-gray-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-[11px] text-gray-400">
+                      {fmtDate(col.created_at)}
+                    </span>
+                    <button
+                      className={`text-[11px] font-medium flex items-center gap-1 ${m.amountCls} hover:opacity-80`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/dashboard/collections/${col.id}?share=true`);
+                      }}
+                    >
+                      <Share2 className="w-3 h-3" /> Share
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Recent Activity ───────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">
+            Recent Activities
+          </h2>
+          {activities.length > 0 && (
+            <button
+              onClick={() => navigate("/dashboard/activities")}
+              className="text-xs font-semibold text-green-600 hover:text-green-700 flex items-center gap-1"
+            >
+              Show More →
+            </button>
+          )}
+        </div>
+        <Card className="border-gray-200">
+          <CardContent className="p-0">
+            {activities.length === 0 ? (
+              <div className="py-12 text-center">
+                <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400 font-medium">
+                  No contributions yet
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Share your collection link to receive payments
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {activities.slice(0, 5).map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between px-4 py-3.5 gap-3 hover:bg-gray-50/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-green-700 font-semibold text-xs">
+                          {(a.name || a.email || "A")[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {a.name || a.email || "Anonymous"}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          paid to{" "}
+                          <span className="font-medium text-gray-600">
+                            {a.collection_title}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-green-600">
+                        +{fmt(a.amount)}
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        {a.relative_time}
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-gray-500">No collections yet</p>
+            )}
+            {activities.length > 5 && (
+              <div className="border-t border-gray-50 p-3">
+                <button
+                  onClick={() => navigate("/dashboard/activities")}
+                  className="w-full text-xs font-semibold text-gray-500 hover:text-green-600 py-1.5 rounded-lg hover:bg-green-50 transition-colors"
+                >
+                  Show All {activities.length} Activities →
+                </button>
+              </div>
             )}
           </CardContent>
         </Card>
-
-        {/* <Card>
-          <CardHeader>
-            <CardTitle>Recent Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentPayments.length > 0 ? (
-              <div className="space-y-4">
-                {recentPayments.map(payment => (
-                  <div key={payment.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{payment.description}</p>
-                      <p className="text-sm text-gray-500">{payment.collections?.title}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatCurrency(payment.amount)}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(payment.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No payments yet</p>
-            )}
-          </CardContent>
-        </Card> */}
-        {/* <ContributionTransactions /> */}
       </div>
+      <WithdrawFundsDialog
+        open={isGlobalWithdrawOpen}
+        onOpenChange={setIsGlobalWithdrawOpen}
+        availableBalance={0} // Not used for global since we'll require collection selection
+        onComplete={() => {
+          // Could refresh dashboard state here
+          setTimeout(() => window.location.reload(), 1500);
+        }}
+      />
     </div>
   );
 };

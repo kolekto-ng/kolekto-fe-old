@@ -1,170 +1,129 @@
-import React from 'react'
-import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
-import '../lpMain/hwWorks/works.module.css'
+import React from "react";
+import { Link } from "react-router-dom";
+import { FaFacebook, FaInstagram, FaLinkedin, FaTwitter } from "react-icons/fa";
 
+const cols = [
+  {
+    title: "Product",
+    links: [
+      { label: "Create Collection", to: "/create-collection" },
+      { label: "Explore Campaigns", to: "/active-campaigns" },
+      { label: "Contribution Tiers", to: "/create-collection" },
+      { label: "Real-Time Tracking", to: "/dashboard" },
+      { label: "Wallet & Withdrawals", to: "/dashboard/transactions" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About Us", to: "/about" },
+      { label: "Contact Us", to: "/contact" },
+      { label: "Careers", to: "/contact" },
+      { label: "Partnerships", to: "/contact" },
+      { label: "Press", to: "/about" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { label: "Help Center", to: "/help" },
+      { label: "FAQ", to: "/#faq" },
+      { label: "Guides", to: "/help" },
+      { label: "Community Support", to: "https://chat.whatsapp.com/JctLgtMQTEc0nFCk40C4Vj", external: true },
+      { label: "WhatsApp Support", to: "https://wa.me/+2349019840377", external: true },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Cookie Policy", to: "/privacy" },
+      { label: "KYC & Compliance", to: "/privacy" },
+    ],
+  },
+];
 
-const Footer = () => {
+const socials = [
+  { icon: <FaFacebook size={16} />, href: "https://www.facebook.com/profile.php?id=61575665957385", label: "Facebook" },
+  { icon: <FaTwitter size={16} />, href: "https://x.com/kolekto_ng", label: "Twitter / X" },
+  { icon: <FaLinkedin size={16} />, href: "https://www.linkedin.com/company/kolektong/", label: "LinkedIn" },
+  { icon: <FaInstagram size={16} />, href: "https://www.instagram.com/kolekto_ng/", label: "Instagram" },
+];
+
+const Footer: React.FC = () => {
+  const linkClass = "text-sm text-white/60 hover:text-white transition-colors";
+
   return (
-    <footer className={`w-full bg-green-800 text-white py-12 md:py-16 px-4 md:px-8 poppins`}>
-      <div className={`overflow-x-hidden max-w-[1280px] w-full mx-auto my-0`}>
-        {/* Main Footer Content */}
-        <div className='grid grid-cols-2 lg:grid-cols-5 gap-8 mb-8'>
-          {/* Stay Connected Section */}
-          <div className='col-span-2 lg:col-span-1'>
-            <h3 className='text-2xl font-bold mb-6'>Stay Connected</h3>
-            <div className='flex space-x-4'>
-              <a href='https://www.facebook.com/profile.php?id=61575665957385' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
-                <Facebook className='w-5 h-5 ' />
-              </a>
-              <a href='https://x.com/kolekto_ng' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
-                <Twitter className='w-5 h-5 ' />
-              </a>
-              <a href='https://www.linkedin.com/company/kolektong/' target='_blank' className='p-2  bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
-                <Linkedin className='w-5 h-5 ' />
-              </a>
-              <a href='https://www.instagram.com/kolekto_ng/' target='_blank' className='p-2 bg-red-white bg-opacity-20 rounded-full hover:bg-opacity-30 transistion-colors'>
-                <Instagram className='w-5 h-5 ' />
-              </a>
+    <footer className="w-full bg-green-900 text-white pt-14 pb-8 px-6">
+      <div className="max-w-[1280px] mx-auto">
+        {/* Top grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-10 mb-12">
+          {/* Brand column */}
+          <div className="col-span-2 md:col-span-3 lg:col-span-1">
+            <Link to="/" className="inline-block mb-4">
+              <span className="text-xl font-extrabold tracking-tight text-white">Kolekto</span>
+            </Link>
+            <p className="text-sm text-white/60 leading-relaxed mb-6 max-w-[220px]">
+              The smart group payment platform for communities, teams and events across Nigeria.
+            </p>
+            <div className="flex gap-3">
+              {socials.map((s, i) => (
+                <a
+                  key={i}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.label}
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                >
+                  {s.icon}
+                </a>
+              ))}
             </div>
-            <p className='text-xs mt-4 text-yellow-500'>Kolekto, Inc. All Rights Reserved</p>
-          </div>
-          {/* Product Section */}
-          <div className='lg:col-span-1'>
-            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Product</h4>
-            <ul className='space-y-2 md:space-y-3'>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Create Collection
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Wallet Overview
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Contribution Tiers
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Custom Bonding
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Real Time Tracking
-                </a>
-              </li>
-
-            </ul>
           </div>
 
-          {/* Company Column */}
+          {/* Link columns */}
+          {cols.map((col) => (
+            <div key={col.title}>
+              <h4 className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-4">
+                {col.title}
+              </h4>
+              <ul className="space-y-3">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    {"external" in link && link.external ? (
+                      <a href={link.to} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link to={link.to} className={linkClass}>
+                        {link.label}
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
 
-          <div className='lg:col-span-1'>
-            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>
-              Company
-            </h4>
-            <ul className='space-y-2 md:space-y-3'>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  About
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Careers
-                </a>
-              </li>
-              <li>
-                <a href='mailto:team@kolekto.com.ng' target='_blank' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Contact
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Press
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transition-colors text-sm'>
-                  Partnerships
-                </a>
-              </li>
-            </ul>
+        {/* Bottom bar */}
+        <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-white/40">
+            © {new Date().getFullYear()} Kolekto, Inc. All rights reserved.
+          </p>
+          <div className="flex items-center gap-4 text-xs text-white/40">
+            <Link to="/privacy" className="hover:text-white/70 transition-colors">Privacy</Link>
+            <span>·</span>
+            <Link to="/terms" className="hover:text-white/70 transition-colors">Terms</Link>
+            <span>·</span>
+            <a href="mailto:team@kolekto.com.ng" className="hover:text-white/70 transition-colors">team@kolekto.com.ng</a>
           </div>
-
-          {/* Resources Column */}
-          <div className='lg:col-span-1'>
-            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Resources</h4>
-            <ul className='space-y-2 md:space-y-3'>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Help Center
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  FAQ
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Blog
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Guides
-                </a>
-              </li>
-              <li>
-                <a href='https://chat.whatsapp.com/JctLgtMQTEc0nFCk40C4Vj?mode=ac_t' target='_blank' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Community Support
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Resources Column 2 */}
-          <div className='lg:col-span-1'>
-            <h4 className='text-base md:text-lg font-medium mb-4 md:mb-6 text-orange-400'>Resources</h4>
-            <ul className='space-y-2 md:space-y-3'>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Tiered Contributions
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Withdrawals Request
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Collection Analytics
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  KYC & Access Controls
-                </a>
-              </li>
-              <li>
-                <a href='#' className='text-shadow-fuchsia-200 hover:text-white transistion-colors text-sm'>
-                  Admin Dashboard
-                </a>
-              </li>
-            </ul>
-          </div>
-
-
         </div>
       </div>
     </footer>
-  )
-}
+  );
+};
 
-export default Footer
+export default Footer;

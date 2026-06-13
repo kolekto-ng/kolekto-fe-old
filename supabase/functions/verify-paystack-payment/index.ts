@@ -1,114 +1,834 @@
+/**
+ * verify-paystack-payment — self-contained single-file edge function.
+ * Safe to paste directly into the Supabase web console editor.
+ * All shared utilities are inlined — no external local imports needed.
+ *
+ * Fee handling rules (applied to ALL collection types):
+ *   - contributionAmount  = base amount (fixed price / selected tier / entered amount)
+ *   - totalPayable        = what Paystack charges (contributionAmount + fees if contributor-borne)
+ *   - contributions.amount = NET to host:
+ *       • feeBearer=contributor → contributionAmount (fees paid on top by contributor)
+ *       • feeBearer=organizer   → contributionAmount − fees (fees deducted from payment)
+ *   - contributions.gross_amount = what Paystack actually charged the contributor
+ *   - fundraising: fees always contributor-borne (override fee_bearer)
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
-  // Handle CORS preflight requests
+// ─── SHARED TYPES ─────────────────────────────────────────────────────────────
+type FeeBearer = "contributor" | "organizer";
+
+interface TicketSelection {
+  tierId: string | null;
+  tierName: string;
+  pricePerUnit: number;
+  quantity: number;
+  subtotal: number;
+  description?: string | null;
+  prefix?: string | null;
+  remainingCapacity?: number | null;
+}
+
+class PaymentValidationError extends Error {
+  status: number;
+  code: string;
+  logContext?: Record<string, unknown>;
+  constructor(
+    message: string,
+    status = 400,
+    code = "payment_validation_error",
+    logContext?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "PaymentValidationError";
+    this.status = status;
+    this.code = code;
+    this.logContext = logContext;
+  }
+}
+
+// ─── SHARED UTILITIES ────────────────────────────────────────────────────────
+function roundCurrency(value: number): number {
+  return Number((Number(value) || 0).toFixed(2));
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number((value as string).replace(/,/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function asPositiveInt(value: unknown): number {
+  const parsed = Math.floor(asNumber(value));
+  return parsed > 0 ? parsed : 0;
+}
+
+function getCollectionType(collection: Record<string, unknown>) {
+  return String(collection.collection_type || collection.type || "fixed").trim();
+}
+
+function getPriceTiers(collection: Record<string, unknown>) {
+  const tiers = collection.price_tiers || collection.pricing_tiers;
+  return Array.isArray(tiers) ? tiers : [];
+}
+
+function getTierLabel(tier: Record<string, unknown>, index: number) {
+  return String(tier.name || `Tier ${index + 1}`);
+}
+
+function getTierMatchKey(tier: Record<string, unknown>, index: number) {
+  return String(tier.id || tier.name || `tier-${index}`);
+}
+
+function getInfoRows(row: Record<string, unknown>) {
+  if (Array.isArray(row.contributor_information)) {
+    return row.contributor_information.filter(
+      (e: unknown) => e && typeof e === "object"
+    ) as Array<Record<string, unknown>>;
+  }
+  if (row.contact_info && typeof row.contact_info === "object") {
+    return [row.contact_info as Record<string, unknown>];
+  }
+  return [];
+}
+
+function calculateFees(amount: number, collectionType: string, feeBearer: FeeBearer) {
+  const sanitizedAmount = roundCurrency(amount);
+  const platformRate = collectionType === "fundraising" ? 0.01 : 0.005;
+  const platformFee = roundCurrency(Math.min(sanitizedAmount * platformRate, 2000));
+  const gatewayFee = roundCurrency(Math.min(sanitizedAmount * 0.015, 2000));
+  const totalFees = roundCurrency(platformFee + gatewayFee);
+  const totalPayable =
+    feeBearer === "contributor"
+      ? roundCurrency(sanitizedAmount + totalFees)
+      : sanitizedAmount;
+  return { platformFee, gatewayFee, totalFees, totalPayable };
+}
+
+/**
+ * Given the total a contributor actually paid (Paystack amount / 100),
+ * reverse-calculate the base contribution amount. Used as a fallback when
+ * metadata.contributionAmount is missing (e.g. due to Paystack metadata
+ * truncation on redirect).
+ */
+function reverseCalculateContribution(
+  totalPayable: number,
+  collectionType: string,
+  feeBearer: FeeBearer
+): number {
+  if (feeBearer === "organizer") return roundCurrency(totalPayable);
+  // Binary search: find C such that calculateFees(C, ...).totalPayable ≈ totalPayable
+  let lo = 0;
+  let hi = totalPayable;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const { totalPayable: tp } = calculateFees(mid, collectionType, feeBearer);
+    if (Math.abs(tp - totalPayable) < 0.005) return roundCurrency(mid);
+    if (tp < totalPayable) lo = mid;
+    else hi = mid;
+  }
+  return roundCurrency((lo + hi) / 2);
+}
+
+function allocateAmounts(total: number, weights: number[]) {
+  const normalized = weights.map((w) => roundCurrency(Math.max(0, w)));
+  const sum = normalized.reduce((a, w) => a + w, 0);
+  if (normalized.length === 0) return [];
+  if (roundCurrency(total) === 0 || sum === 0) return normalized.map(() => 0);
+  let remaining = roundCurrency(total);
+  return normalized.map((w, i) => {
+    if (i === normalized.length - 1) return remaining;
+    const share = roundCurrency((total * w) / sum);
+    remaining = roundCurrency(remaining - share);
+    return share;
+  });
+}
+
+function buildTierAvailability(
+  tiers: Array<Record<string, unknown>>,
+  paidRows: Array<Record<string, unknown>>
+) {
+  const soldByTier = new Map<string, number>();
+  for (const row of paidRows) {
+    const infoRows = getInfoRows(row);
+    for (const info of infoRows) {
+      const tierId = info.TierId ? String(info.TierId) : "";
+      const tierName = info.Tier ? String(info.Tier) : "";
+      const quantity = asPositiveInt(info.Quantity) || 1;
+      if (tierId) soldByTier.set(tierId, (soldByTier.get(tierId) || 0) + quantity);
+      else if (tierName) soldByTier.set(tierName, (soldByTier.get(tierName) || 0) + quantity);
+    }
+  }
+  return tiers.map((tier, index) => {
+    const tierId = tier.id ? String(tier.id) : null;
+    const tierName = getTierLabel(tier, index);
+    const sold =
+      (tierId ? soldByTier.get(tierId) : undefined) ||
+      soldByTier.get(tierName) ||
+      0;
+    const totalCapacity = tier.quantity == null ? null : asPositiveInt(tier.quantity);
+    const remainingCapacity = totalCapacity == null ? null : Math.max(0, totalCapacity - sold);
+    return { ...tier, tierId, tierName, tierKey: getTierMatchKey(tier, index), sold, totalCapacity, remainingCapacity };
+  });
+}
+
+function matchTier(
+  tiers: Array<Record<string, unknown>>,
+  selection: Record<string, unknown>
+) {
+  const requestedTierId = selection.tierId ? String(selection.tierId) : selection.id ? String(selection.id) : null;
+  const requestedTierName = selection.tierName ? String(selection.tierName) : selection.name ? String(selection.name) : null;
+  return tiers.find((tier) => {
+    if (requestedTierId && tier.tierId === requestedTierId) return true;
+    if (requestedTierName && tier.tierName === requestedTierName) return true;
+    return false;
+  }) || null;
+}
+
+function ensureCollectionIsPayable(collection: Record<string, unknown>, collectionId: string) {
+  const status = String(collection.status || "active");
+  if (collection.deleted_at) throw new PaymentValidationError("This collection is no longer available.", 404, "collection_deleted", { collectionId, status });
+  if (status === "paused") throw new PaymentValidationError("This collection is currently paused and cannot accept payments.", 400, "collection_paused", { collectionId, status });
+  if (status === "closed" || status === "completed") throw new PaymentValidationError("This collection is no longer accepting payments.", 400, "collection_closed", { collectionId, status });
+  if (status === "pending_review" || status === "pending_verification") throw new PaymentValidationError("This collection is not available for payment yet.", 400, "collection_unavailable", { collectionId, status });
+}
+
+function normalizePaymentRequest(input: {
+  collection: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  paidRows?: Array<Record<string, unknown>>;
+  paystackVerifiedTotal?: number;
+}) {
+  const collection = input.collection;
+  const metadata = input.metadata || {};
+  const paidRows = input.paidRows || [];
+  const paystackVerifiedTotal = input.paystackVerifiedTotal ?? 0;
+
+  const collectionId = String(metadata.collectionId || metadata.collection_id || collection.id || "").trim();
+  if (!collectionId) throw new PaymentValidationError("A valid collection ID is required.", 400, "missing_collection_id");
+
+  ensureCollectionIsPayable(collection, collectionId);
+  const collectionType = getCollectionType(collection);
+
+  // CRITICAL: fundraising fees are ALWAYS contributor-borne.
+  // This keeps Total Raised = pure contribution amount across all collection types.
+  const feeBearer: FeeBearer =
+    collectionType === "fundraising"
+      ? "contributor"
+      : String(collection.fee_bearer || metadata.feeBearer || "organizer") === "contributor"
+      ? "contributor"
+      : "organizer";
+
+  // Read both metadata shapes:
+  //   NEW (flat): contactName/contactEmail/contactPhone, formDataJson, ticketSelectionsJson
+  //   OLD (nested): metadata.contact, metadata.formData, metadata.ticketSelections
+  // The new shape was introduced because Paystack rejects deeply-nested
+  // metadata with a generic 400 "An error occurred".
+  const safeJsonParse = (input: unknown): any => {
+    if (input == null) return null;
+    if (typeof input === "object") return input;
+    if (typeof input === "string") {
+      try { return JSON.parse(input); } catch { return null; }
+    }
+    return null;
+  };
+
+  const contactSource = (metadata.contact && typeof metadata.contact === "object")
+    ? (metadata.contact as Record<string, unknown>)
+    : {
+        name: metadata.contactName,
+        email: metadata.contactEmail,
+        phone: metadata.contactPhone,
+      };
+
+  const parsedFormData = safeJsonParse(metadata.formDataJson);
+  const formData: Record<string, unknown> =
+    (metadata.formData && typeof metadata.formData === "object")
+      ? (metadata.formData as Record<string, unknown>)
+      : (parsedFormData && typeof parsedFormData === "object")
+        ? parsedFormData
+        : {};
+
+  const contact = {
+    name: String(contactSource.name || "").trim(),
+    email: String(contactSource.email || "").trim(),
+    phone: String(contactSource.phone || "").trim(),
+  };
+
+  const allTiers = buildTierAvailability(getPriceTiers(collection), paidRows);
+  const maxContributions = asPositiveInt(collection.max_contributions || collection.max_participants);
+  const paidCount = paidRows.length;
+  const remainingContributionCapacity = maxContributions > 0 ? Math.max(0, maxContributions - paidCount) : null;
+
+  let contributionAmount = 0;
+  let quantity = 1;
+  let selectedTier: string | null = null;
+  let selectedTierId: string | null = null;
+  let selectedTierPrefix: string | null = null;
+  let ticketSelections: TicketSelection[] = [];
+
+  if (collectionType === "fundraising" || collectionType === "open_pool") {
+    const requestedAmount = roundCurrency(asNumber(metadata.contributionAmount || metadata.amount));
+    const minimumAmount = roundCurrency(asNumber(collection.min_contribution || collection.amount));
+    // Fallback: if metadata.contributionAmount was lost (e.g. Paystack metadata truncation
+    // on redirect), reverse-calculate the base contribution from the verified Paystack total.
+    const derivedAmount =
+      (!requestedAmount || requestedAmount <= 0) && paystackVerifiedTotal > 0
+        ? reverseCalculateContribution(paystackVerifiedTotal, collectionType, feeBearer)
+        : 0;
+    const effectiveAmount = requestedAmount > 0 ? requestedAmount : derivedAmount;
+    if (!effectiveAmount || effectiveAmount <= 0) {
+      throw new PaymentValidationError(
+        collectionType === "fundraising" ? "Enter a valid donation amount." : "Enter a valid contribution amount.",
+        400, "invalid_amount", { collectionId, collectionType, requestedAmount }
+      );
+    }
+    if (minimumAmount > 0 && effectiveAmount < minimumAmount) {
+      throw new PaymentValidationError(
+        `${collectionType === "fundraising" ? "Minimum donation" : "Minimum contribution"} is NGN ${minimumAmount.toLocaleString("en-NG")}.`,
+        400, "amount_below_minimum", { collectionId, effectiveAmount, minimumAmount }
+      );
+    }
+    if (remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
+      throw new PaymentValidationError("This collection has reached its contribution limit.", 400, "collection_full", { collectionId, paidCount, maxContributions });
+    }
+    contributionAmount = effectiveAmount;
+
+  } else if (collectionType === "ticket") {
+    if (String(collection.ticket_mode || "") === "tiered") {
+      // Accept both nested ticketSelections (legacy) and ticketSelectionsJson (flat).
+      const parsedTicketSelections = Array.isArray(metadata.ticketSelections)
+        ? (metadata.ticketSelections as Array<Record<string, unknown>>)
+        : (() => {
+            const parsed = safeJsonParse(metadata.ticketSelectionsJson);
+            return Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
+          })();
+      const rawSelections = parsedTicketSelections;
+      const legacyQuantity = asPositiveInt(metadata.quantity) || 1;
+      const legacySelection =
+        rawSelections.length === 0 && (metadata.selectedTier || metadata.selectedTierId)
+          ? [{ tierId: metadata.selectedTierId, tierName: metadata.selectedTier, quantity: legacyQuantity }]
+          : rawSelections;
+
+      if (legacySelection.length === 0) {
+        throw new PaymentValidationError("Select at least one ticket tier before checkout.", 400, "missing_ticket_selection", { collectionId });
+      }
+
+      ticketSelections = legacySelection.map((selection) => {
+        const tier = matchTier(allTiers, selection);
+        const requestedQuantity = asPositiveInt(selection.quantity);
+        if (!tier) throw new PaymentValidationError("One of the selected ticket tiers is no longer available.", 404, "ticket_tier_not_found", { collectionId, selection });
+        if (requestedQuantity < 1) return null;
+        if (tier.remainingCapacity !== null && requestedQuantity > Number(tier.remainingCapacity)) {
+          throw new PaymentValidationError(
+            `${tier.tierName} does not have enough tickets left.`,
+            400, "insufficient_ticket_capacity",
+            { collectionId, tierId: tier.tierId, tierName: tier.tierName, requestedQuantity, remainingCapacity: tier.remainingCapacity }
+          );
+        }
+        return {
+          tierId: tier.tierId,
+          tierName: String(tier.tierName),
+          pricePerUnit: roundCurrency(asNumber(tier.price)),
+          quantity: requestedQuantity,
+          subtotal: roundCurrency(asNumber(tier.price) * requestedQuantity),
+          description: tier.description ? String(tier.description) : null,
+          prefix: tier.prefix ? String(tier.prefix) : null,
+          remainingCapacity: tier.remainingCapacity as number | null,
+        } as TicketSelection;
+      }).filter(Boolean) as TicketSelection[];
+
+      quantity = ticketSelections.reduce((t, s) => t + s.quantity, 0);
+      if (quantity < 1) throw new PaymentValidationError("Select at least one ticket before checkout.", 400, "missing_ticket_quantity", { collectionId });
+      contributionAmount = roundCurrency(ticketSelections.reduce((s, sel) => s + sel.subtotal, 0));
+
+    } else {
+      quantity = asPositiveInt(metadata.quantity) || 1;
+      if (remainingContributionCapacity !== null && quantity > remainingContributionCapacity) {
+        throw new PaymentValidationError("Not enough tickets remain for this order.", 400, "insufficient_ticket_capacity", { collectionId, quantity, remainingContributionCapacity });
+      }
+      if (String(collection.allow_multiple_quantity) === "false" && quantity > 1) {
+        throw new PaymentValidationError("This ticket only allows one purchase per checkout.", 400, "multiple_quantity_disabled", { collectionId, quantity });
+      }
+      const unitPrice = roundCurrency(asNumber(collection.amount));
+      contributionAmount = roundCurrency(unitPrice * quantity);
+      ticketSelections = [{
+        tierId: null,
+        tierName: String(collection.title || "Ticket"),
+        pricePerUnit: unitPrice,
+        quantity,
+        subtotal: contributionAmount,
+        prefix: collection.code_prefix ? String(collection.code_prefix) : null,
+        remainingCapacity: remainingContributionCapacity,
+      }];
+    }
+
+  } else if (collectionType === "tiered") {
+    const tier = matchTier(allTiers, {
+      tierId: metadata.selectedTierId,
+      tierName: metadata.selectedTier,
+      name: metadata.selectedTier,
+    });
+    if (!tier) throw new PaymentValidationError("Select a valid pricing tier before checkout.", 400, "invalid_selected_tier", { collectionId, selectedTier: metadata.selectedTier });
+    if (tier.remainingCapacity !== null && Number(tier.remainingCapacity) < 1) {
+      throw new PaymentValidationError(`${tier.tierName} is sold out.`, 400, "tier_sold_out", { collectionId, tierId: tier.tierId, tierName: tier.tierName });
+    }
+    contributionAmount = roundCurrency(asNumber(tier.price));
+    selectedTier = tier.tierName != null ? String(tier.tierName) : null;
+    selectedTierId = tier.tierId != null ? String(tier.tierId) : null;
+    selectedTierPrefix = tier.prefix ? String(tier.prefix) : null;
+
+  } else {
+    // fixed (default)
+    if (remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
+      throw new PaymentValidationError("This collection has reached its contribution limit.", 400, "collection_full", { collectionId, paidCount, maxContributions });
+    }
+    contributionAmount = roundCurrency(asNumber(collection.amount));
+  }
+
+  if (!contributionAmount || contributionAmount <= 0) {
+    throw new PaymentValidationError(
+      "Unable to determine a valid payment amount for this checkout.",
+      400, "invalid_contribution_amount", { collectionId, collectionType, contributionAmount }
+    );
+  }
+
+  const feeBreakdown = calculateFees(contributionAmount, collectionType, feeBearer);
+
+  return {
+    collectionId,
+    collectionType,
+    collectionTitle: String(collection.title || "Collection"),
+    feeBearer,
+    contributionAmount,       // ← stored in contributions.amount → drives Total Raised
+    platformFee: feeBreakdown.platformFee,
+    gatewayFee: feeBreakdown.gatewayFee,
+    totalFees: feeBreakdown.totalFees,
+    totalPayable: feeBreakdown.totalPayable,  // ← what Paystack charged
+    quantity,
+    selectedTier,
+    selectedTierId,
+    selectedTierPrefix,
+    ticketSelections,
+    formData,
+    contact,
+    isAnonymous: metadata.isAnonymous === true || metadata.isAnonymous === 1 || metadata.isAnonymous === "1" || metadata.isAnonymous === "true",
+    codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
+    providedAmount: roundCurrency(asNumber(metadata.totalPayable || metadata.amount || 0)),
+  };
+}
+
+// ─── SETTLEMENT HELPERS ──────────────────────────────────────────────────────
+const COMPLETED_WITHDRAWAL_STATUSES = new Set(["completed", "successful"]);
+
+/** Returns the most recent T+1 settlement cutoff (5am WAT = 4am UTC). */
+function getSettlementCutoff(): Date {
+  const now = new Date();
+  const todayCutoff = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 4, 0, 0, 0
+  ));
+  return now >= todayCutoff ? todayCutoff : new Date(todayCutoff.getTime() - 86_400_000);
+}
+
+// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get request body
     const reqData = await req.json();
     const { reference } = reqData;
 
-    console.log("Processing payment verification for reference:", reference);
-
     if (!reference) {
-      return new Response(
-        JSON.stringify({ error: "Missing payment reference" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Missing payment reference" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Get Paystack secret key
+    // F4: payment-lifecycle correlation log — every line below uses this prefix.
+    console.log(`[verify ref=${reference}] VERIFY_CALLED`);
+
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
     if (!paystackSecretKey) {
-      return new Response(
-        JSON.stringify({ error: "Payment service not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Payment service not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("Verifying transaction with Paystack API");
-
-    // Verify the transaction with Paystack
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${paystackSecretKey}`,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { Authorization: `Bearer ${paystackSecretKey}`, "Content-Type": "application/json" } }
     );
 
     const data = await response.json();
-
     if (!response.ok || !data.status) {
-      console.error("Paystack verification error:", data);
-      return new Response(
-        JSON.stringify({
-          error: data.message || "Payment verification failed",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      // F4: Paystack verify rejected the reference
+      console.warn(
+        `[verify ref=${reference}] VERIFY_PAYSTACK_FAILED status=${response.status} message=${data?.message || ""}`
       );
+      return new Response(JSON.stringify({ error: data.message || "Payment verification failed" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Get the transaction details
     const transaction = data.data;
+    // F4: Paystack confirmed
+    console.log(
+      `[verify ref=${reference}] VERIFY_PAYSTACK_OK status=${transaction?.status} amount=${transaction?.amount} channel=${transaction?.channel || ""}`
+    );
+    const customer =
+      transaction.customer && typeof transaction.customer === "object"
+        ? (transaction.customer as Record<string, unknown>)
+        : {};
 
-    console.log("Paystack verification successful:", {
-      status: transaction.status,
-      amount: transaction.amount,
-      reference: transaction.reference,
-    });
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // If the payment is successful, update the database
-    if (transaction.status === "success") {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-      const supabaseServiceKey =
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const metadata =
+      transaction.metadata && typeof transaction.metadata === "object"
+        ? transaction.metadata
+        : {};
 
-      const collectionId = transaction.metadata?.collectionId;
-      const participants = transaction.metadata?.participants || [];
-      const collectionTitle =
-        transaction.metadata?.collectionTitle || "Untitled Collection";
-
-      console.log("Payment metadata:", {
-        collectionId,
-        collectionTitle,
-        participantsCount: participants.length,
+    const collectionId = String(metadata.collectionId || metadata.collection_id || "").trim();
+    if (!collectionId) {
+      return new Response(JSON.stringify({ error: "Missing collection ID in payment metadata" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
 
-      if (collectionId && participants.length > 0) {
-        // First get the collection details to know the total amount
-        const { data: collection, error: collectionError } = await supabase
-          .from("collections")
-          .select("*")
-          .eq("id", collectionId)
-          .single();
+    // Do not filter on deleted_at — column may not exist in prod schema.
+    const { data: collection, error: collectionError } = await supabase
+      .from("collections").select("*").eq("id", collectionId).maybeSingle();
 
-        if (collectionError) {
-          console.error("Error fetching collection:", collectionError);
+    if (collectionError) {
+      return new Response(JSON.stringify({ error: "Error fetching collection details" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!collection) {
+      return new Response(JSON.stringify({ error: "Collection not found." }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let processedContributions: Record<string, unknown>[] = [];
+    let normalizedPayment: ReturnType<typeof normalizePaymentRequest> | null = null;
+    let isNewPayment = false; // true only when we insert new contributions (not idempotent replay)
+
+    if (transaction.status === "success") {
+      // ── Idempotency: check if we already recorded contributions for this reference ──
+      // Use the new payment_reference column that was added via migration.
+      const { data: existingContributions } = await supabase
+        .from("contributions")
+        .select("*")
+        .eq("payment_reference", String(transaction.reference))
+        .eq("collection_id", collectionId)
+        .order("created_at", { ascending: true });
+
+      if ((existingContributions || []).length > 0) {
+        processedContributions = existingContributions || [];
+        // F4: idempotent return — already-recorded payment, no inserts needed
+        console.log(
+          `[verify ref=${reference}] VERIFY_IDEMPOTENT_HIT existing=${processedContributions.length}`
+        );
+      } else {
+        const { data: paidRows, error: paidRowsError } = await supabase
+          .from("contributions").select("id, amount, contributor_information, contributor_unique_code").eq("collection_id", collectionId).eq("status", "paid");
+
+        if (paidRowsError) {
+          return new Response(JSON.stringify({ error: "Unable to validate payment totals right now." }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // verifiedTotal is computed right before the mismatch check below
+        const verifiedTotalEarly = roundCurrency(Number(transaction.amount || 0) / 100);
+        try {
+          normalizedPayment = normalizePaymentRequest({
+            collection,
+            metadata,
+            paidRows: (paidRows || []) as Array<Record<string, unknown>>,
+            paystackVerifiedTotal: verifiedTotalEarly,
+          });
+        } catch (error: unknown) {
+          if (error instanceof PaymentValidationError) {
+            return new Response(JSON.stringify({ error: error.message, code: error.code }), {
+              status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          throw error;
+        }
+
+        // Verify amount matches: Paystack charged totalPayable, not contributionAmount.
+        // For open_pool/fundraising where metadata.contributionAmount was missing and we
+        // reverse-calculated the amount from verifiedTotal, allow a slightly wider tolerance
+        // to absorb binary-search rounding (max ~₦0.10 off).
+        const verifiedTotal = verifiedTotalEarly;
+        const metadataHadAmount =
+          asNumber(metadata.contributionAmount || metadata.amount) > 0;
+        const isOpenAmount =
+          normalizedPayment.collectionType === "open_pool" ||
+          normalizedPayment.collectionType === "fundraising";
+        const mismatchTolerance = isOpenAmount && !metadataHadAmount ? 1.0 : 0.01;
+        if (Math.abs(verifiedTotal - normalizedPayment.totalPayable) > mismatchTolerance) {
+          console.error("Amount mismatch:", { reference, collectionId, verifiedTotal, expectedTotal: normalizedPayment.totalPayable });
+          return new Response(JSON.stringify({ error: "Payment amount validation failed. Contact support with your reference." }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const contactName =
+          normalizedPayment.contact.name ||
+          String(customer.email || "").split("@")[0] ||
+          "Anonymous";
+        const payerName =
+          normalizedPayment.isAnonymous && normalizedPayment.collectionType === "fundraising"
+            ? "Anonymous"
+            : contactName;
+
+        // Fix #4: Only host-requested form fields go into contributorInformation.
+        // Contact info (name/email/phone) is stored on top-level columns only.
+        const baseFields = {
+          ...(normalizedPayment.formData || {}),
+        };
+
+        const contributionUnits = buildContributionUnits(normalizedPayment, collection);
+        const unitAmounts = contributionUnits.map((u) => u.amount);
+        const allocatedPlatformFees = allocateAmounts(normalizedPayment.platformFee, unitAmounts);
+        const allocatedGatewayFees = allocateAmounts(normalizedPayment.gatewayFee, unitAmounts);
+        const allocatedTotals = allocateAmounts(normalizedPayment.totalPayable, unitAmounts);
+
+        // Fix #7: Per-prefix sequential IDs — each tier prefix counts independently.
+        // Build a map of how many paid contributions already exist for each prefix.
+        const existingCountByPrefix = new Map<string, number>();
+        for (const row of (paidRows || [])) {
+          const code = String((row as Record<string, unknown>).contributor_unique_code || "");
+          const match = code.match(/^([A-Za-z]+)\d+$/);
+          if (match) {
+            const p = match[1].toUpperCase();
+            existingCountByPrefix.set(p, (existingCountByPrefix.get(p) || 0) + 1);
+          }
+        }
+        // Track how many units in the CURRENT batch have used each prefix
+        const batchCountByPrefix = new Map<string, number>();
+
+        // F2: bookkeeping for fail-fast + rollback semantics.
+        //   insertedIds  — rows WE inserted this call. Used for rollback if a
+        //                  later unit's insert hits a real error.
+        //   insertErrors — non-duplicate insert errors. Presence triggers
+        //                  rollback + 500 (instead of the old silent `continue`).
+        const insertedIds: string[] = [];
+        const insertErrors: Array<{ index: number; error: unknown }> = [];
+
+        for (let index = 0; index < contributionUnits.length; index++) {
+          const unit = contributionUnits[index];
+          // Only generate unique codes when the host explicitly enabled unique IDs.
+          // If unique_id_enabled is false on the collection, no code is ever assigned,
+          // even if a code_prefix value happens to exist on the record.
+          const prefix = normalizedPayment.uniqueIdEnabled
+            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase()
+            : "";
+          let uniqueCode: string | null = null;
+
+          if (prefix) {
+            // Per-prefix sequential code: count existing + count in this batch so far
+            const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
+            const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
+            const sequenceNumber = existingForPrefix + batchForPrefix + 1;
+            batchCountByPrefix.set(prefix, batchForPrefix + 1);
+            uniqueCode = `${prefix}${String(sequenceNumber).padStart(3, "0")}`;
+          }
+
+          // Fix #1: When organizer absorbs fees, contributions.amount = net the host receives.
+          // When contributor pays fees, contributions.amount = base contribution amount.
+          const allocatedFees = roundCurrency(
+            (allocatedPlatformFees[index] || 0) + (allocatedGatewayFees[index] || 0)
+          );
+          const netAmount =
+            normalizedPayment.feeBearer === "organizer"
+              ? roundCurrency(unit.amount - allocatedFees)
+              : unit.amount;
+
+          const contributorInformation = {
+            ...baseFields,
+            ...(unit.tierName ? { Tier: unit.tierName } : {}),
+            ...(unit.tierId ? { TierId: unit.tierId } : {}),
+            TierAmount: unit.amount,
+            Quantity: 1,
+            collectionType: normalizedPayment.collectionType,
+            channel: transaction.channel,
+            paidAt: transaction.paid_at,
+          };
+
+          // ── contributions table columns (actual schema): ─────────────────
+          //   id, collection_id, name, email, phone, amount, gross_amount,
+          //   contributor_information, contributor_unique_code, status,
+          //   payment_id, payment_reference, check_in_status,
+          //   created_at, updated_at
+          //
+          // amount      = net to host (contributionAmount minus fees if organizer-borne)
+          // gross_amount= what contributor actually paid (inc. fees or same as amount)
+
+          const lineItemGross = roundCurrency(allocatedTotals[index] || unit.amount);
+
+          // Embed receipt data inside contributor_information so it's queryable
+          // without a separate table. Standard fields are in named keys;
+          // receipt metadata sits under _receipt so it doesn't pollute the UI.
+          const infoWithReceipt = {
+            ...stripStandardFields(contributorInformation),
+            _receipt: {
+              transaction_id: transaction.id,
+              reference: transaction.reference,
+              paid_at: transaction.paid_at,
+              payment_channel: transaction.channel,
+              collection_title: collection.title || null,
+              unique_code: uniqueCode,
+              name: payerName,
+              line_item_amount: unit.amount,
+              line_item_net_amount: netAmount,
+              line_item_platform_fee: allocatedPlatformFees[index] || 0,
+              line_item_gateway_fee: allocatedGatewayFees[index] || 0,
+              line_item_total_paid: lineItemGross,
+              order_contribution_amount: normalizedPayment.contributionAmount,
+              order_platform_fee: normalizedPayment.platformFee,
+              order_gateway_fee: normalizedPayment.gatewayFee,
+              order_total_fees: normalizedPayment.totalFees,
+              order_total_paid: normalizedPayment.totalPayable,
+              order_quantity: normalizedPayment.quantity,
+              fee_bearer: normalizedPayment.feeBearer,
+              tier_id: unit.tierId,
+              tier_name: unit.tierName,
+              ticket_selections: normalizedPayment.ticketSelections,
+              // Payer contact stored here — used in Activities tab only
+              _payer: {
+                name: payerName,
+                email: normalizedPayment.contact.email || String(customer.email || ""),
+                phone: normalizedPayment.contact.phone || null,
+              },
+            },
+          };
+
+          const contributorPayload: Record<string, unknown> = {
+            collection_id: collectionId,
+            // ─── CORRECT column names (matching actual schema) ───────────────
+            name: payerName,
+            email: normalizedPayment.contact.email || String(customer.email || ""),
+            phone: normalizedPayment.contact.phone || null,
+            // amount = net to host (deducts fees when organizer-borne)
+            amount: netAmount,
+            // gross_amount = what contributor actually paid
+            gross_amount: lineItemGross,
+            status: "paid",
+            payment_reference: String(transaction.reference),
+            contributor_unique_code: uniqueCode,
+            contributor_information: [infoWithReceipt],
+            // F3: per-unit line index. Combined with (collection_id,
+            // payment_reference) this is unique (enforced by the constraint
+            // added in f3_step2_line_index_constraint.sql). Without this,
+            // two concurrent verify calls for the same reference could each
+            // insert N rows = 2N total rows.
+            line_index: index,
+            ...(normalizedPayment.collectionType === "ticket"
+              ? { check_in_status: "not_checked_in" }
+              : {}),
+          };
+
+          const { data: contribution, error: contribError } = await supabase
+            .from("contributions").insert(contributorPayload).select("*").single();
+
+          if (contribError) {
+            // F2: classify the error.
+            //
+            // Duplicate (23505 / "duplicate" / "unique") → a concurrent verify
+            // call inserted the rows for this same payment_reference. Fetch
+            // EVERY existing row for this reference (not just [0] — the old
+            // code did that and ended up registering only one row for a
+            // multi-ticket order during a race). Set processedContributions
+            // to the full set and break out of the loop — the concurrent
+            // call has already covered all units.
+            //
+            // Non-duplicate → a real DB / FK / RLS error. Stop the loop and
+            // roll back any rows WE inserted, so the FE/webhook can retry
+            // cleanly. Silently `continue`-ing on these errors is what made
+            // partial-failed inserts hard to detect in production.
+            const isDuplicate =
+              contribError.code === "23505" || // unique_violation
+              String(contribError.message).toLowerCase().includes("duplicate") ||
+              String(contribError.message).toLowerCase().includes("unique");
+            if (isDuplicate) {
+              const { data: existing } = await supabase
+                .from("contributions")
+                .select("*")
+                .eq("payment_reference", String(transaction.reference))
+                .eq("collection_id", collectionId)
+                .order("created_at", { ascending: true });
+              processedContributions = existing || [];
+              console.log(
+                `[verify ref=${reference}] VERIFY_INSERT_RACE_RECOVERED rows=${processedContributions.length}`
+              );
+              break;
+            }
+
+            console.error(
+              `[verify ref=${reference}] VERIFY_INSERT_FAILED index=${index}`,
+              {
+                code: contribError.code,
+                message: contribError.message,
+                details: (contribError as any).details,
+                hint: (contribError as any).hint,
+              }
+            );
+            insertErrors.push({ index, error: contribError });
+            break;
+          }
+          insertedIds.push(String((contribution as Record<string, unknown>).id));
+          processedContributions.push(contribution);
+        }
+
+        // F2: if any non-duplicate insert error occurred, roll back the rows
+        // we DID insert this call (don't touch rows inserted by concurrent
+        // callers — they aren't in `insertedIds`). Returning 500 here makes
+        // the FE's PaymentCallback render the "Try Again" screen and makes
+        // the webhook retry. The verify edge function is idempotent so retry
+        // is safe.
+        if (insertErrors.length > 0) {
+          if (insertedIds.length > 0) {
+            console.warn(
+              `[verify ref=${reference}] ROLLING_BACK partial_inserts=${insertedIds.length}`
+            );
+            const { error: rollbackErr } = await supabase
+              .from("contributions")
+              .delete()
+              .in("id", insertedIds);
+            if (rollbackErr) {
+              console.error(
+                `[verify ref=${reference}] ROLLBACK_FAILED — partial data may remain`,
+                rollbackErr
+              );
+            }
+          }
+          const firstErr = insertErrors[0].error as Record<string, unknown>;
+          console.error(
+            `[verify ref=${reference}] VERIFY_FAILED_AFTER_ROLLBACK code=${String(firstErr.code || "")}`
+          );
           return new Response(
-            JSON.stringify({ error: "Error fetching collection details" }),
+            JSON.stringify({
+              error:
+                "Failed to record contribution. The payment is recorded on Paystack — please retry; this is safe.",
+              code: String(firstErr.code || "contribution_insert_failed"),
+              details: String(firstErr.message || firstErr),
+            }),
             {
               status: 500,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -116,237 +836,626 @@ serve(async (req) => {
           );
         }
 
-        console.log("Retrieved collection details:", {
-          title: collection.title,
-          amount: collection.amount,
-          organizer_id: collection.organizer_id,
-        });
-
-        // Calculate total amount and fees
-        const totalAmount = transaction.amount / 100; // Convert from kobo to naira
-        const amountPerPerson = collection.amount; // Amount per participant
-
+        // Flag as a fresh (non-idempotent) payment so the receipt email is sent below
+        isNewPayment = processedContributions.length > 0;
+        // F4: fresh inserts complete
         console.log(
-          "Processing contribution records for participants:",
-          participants.length
-        );
-
-        let totalContributionAmount = 0;
-        let contributionIds = [];
-
-        // Create a contribution record for each participant
-        for (const participant of participants) {
-          try {
-            // Generate a unique code for this contribution
-            const uniqueCode = `${collection.id.slice(0, 6)}-${Math.random()
-              .toString(36)
-              .substring(2, 8)
-              .toUpperCase()}`;
-
-            console.log(
-              "Processing participant with data:",
-              JSON.stringify(participant.data)
-            );
-
-            // Extract only the requested fields from the participant data
-            // This ensures we're only storing what was requested by the collection creator
-            const contributorData = {
-              collection_id: collectionId,
-              contributor_name:
-                participant.data?.["Full Name"] ||
-                participant.data?.["Name"] ||
-                transaction.customer.email.split("@")[0] ||
-                "Anonymous",
-              contributor_email:
-                participant.data?.["Email"] || transaction.customer.email,
-              contributor_phone:
-                participant.data?.["Phone Number"] ||
-                participant.data?.["Phone"] ||
-                null,
-              contributor_id: transaction.customer.id || "anonymous",
-              amount: amountPerPerson,
-              status: "paid",
-              payment_method: "paystack",
-              payment_reference: transaction.reference,
-              receipt_details: {
-                transaction_id: transaction.id,
-                reference: transaction.reference,
-                paid_at: transaction.paid_at,
-                payment_channel: transaction.channel,
-                collection_title: collection.title || null,
-                unique_code: uniqueCode,
-              },
-              // Store only the requested fields from the form
-              contact_info: Object.keys(participant.data || {}).reduce(
-                (acc: any, key: string) => {
-                  // Don't store standard contact fields in the contact_info JSON as they're already in dedicated columns
-                  if (
-                    ![
-                      "Full Name",
-                      "Name",
-                      "Email",
-                      "Phone Number",
-                      "Phone",
-                    ].includes(key)
-                  ) {
-                    acc[key] = participant.data[key];
-                  }
-                  return acc;
-                },
-                {}
-              ),
-            };
-
-            console.log("Inserting contribution record:", {
-              name: contributorData.contributor_name,
-              email: contributorData.contributor_email,
-              amount: contributorData.amount,
-              uniqueCode,
-              contact_info: contributorData.contact_info,
-            });
-
-            const { data: contribution, error: contribError } = await supabase
-              .from("contributions")
-              .insert(contributorData)
-              .select("id")
-              .single();
-
-            if (contribError) {
-              console.error("Error recording contribution:", contribError);
-              // Continue with the next participant instead of failing completely
-              continue;
-            }
-
-            console.log(
-              "Successfully inserted contribution with ID:",
-              contribution?.id
-            );
-            if (contribution?.id) {
-              contributionIds.push(contribution.id);
-            }
-            totalContributionAmount += amountPerPerson;
-
-            // Always record a transaction in the transactions table
-            if (contribution && contribution.id) {
-              // Calculate platform charges based on the tier system
-              const platformChargePercent =
-                calculatePlatformChargePercentage(amountPerPerson);
-              const platformCharge = amountPerPerson * platformChargePercent;
-              const gatewayFee = Math.min(amountPerPerson * 0.015, 2000); // 1.5% with cap at ₦2,000
-
-              console.log("Recording transaction with fees:", {
-                platformChargePercent,
-                platformCharge,
-                gatewayFee,
-                contributionId: contribution.id,
-              });
-
-              const { data: trans, error: transError } = await supabase
-                .from("transactions")
-                .insert({
-                  collection_id: collectionId,
-                  contribution_id: contribution.id,
-                  user_id: collection.organizer_id, // The organizer of the collection
-                  type: "contribution",
-                  status: "successful",
-                  amount: amountPerPerson,
-                  description: `Payment for ${
-                    collection.title || "collection"
-                  }`,
-                })
-                .select("id");
-
-              if (transError) {
-                console.error("Error recording transaction:", transError);
-              } else {
-                console.log(
-                  "Transaction record created successfully with ID:",
-                  trans?.id
-                );
-              }
-            }
-          } catch (err) {
-            console.error("Error processing participant contribution:", err);
-          }
-        }
-
-        // Update the collection's total amount raised
-        try {
-          // Calculate the total contributed amount from this transaction
-          const currentTotal = collection.total_amount || 0;
-          const newTotal = currentTotal + totalContributionAmount;
-
-          console.log("Updating collection total amount:", {
-            currentTotal,
-            contributedAmount: totalContributionAmount,
-            newTotal,
-          });
-
-          const { data: updateResult, error: updateError } = await supabase
-            .from("collections")
-            .update({
-              total_amount: newTotal,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", collectionId)
-            .select();
-
-          if (updateError) {
-            console.error(
-              "Error updating collection total amount:",
-              updateError
-            );
-          } else {
-            console.log(
-              "Collection total amount updated successfully to:",
-              newTotal,
-              "Result:",
-              updateResult
-            );
-          }
-        } catch (err) {
-          console.error("Error updating collection:", err);
-        }
-      } else {
-        console.warn(
-          "Missing collection ID or participants in payment metadata"
+          `[verify ref=${reference}] VERIFY_CONTRIBS_INSERTED count=${processedContributions.length}`
         );
       }
+
+      await refreshCollectionAndWallets(supabase, collectionId, collection);
+      // F4: wallet recompute complete (source-of-truth derivation)
+      console.log(
+        `[verify ref=${reference}] WALLET_UPDATED collectionId=${collectionId}`
+      );
+
+      // ── Send receipt + organizer email (best-effort, non-blocking) ──────────
+      // Primary path: call the backend's /api/payments/send-receipt endpoint
+      //   which uses Zoho SMTP (already configured in the backend).
+      // Fallback: Resend API (if RESEND_API_KEY is set as a Supabase secret).
+      // Fires only on first-time payment insertion — never on idempotent replays.
+      if (isNewPayment && normalizedPayment) {
+        const payerEmail = normalizedPayment.contact.email || String(customer.email || "");
+        const payerName = normalizedPayment.contact.name || payerEmail.split("@")[0];
+
+        if (payerEmail) {
+          // @ts-ignore — Deno is a valid global in Supabase Edge Functions
+          const backendUrl = Deno.env.get("BACKEND_URL");
+          // @ts-ignore
+          const notifySecret = Deno.env.get("BACKEND_NOTIFY_SECRET");
+
+          // Build participant list for the email template
+          const emailParticipants = processedContributions.map((c) => {
+            const infoRows = Array.isArray((c as Record<string, unknown>).contributor_information)
+              ? ((c as Record<string, unknown>).contributor_information as Array<Record<string, unknown>>)
+              : [];
+            const details = infoRows.flatMap((row) =>
+              Object.entries(row)
+                .filter(([k]) => !k.startsWith("_"))
+                .map(([label, value]) => ({ label, value: String(value) }))
+            );
+            return {
+              id: String((c as Record<string, unknown>).id || ""),
+              uniqueCode: String((c as Record<string, unknown>).contributor_unique_code || ""),
+              details,
+            };
+          });
+
+          if (backendUrl) {
+            // ── Primary: backend Zoho SMTP email ──────────────────────────────
+            fetch(`${backendUrl}/api/payments/send-receipt`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(notifySecret ? { "x-internal-secret": notifySecret } : {}),
+              },
+              body: JSON.stringify({
+                payerEmail,
+                payerName,
+                collectionTitle: String(collection.title || "Collection"),
+                totalPaid: normalizedPayment.totalPayable,
+                currency: "NGN",
+                transactionRef: String(transaction.reference || ""),
+                paidAt: String(transaction.paid_at || new Date().toISOString()),
+                channel: String(transaction.channel || "card"),
+                participants: emailParticipants,
+                collectionId: collectionId,
+              }),
+            }).then(async (r) => {
+              if (!r.ok) {
+                const body = await r.text().catch(() => "");
+                console.warn("[verify] backend email non-OK:", r.status, body);
+                // Fallback to Resend if backend returned an error
+                return sendReceiptEmail({
+                  payerEmail, payerName,
+                  collectionTitle: String(collection.title || "Collection"),
+                  collectionType: normalizedPayment!.collectionType,
+                  contributionAmount: normalizedPayment!.contributionAmount,
+                  totalPaid: normalizedPayment!.totalPayable,
+                  platformFee: normalizedPayment!.platformFee,
+                  gatewayFee: normalizedPayment!.gatewayFee,
+                  transactionRef: String(transaction.reference || ""),
+                  paidAt: String(transaction.paid_at || new Date().toISOString()),
+                  uniqueCodes: processedContributions
+                    .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                    .filter(Boolean),
+                }).catch((e: unknown) =>
+                  console.warn("[verify] resend fallback also failed:", (e as Error)?.message)
+                );
+              }
+              console.log(
+                `[verify ref=${reference}] RECEIPT_EMAIL_SENT channel=backend`
+              );
+            }).catch((err: unknown) => {
+              console.warn("[verify] backend email fetch error, trying Resend:", (err as Error)?.message);
+              // Fallback to Resend on network error
+              sendReceiptEmail({
+                payerEmail, payerName,
+                collectionTitle: String(collection.title || "Collection"),
+                collectionType: normalizedPayment!.collectionType,
+                contributionAmount: normalizedPayment!.contributionAmount,
+                totalPaid: normalizedPayment!.totalPayable,
+                platformFee: normalizedPayment!.platformFee,
+                gatewayFee: normalizedPayment!.gatewayFee,
+                transactionRef: String(transaction.reference || ""),
+                paidAt: String(transaction.paid_at || new Date().toISOString()),
+                uniqueCodes: processedContributions
+                  .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                  .filter(Boolean),
+              }).catch((e: unknown) =>
+                console.warn("[verify] resend fallback also failed:", (e as Error)?.message)
+              );
+            });
+          } else {
+            // ── No BACKEND_URL configured: fall back to Resend directly ───────
+            sendReceiptEmail({
+              payerEmail, payerName,
+              collectionTitle: String(collection.title || "Collection"),
+              collectionType: normalizedPayment.collectionType,
+              contributionAmount: normalizedPayment.contributionAmount,
+              totalPaid: normalizedPayment.totalPayable,
+              platformFee: normalizedPayment.platformFee,
+              gatewayFee: normalizedPayment.gatewayFee,
+              transactionRef: String(transaction.reference || ""),
+              paidAt: String(transaction.paid_at || new Date().toISOString()),
+              uniqueCodes: processedContributions
+                .map((c) => String((c as Record<string, unknown>).contributor_unique_code || ""))
+                .filter(Boolean),
+            }).catch((err: unknown) =>
+              console.warn("[verify] resend email failed (no backend URL set):", (err as Error)?.message)
+            );
+          }
+        }
+      }
     }
+
+    const receiptData = buildReceiptData({
+      transaction, normalizedPayment, collection, contributions: processedContributions, customer,
+    });
+
+    // F4: final lifecycle checkpoint — clean filterable end-of-flow marker
+    console.log(
+      `[verify ref=${reference}] PAYMENT_COMPLETED contributions=${processedContributions.length} fresh=${isNewPayment}`
+    );
 
     return new Response(
       JSON.stringify({
         status: transaction.status,
         reference: transaction.reference,
-        amount: transaction.amount / 100, // Convert from kobo to naira
+        amount: transaction.amount / 100,
         paidAt: transaction.paid_at,
+        channel: transaction.channel,
+        currency: transaction.currency,
+        customer: transaction.customer,
+        contributions: processedContributions.map(formatContributionSummary),
+        receiptData,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
-    console.error("Server error:", error.message);
-    return new Response(
-      JSON.stringify({ error: "An unexpected error occurred" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    // F4: capture unexpected errors with whatever reference we have in scope.
+    // (Best-effort — if the error fired before we parsed the body, ref is unknown.)
+    console.error(`[verify ref=?] VERIFY_UNHANDLED_ERROR ${msg}`);
+    return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
 
-// Helper function to calculate platform charge percentage based on amount
-function calculatePlatformChargePercentage(amount: number): number {
-  if (amount < 1000) {
-    return 0.03; // 3%
-  } else if (amount < 5000) {
-    return 0.025; // 2.5%
-  } else if (amount < 20000) {
-    return 0.02; // 2%
-  } else {
-    return 0.015; // 1.5%
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function buildContributionUnits(
+  normalizedPayment: ReturnType<typeof normalizePaymentRequest>,
+  collection: Record<string, unknown>
+) {
+  if (normalizedPayment.collectionType === "ticket") {
+    return normalizedPayment.ticketSelections.flatMap((selection) =>
+      Array.from({ length: selection.quantity }, () => ({
+        amount: selection.pricePerUnit,
+        tierId: selection.tierId,
+        tierName: selection.tierName,
+        prefix: selection.prefix || normalizedPayment.codePrefix || null,
+      }))
+    );
   }
+  return [{
+    amount: normalizedPayment.contributionAmount,
+    tierId: normalizedPayment.selectedTierId,
+    tierName: normalizedPayment.selectedTier,
+    prefix: normalizedPayment.selectedTierPrefix || collection.code_prefix || normalizedPayment.codePrefix || null,
+  }];
+}
+
+/**
+ * Recomputes all wallet balances from source of truth after every payment.
+ *
+ * net_payment (Total Raised)  = sum of contributions.amount (no fees, ever)
+ * gross_payment               = sum of what contributors actually paid (inc. fees)
+ * pending_balance             = net amounts from today's payments (after 5am WAT)
+ * available_balance           = settled net minus completed withdrawals
+ * ledger_balance              = available + pending
+ */
+async function refreshCollectionAndWallets(
+  supabase: ReturnType<typeof createClient>,
+  collectionId: string,
+  collection: Record<string, unknown>
+) {
+  const { data: paidRows, error: totalError } = await supabase
+    .from("contributions")
+    .select("amount, gross_amount, contributor_information, created_at")
+    .eq("collection_id", collectionId)
+    .eq("status", "paid");
+
+  if (totalError) { console.error("Error recalculating totals:", totalError); return; }
+
+  const paidContributions = paidRows || [];
+  const settlementCutoff = getSettlementCutoff();
+
+  // Total Raised = sum of contribution net amounts (NEVER totalPayable / gross)
+  const netPayment = roundCurrency(
+    paidContributions.reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
+  );
+
+  // Gross = what contributors actually paid (gross_amount column, fallback to amount)
+  const grossPayment = roundCurrency(
+    paidContributions.reduce((sum: number, row: Record<string, unknown>) => {
+      return sum + Number(row.gross_amount || row.amount || 0);
+    }, 0)
+  );
+
+  // Pending = net from today's payments (not yet available for withdrawal)
+  const pendingBalance = roundCurrency(
+    paidContributions
+      .filter((row: Record<string, unknown>) => {
+        const ts = row.created_at ? new Date(String(row.created_at)) : null;
+        return ts !== null && ts >= settlementCutoff;
+      })
+      .reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
+  );
+
+  const settledNet = roundCurrency(netPayment - pendingBalance);
+
+  const { data: withdrawals } = await supabase
+    .from("withdrawals").select("amount, status").eq("collection_id", collectionId);
+
+  const completedWithdrawals = roundCurrency(
+    (withdrawals || [])
+      .filter((row: Record<string, unknown>) => COMPLETED_WITHDRAWAL_STATUSES.has(String(row.status || "")))
+      .reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
+  );
+
+  const availableBalance = roundCurrency(Math.max(0, settledNet - completedWithdrawals));
+  const ledgerBalance = roundCurrency(availableBalance + pendingBalance);
+
+  // total_contributions = count of paid contributions (one per ticket for ticket collections)
+  const totalContributions = paidContributions.length;
+
+  console.log("[verify] Balances computed:", {
+    collectionId,
+    netPayment,
+    grossPayment,
+    pendingBalance,
+    settledNet: roundCurrency(netPayment - pendingBalance),
+    completedWithdrawals,
+    availableBalance,
+    ledgerBalance,
+    totalContributions,
+  });
+
+  // Cast tiers to Record so we can access the original spread properties (id, price, etc.)
+  const tierAvailability = (buildTierAvailability(
+    getPriceTiers(collection),
+    paidContributions as Array<Record<string, unknown>>
+  ) as Array<Record<string, unknown>>).map((tier) => ({
+    id: tier.id || tier.tierId || null,
+    name: tier.tierName,
+    price: tier.price,
+    description: tier.description || null,
+    quantity: tier.totalCapacity,
+    prefix: tier.prefix || null,
+    sold_quantity: tier.sold,
+    remaining_quantity: tier.remainingCapacity,
+  }));
+
+  // NOTE: collections table does NOT have a total_amount column.
+  // total_contributions tracks how many paid contribution rows exist.
+  const { error: colUpdateErr } = await supabase.from("collections").update({
+    total_contributions: totalContributions,
+    ...(Array.isArray(getPriceTiers(collection)) ? { price_tiers: tierAvailability } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq("id", collectionId);
+  if (colUpdateErr) console.error("[verify] ❌ collections update failed:", colUpdateErr);
+
+  // ── Wallet: SELECT-then-UPDATE or INSERT ──────────────────────────────────
+  // We do NOT use upsert({ onConflict: "collection_id" }) because that requires
+  // a UNIQUE constraint on wallets.collection_id. Instead we explicitly check
+  // existence and branch, which works regardless of DB constraint state.
+  const walletPayload = {
+    collection_id: collectionId,
+    gross_payment: grossPayment,
+    net_payment: netPayment,         // = Total Raised (contribution amounts, no fees)
+    ledger_balance: ledgerBalance,
+    available_balance: availableBalance,
+    pending_balance: pendingBalance,
+    withdrawn: completedWithdrawals,
+    currency: "NGN",
+    currency_symbol: "₦",
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: existingWallet, error: walletCheckErr } = await supabase
+    .from("wallets")
+    .select("id")
+    .eq("collection_id", collectionId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (walletCheckErr) {
+    console.error("[verify] ❌ Wallet existence check failed:", walletCheckErr);
+  } else if (existingWallet) {
+    // Row exists: UPDATE in-place using primary key
+    const { error: updateErr } = await supabase
+      .from("wallets")
+      .update(walletPayload)
+      .eq("id", existingWallet.id);
+    if (updateErr) {
+      console.error("[verify] ❌ Wallet UPDATE failed:", updateErr);
+    } else {
+      console.log("[verify] ✅ Wallet UPDATED:", { id: existingWallet.id, collectionId, netPayment, pendingBalance, availableBalance, ledgerBalance });
+    }
+  } else {
+    // No row yet: INSERT
+    const { data: inserted, error: insertErr } = await supabase
+      .from("wallets")
+      .insert(walletPayload)
+      .select("id")
+      .single();
+    if (insertErr) {
+      console.error("[verify] ❌ Wallet INSERT failed:", insertErr);
+    } else {
+      console.log("[verify] ✅ Wallet INSERTED:", { id: inserted?.id, collectionId, netPayment, pendingBalance, availableBalance, ledgerBalance });
+    }
+  }
+}
+
+function getReceiptFromContribution(contribution: Record<string, unknown>): Record<string, unknown> {
+  const infoRows = Array.isArray(contribution.contributor_information)
+    ? (contribution.contributor_information as Array<Record<string, unknown>>)
+    : [];
+  // Receipt data is stored under _receipt key inside contributor_information[0]
+  return (infoRows[0]?._receipt as Record<string, unknown>) || {};
+}
+
+function formatContributionSummary(contribution: Record<string, unknown>) {
+  return {
+    id: contribution.id,
+    // Column is "name" not "contributor_name"
+    name: contribution.name || "Anonymous",
+    amount: Number(contribution.amount || 0),
+    gross_amount: Number(contribution.gross_amount || contribution.amount || 0),
+    uniqueCode: contribution.contributor_unique_code || null,
+    created_at: contribution.created_at,
+    // Column is "email" not "contributor_email"
+    email: contribution.email || "",
+    contributor_information: contribution.contributor_information || [],
+  };
+}
+
+function buildReceiptData(input: {
+  transaction: Record<string, unknown>;
+  normalizedPayment: ReturnType<typeof normalizePaymentRequest> | null;
+  collection: Record<string, unknown>;
+  contributions: Array<Record<string, unknown>>;
+  customer: Record<string, unknown>;
+}) {
+  const { transaction, normalizedPayment, collection, contributions, customer } = input;
+
+  // Receipt metadata is stored inside contributor_information[0]._receipt
+  const firstReceipt = getReceiptFromContribution(contributions[0] || {});
+
+  const contributionAmount =
+    normalizedPayment?.contributionAmount ||
+    Number(firstReceipt.order_contribution_amount || 0) ||
+    roundCurrency(contributions.reduce((s, r) => s + Number(r.amount || 0), 0));
+
+  const platformFee = normalizedPayment?.platformFee || Number(firstReceipt.order_platform_fee || 0);
+  const gatewayFee = normalizedPayment?.gatewayFee || Number(firstReceipt.order_gateway_fee || 0);
+  const totalFees = normalizedPayment?.totalFees || Number(firstReceipt.order_total_fees || 0) || roundCurrency(platformFee + gatewayFee);
+  const totalPaid = normalizedPayment?.totalPayable || Number(firstReceipt.order_total_paid || 0) || roundCurrency(Number(transaction.amount || 0) / 100);
+  const ticketSelections = normalizedPayment?.ticketSelections || groupTicketSelectionsFromContributions(contributions);
+
+  const payerName =
+    normalizedPayment?.contact.name ||
+    String(customer.name || "") ||
+    String(customer.email || "").split("@")[0] ||
+    "";
+
+  return {
+    collectionTitle: String(collection.title || "Your Collection"),
+    collectionType: String(collection.collection_type || collection.type || "fixed"),
+    description: collection.description ? String(collection.description) : "",
+    campaignSummary: collection.campaign_summary ? String(collection.campaign_summary) : "",
+    bannerUrl: String(collection.banner_url || collection.banner_image || ""),
+    eventDate: collection.event_date ? String(collection.event_date) : "",
+    uniqueIdEnabled: Boolean(collection.unique_id_enabled),
+    codePrefix: collection.code_prefix ? String(collection.code_prefix) : "",
+    contributionAmount,  // Total Raised contribution — no fees
+    platformFee,
+    gatewayFee,
+    totalFees,
+    totalPaid,           // what contributor paid (may be higher if contributor-borne)
+    participants: contributions.map((c) => ({
+      id: String(c.id),
+      uniqueCode: String(c.contributor_unique_code || ""),
+      details: formatParticipantDetails(c),
+    })),
+    ticketSelections,
+    transactionRef: String(transaction.reference || ""),
+    status: "success",
+    paidAt: String(transaction.paid_at || new Date().toISOString()),
+    channel: String(transaction.channel || "card"),
+    currency: String(transaction.currency || "NGN"),
+    payer: {
+      name: payerName,
+      email: String(normalizedPayment?.contact.email || customer.email || ""),
+      phone: String(normalizedPayment?.contact.phone || ""),
+    },
+  };
+}
+
+function formatParticipantDetails(contribution: Record<string, unknown>) {
+  const infoRows = Array.isArray(contribution.contributor_information)
+    ? (contribution.contributor_information as Array<Record<string, unknown>>)
+    : [];
+  // Skip internal keys prefixed with _ (e.g., _receipt) and technical fields
+  const SKIP_KEYS = new Set(["collectionType", "paidAt", "channel", "TierAmount", "TierId", "Quantity"]);
+  const details = infoRows.flatMap((row) =>
+    Object.entries(row).flatMap(([label, value]) => {
+      if (label.startsWith("_")) return []; // skip internal metadata
+      if (value == null || value === "") return [];
+      if (SKIP_KEYS.has(label)) return [];
+      return [{ label, value: String(value) }];
+    })
+  );
+  // "name" is the correct column (not "contributor_name")
+  if (details.length === 0) {
+    return [{ label: "Contributor", value: String(contribution.name || "Anonymous") }];
+  }
+  return details;
+}
+
+function groupTicketSelectionsFromContributions(contributions: Array<Record<string, unknown>>) {
+  const grouped = new Map<string, { tierName: string; quantity: number; pricePerUnit: number; subtotal: number }>();
+  for (const contribution of contributions) {
+    const infoRows = Array.isArray(contribution.contributor_information)
+      ? (contribution.contributor_information as Array<Record<string, unknown>>)
+      : [];
+    const info = infoRows[0] || {};
+    const tierName = String(info.Tier || "Ticket");
+    const pricePerUnit = Number(info.TierAmount || contribution.amount || 0);
+    const existing = grouped.get(tierName) || { tierName, quantity: 0, pricePerUnit, subtotal: 0 };
+    existing.quantity += 1;
+    existing.subtotal = roundCurrency(existing.subtotal + Number(contribution.amount || 0));
+    grouped.set(tierName, existing);
+  }
+  return Array.from(grouped.values());
+}
+
+function stripStandardFields(data: Record<string, unknown>) {
+  const blocked = new Set(["collectionType", "channel", "paidAt"]);
+  return Object.keys(data || {}).reduce<Record<string, unknown>>((acc, key) => {
+    if (!blocked.has(key)) acc[key] = data[key];
+    return acc;
+  }, {});
+}
+
+// ─── RECEIPT EMAIL ────────────────────────────────────────────────────────────
+/**
+ * Sends a branded HTML receipt email to the payer via Resend.
+ * Requires RESEND_API_KEY env var. Fails gracefully if not configured.
+ */
+async function sendReceiptEmail(params: {
+  payerEmail: string;
+  payerName: string;
+  collectionTitle: string;
+  collectionType: string;
+  contributionAmount: number;
+  totalPaid: number;
+  platformFee: number;
+  gatewayFee: number;
+  transactionRef: string;
+  paidAt: string;
+  uniqueCodes: string[];
+}): Promise<void> {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendApiKey) {
+    console.warn("[verify] RESEND_API_KEY not set — skipping receipt email");
+    return;
+  }
+
+  const {
+    payerEmail, payerName, collectionTitle, collectionType,
+    contributionAmount, totalPaid, platformFee, gatewayFee,
+    transactionRef, paidAt, uniqueCodes,
+  } = params;
+
+  const fmt = (n: number) =>
+    `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const typeLabel: Record<string, string> = {
+    fixed: "Payment", tiered: "Payment", open_pool: "Contribution",
+    ticket: "Ticket Purchase", fundraising: "Donation",
+  };
+  const label = typeLabel[collectionType] || "Payment";
+
+  let formattedDate = paidAt;
+  try {
+    formattedDate = new Date(paidAt).toLocaleString("en-NG", {
+      dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos",
+    });
+  } catch { /* keep raw string */ }
+
+  const uniqueCodesRow = uniqueCodes.length > 0
+    ? `<tr style="border-top:1px solid #e5e7eb;">
+        <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Your Code(s)</td>
+        <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;font-family:monospace;">${uniqueCodes.join(", ")}</td>
+      </tr>`
+    : "";
+
+  const feesRow = (platformFee + gatewayFee) > 0
+    ? `<tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+        <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Processing Fees</td>
+        <td style="padding:12px 16px;color:#111827;font-size:14px;">${fmt(platformFee + gatewayFee)}</td>
+      </tr>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#1B5E20 0%,#388E3C 100%);padding:32px 40px;text-align:center;">
+            <div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:rgba(255,255,255,0.2);border-radius:50%;margin-bottom:12px;">
+              <span style="color:#ffffff;font-size:22px;">✓</span>
+            </div>
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${label} Confirmed</h1>
+            <p style="margin:6px 0 0;color:#bbf7d0;font-size:14px;">${collectionTitle}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 40px;">
+            <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hi <strong>${payerName}</strong>,</p>
+            <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.7;">
+              Your ${label.toLowerCase()} has been confirmed. Here is your receipt for your records.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr style="background:#f9fafb;">
+                <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Receipt Summary</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;width:45%;">Collection</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;">${collectionTitle}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Amount</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;font-weight:600;">${fmt(contributionAmount)}</td>
+              </tr>
+              ${feesRow}
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;font-weight:600;">Total Paid</td>
+                <td style="padding:12px 16px;color:#16a34a;font-size:16px;font-weight:700;">${fmt(totalPaid)}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;background:#f9fafb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Reference</td>
+                <td style="padding:12px 16px;color:#111827;font-size:13px;font-family:'Courier New',monospace;">${transactionRef}</td>
+              </tr>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:12px 16px;color:#6b7280;font-size:14px;">Date</td>
+                <td style="padding:12px 16px;color:#111827;font-size:14px;">${formattedDate}</td>
+              </tr>
+              ${uniqueCodesRow}
+            </table>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;">
+              <p style="margin:0;color:#166534;font-size:13px;line-height:1.6;">
+                <strong>Payment not loading?</strong> Your payment was successful and is recorded. If the confirmation page didn't load, use your reference number above to contact support.
+              </p>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px;border-top:1px solid #f3f4f6;text-align:center;">
+            <p style="margin:0;color:#d1d5db;font-size:12px;">Powered by <strong style="color:#1B5E20;">Kolekto</strong> &nbsp;·&nbsp; Secure group payments across Nigeria</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Kolekto Payments <noreply@kolekto.io>",
+      to: [payerEmail],
+      subject: `${label} confirmed — ${collectionTitle}`,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Resend API error ${res.status}: ${body}`);
+  }
+  console.log("[verify] ✅ Receipt email sent to", payerEmail);
 }

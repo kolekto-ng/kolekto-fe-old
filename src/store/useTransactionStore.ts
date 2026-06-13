@@ -18,7 +18,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const { data: collections } = await supabase
         .from('collections')
         .select('id, title')
-        .eq('organizer_id', userId);
+        .eq('user_id', userId);
 
       if (!collections || collections.length === 0) {
         set({ transactions: [], isLoading: false });
@@ -107,7 +107,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       const { data: collections } = await supabase
         .from('collections')
         .select('id, amount')
-        .eq('organizer_id', userId);
+        .eq('user_id', userId);
 
       if (!collections || collections.length === 0) {
         const summary = {
@@ -134,9 +134,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         .select('amount, status')
         .in('collection_id', collectionIds);
 
+      const { isCompletedWithdrawal, isPendingWithdrawal } = await import('@/utils/withdrawalStatus');
       const totalRaised = contributions?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
-      const totalWithdrawn = withdrawals?.filter(w => w.status === 'completed').reduce((sum, w) => sum + (w.amount || 0), 0) || 0;
-      const pendingWithdrawals = withdrawals?.filter(w => w.status === 'pending').reduce((sum, w) => sum + (w.amount || 0), 0) || 0;
+      // "completed" was the only status counted before — but the admin-
+      // approval path writes "approved", which got dropped from the
+      // total. Use the shared helper that mirrors the BE truth function.
+      const totalWithdrawn = withdrawals?.filter(w => isCompletedWithdrawal(w.status)).reduce((sum, w) => sum + (w.amount || 0), 0) || 0;
+      const pendingWithdrawals = withdrawals?.filter(w => isPendingWithdrawal(w.status)).reduce((sum, w) => sum + (w.amount || 0), 0) || 0;
       const availableBalance = totalRaised - totalWithdrawn - pendingWithdrawals;
 
       const summary = {

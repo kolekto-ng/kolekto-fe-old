@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,8 +8,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/store';
 
-const LoginForm: React.FC = () => {
-  const [email, setEmail] = useState('');
+interface LoginFormProps {
+  redirectTo?: string;
+  prefillEmail?: string;
+}
+
+const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefillEmail = '' }) => {
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
@@ -20,6 +25,14 @@ const LoginForm: React.FC = () => {
   const { signIn, sendMagicLink } = useAuthStore();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    setEmail(prefillEmail);
+  }, [prefillEmail]);
+
+  const resolvedRedirect = redirectTo === '/create-collection'
+    ? '/create-collection?resumePublish=1'
+    : redirectTo;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -28,11 +41,15 @@ const LoginForm: React.FC = () => {
     try {
       const { user, error } = await signIn(email, password);
       if (error) {
-        setError(error.message);
-        toast.error(error.message);
+        const message =
+          error.message === 'Email not confirmed'
+            ? 'Please check your email and verify your account before signing in.'
+            : error.message;
+        setError(message);
+        toast.error(message);
       } else {
         toast.success('Login successful!');
-        navigate('/dashboard');
+        navigate(resolvedRedirect);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
@@ -172,7 +189,10 @@ const LoginForm: React.FC = () => {
 
       <div className="text-center text-sm">
         Don't have an account?{" "}
-        <Link to="/register" className="text-kolekto hover:underline">
+        <Link
+          to={`/register?redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`}
+          className="text-kolekto hover:underline"
+        >
           Sign up
         </Link>
       </div>
