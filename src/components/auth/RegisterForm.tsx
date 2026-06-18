@@ -11,6 +11,7 @@ import { useRecaptcher } from "@/hooks/useRecaptcher";
 import ReCAPTCHA from "react-google-recaptcha";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import { Eye, EyeOff } from "lucide-react"; // Add this import for icons
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface RegisterFormProps {
   redirectTo?: string;
@@ -133,7 +134,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       }
     } catch (error: any) {
       console.log(error, 'error');
-      setError(error.message || "An unexpected error occurred");
+      setError(toFriendlyErrorMessage(error, "Registration failed. Please try again."));
       toast.error("Registration failed");
     } finally {
       setIsLoading(false);
@@ -259,7 +260,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         }
       }
     } catch (err: any) {
-      setError(err.message || "An unexpected error occurred");
+      setError(toFriendlyErrorMessage(err, "Registration failed. Please try again."));
       toast.error("Registration failed");
     } finally {
       setIsLoading(false);

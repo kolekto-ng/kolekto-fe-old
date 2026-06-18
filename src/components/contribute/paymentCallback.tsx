@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2, AlertTriangle, Mail, RefreshCw, Home } from "luc
 import { supabase } from "@/integrations/supabase/client";
 import PaymentSuccessful from "./PaymentSuccessful";
 import { Button } from "@/components/ui/button";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 const PaymentCallback = () => {
   const [searchParams] = useSearchParams();
@@ -59,7 +60,7 @@ const PaymentCallback = () => {
       throw new Error(data?.error || "Unable to load payment receipt");
     } catch (err: any) {
       console.error("Payment callback error:", err);
-      setErrorMsg(err?.message || "Failed to verify payment");
+        setErrorMsg(toFriendlyErrorMessage(err, "Could not verify payment. Please try again."));
     } finally {
       setLoading(false);
     }

@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/formatters';
 import { normalizeContributions } from '@/utils/contributions';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface ContributeFlowProps {
   collection: any;
@@ -639,7 +640,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
       window.location.href = authorizationUrl;
     } catch (err: any) {
-      const msg = err?.message || 'Failed to initiate payment';
+      const msg = toFriendlyErrorMessage(err, 'We could not start your payment. Please try again.');
       toast.error(msg);
       setIsSubmitting(false);
     }

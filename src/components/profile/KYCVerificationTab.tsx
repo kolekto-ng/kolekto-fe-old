@@ -16,6 +16,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import second from '../settings/comprehensive-kyc-system.js'
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 const VERIFIED = 'verified';
 const PENDING = 'pending';
@@ -177,7 +178,7 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
 
     } catch (error) {
       console.error('BVN verification failed:', error);
-      setError(error.message || 'Failed to verify BVN. Please try again.');
+      setError(toFriendlyErrorMessage(error, 'Could not verify BVN. Please try again.'));
     } finally {
       setIsLoading(false);
     }

@@ -4,7 +4,7 @@ import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import DashboardSidebar from './DashboardSidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuthStore } from '@/store';
+import { useAuthStore } from '@/store/useAuthStore';
 import DashboardNavbar from './DashboardNavbar';
 import { DashboardShellSkeleton } from '@/components/ui/page-skeletons';
 
@@ -23,9 +23,9 @@ const DashboardContent = () => {
   return (
     <div className="flex-1 w-full flex flex-col bg-gray-50 min-w-0">
       <DashboardNavbar />
-      <div className="p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
+      <main className="p-3 sm:p-6 lg:p-8 pb-24 md:pb-8 transition-opacity duration-200 ease-out">
         <Outlet />
-      </div>
+      </main>
     </div>
   );
 };

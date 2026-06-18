@@ -34,11 +34,11 @@ interface CollectionCardProps {
 }
 
 function fmt(n: number) {
-  return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
+  return `\u20A6${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
 }
 
 function fmtDate(d?: string) {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -81,7 +81,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   const cfg = TYPE_ICON[type] ?? DEFAULT_TYPE;
   const Icon = cfg.icon;
   const sCls = STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700";
-  const sLabel = status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
+  const sLabel = status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "-";
   const progress = goalAmount && goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0;
   const lowestTier = tiers?.length ? Math.min(...tiers.map(t => t.amount)) : 0;
   const isFundraising = type === "fundraising";
@@ -92,11 +92,10 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   return (
     <article
       className="group overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg flex flex-col"
-      style={{ minHeight: '320px' }}
+      style={{ minHeight: "320px" }}
       onClick={onViewDetails}
     >
-      {/* Header */}
-      <div className="px-5 py-4" style={{ backgroundColor: '#f5ce42' }}>
+      <div className="px-5 py-4" style={{ backgroundColor: "#f5ce42" }}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div className="rounded-2xl bg-white/30 p-3 text-gray-900 backdrop-blur-sm">
@@ -112,7 +111,6 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         </div>
       </div>
 
-      {/* Body */}
       <div className="border-t border-gray-200 px-5 py-5 bg-gray-50/50 flex-1 flex flex-col">
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
@@ -127,7 +125,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
               {isFundraising
                 ? fmt(goalAmount || 0)
                 : isTiered
-                  ? lowestTier > 0 ? fmt(lowestTier) : "—"
+                  ? lowestTier > 0 ? fmt(lowestTier) : "-"
                   : isOpenPool
                     ? amount > 0 ? fmt(amount) : "Any"
                     : fmt(amount)}
@@ -160,7 +158,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
               <div
                 className="h-full rounded-full bg-green-600"
-                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? '100%' : '0%' }}
+                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? "100%" : "0%" }}
               />
             </div>
             {goalAmount && goalAmount > 0 && (

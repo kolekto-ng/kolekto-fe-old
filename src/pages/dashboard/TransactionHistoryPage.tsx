@@ -2,7 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, History } from 'lucide-react';
+import {
+  Wallet,
+  History,
+  Lock,
+  Layers,
+  Waves,
+  Ticket,
+  Heart,
+  ChevronRight,
+  MoreVertical,
+} from 'lucide-react';
 import {
   isCompletedWithdrawal,
   withdrawalStatusBucket,
@@ -17,6 +27,7 @@ interface CollectionEarning {
   id: string;
   name: string;
   type: string;
+  typeKey: string;
   totalRaised: number;
   currentBalance: number;
   amountWithdrawn: number;
@@ -33,6 +44,59 @@ interface RecentTransaction {
   status: 'pending' | 'successful' | 'failed' | string;
   description: string;
 }
+
+const normalizeCollectionType = (type?: string) =>
+  (type || 'fixed').toLowerCase().replace(/\s+/g, '_');
+
+const COLLECTION_TYPE_META: Record<
+  string,
+  {
+    label: string;
+    icon: React.ElementType;
+    iconClassName: string;
+    pillClassName: string;
+  }
+> = {
+  fixed: {
+    label: 'Fixed',
+    icon: Lock,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  flat: {
+    label: 'Fixed',
+    icon: Lock,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  tiered: {
+    label: 'Tiered',
+    icon: Layers,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  open_pool: {
+    label: 'Open Pool',
+    icon: Waves,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  ticket: {
+    label: 'Ticketing',
+    icon: Ticket,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+  fundraising: {
+    label: 'Fundraising',
+    icon: Heart,
+    iconClassName: 'bg-emerald-50 text-emerald-700',
+    pillClassName: 'bg-emerald-50 text-emerald-700',
+  },
+};
+
+const getCollectionTypeMeta = (type?: string) =>
+  COLLECTION_TYPE_META[normalizeCollectionType(type)] || COLLECTION_TYPE_META.fixed;
 
 const TransactionHistoryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('collections');
@@ -84,6 +148,8 @@ const TransactionHistoryPage: React.FC = () => {
     });
 
     return sortedCollections.map((col: any) => {
+      const typeKey = normalizeCollectionType(col.collection_type || col.type || 'fixed');
+      const typeMeta = getCollectionTypeMeta(typeKey);
       const wallet = col.wallets
         ? (Array.isArray(col.wallets) ? col.wallets[0] || {} : col.wallets)
         : {};
@@ -100,7 +166,8 @@ const TransactionHistoryPage: React.FC = () => {
       return {
         id: col.id,
         name: col.title || '',
-        type: col.collection_type || col.type || 'Fixed',
+        type: typeMeta.label,
+        typeKey,
         totalRaised,
         currentBalance,
         amountWithdrawn: withdrawnTotal,
@@ -112,6 +179,25 @@ const TransactionHistoryPage: React.FC = () => {
       };
     });
   }, [collections, completedByCollection]);
+
+  const walletSummary = useMemo(
+    () =>
+      collectionEarnings.reduce(
+        (totals, earning) => ({
+          availableBalance: totals.availableBalance + earning.availableBalance,
+          pendingBalance: totals.pendingBalance + earning.pendingBalance,
+          amountWithdrawn: totals.amountWithdrawn + earning.amountWithdrawn,
+          currentBalance: totals.currentBalance + earning.currentBalance,
+        }),
+        {
+          availableBalance: 0,
+          pendingBalance: 0,
+          amountWithdrawn: 0,
+          currentBalance: 0,
+        },
+      ),
+    [collectionEarnings],
+  );
 
   const recentTransactions: RecentTransaction[] = useMemo(() => {
     const sortedWithdrawals = [...withdrawalsArray].sort((a, b) => {
@@ -158,73 +244,180 @@ const TransactionHistoryPage: React.FC = () => {
   };
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Wallet & Transactions</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your collections balance and track withdrawals.</p>
+    <div className="space-y-5 pb-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <section className="min-w-0 overflow-hidden rounded-[22px] bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-800 text-white shadow-[0_12px_24px_rgba(4,120,87,0.18)]">
+          <div className="relative p-4 sm:p-5">
+            <div className="pointer-events-none absolute inset-0 opacity-20 [background:radial-gradient(circle_at_18%_18%,white_0,transparent_28%),linear-gradient(135deg,transparent_20%,rgba(255,255,255,.22)_60%,transparent_80%)]" />
+            <div className="relative space-y-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-emerald-50 sm:text-sm">Wallet Balance</p>
+                <div className="mt-1.5 min-w-0">
+                  <p className="break-words text-[clamp(1.35rem,6vw,2.35rem)] font-semibold leading-tight tracking-normal">
+                    {formatCurrency(walletSummary.availableBalance)}
+                  </p>
+                </div>
+                <p className="mt-1.5 text-xs font-normal leading-snug text-emerald-50 sm:text-sm">Available to withdraw</p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('collections')}
+            className="flex min-h-12 w-full items-center justify-between gap-2 bg-emerald-800/70 px-4 py-3 text-left text-xs font-semibold text-white transition hover:bg-emerald-900/70 sm:text-sm"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Wallet className="h-4 w-4 shrink-0" />
+              Withdraw Funds
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          </button>
+        </section>
+
+        <section className="min-w-0 rounded-[22px] border border-gray-100 bg-white p-4 shadow-[0_12px_24px_rgba(15,23,42,0.07)] sm:p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="break-words text-base font-semibold leading-snug text-gray-950 sm:text-lg">Wallet Summary</h2>
+              <p className="mt-1 hidden text-xs text-gray-500 sm:block">Balances across your collections</p>
+            </div>
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+              aria-label="Wallet summary options"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-3 divide-y divide-gray-100">
+            <div className="flex items-center justify-between gap-2 py-2">
+              <span className="flex min-w-0 items-center gap-2 text-xs text-gray-700 sm:text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 ring-4 ring-emerald-50" />
+                Available
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-semibold leading-tight text-gray-950 sm:text-base">
+                {formatCurrency(walletSummary.availableBalance)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 py-2">
+              <span className="flex min-w-0 items-center gap-2 text-xs text-gray-700 sm:text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 ring-4 ring-emerald-50" />
+                Pending
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-semibold leading-tight text-gray-950 sm:text-base">
+                {formatCurrency(walletSummary.pendingBalance)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 py-2">
+              <span className="flex min-w-0 items-center gap-2 text-xs text-gray-700 sm:text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 ring-4 ring-emerald-50" />
+                Withdrawn
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-semibold leading-tight text-gray-950 sm:text-base">
+                {formatCurrency(walletSummary.amountWithdrawn)}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('withdrawals')}
+            className="mt-3 flex min-h-11 w-full items-center justify-between gap-2 rounded-2xl bg-emerald-50 px-3 text-left text-xs font-semibold leading-tight text-emerald-700 transition hover:bg-emerald-100 sm:text-sm"
+          >
+            <span className="min-w-0">View withdrawal transactions</span>
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          </button>
+        </section>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-gray-100/80 p-1 w-full sm:w-auto inline-flex h-auto rounded-xl">
-          <TabsTrigger 
-            value="collections" 
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all"
-          >
-            <Wallet className="w-4 h-4" />
-            Collections Overview
-          </TabsTrigger>
-          <TabsTrigger 
-            value="withdrawals"
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all"
-          >
-            <History className="w-4 h-4" />
-            Withdrawal Transactions
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+        <div className="pb-1">
+          <TabsList className="grid h-auto w-full grid-cols-2 rounded-[22px] border border-gray-100 bg-white p-1 shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
+            <TabsTrigger
+              value="collections"
+              className="min-h-12 gap-1.5 rounded-[16px] px-2 py-2 text-[11px] font-semibold leading-tight text-gray-500 transition-all data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm sm:text-sm"
+            >
+              <Wallet className="h-4 w-4 shrink-0" />
+              <span className="text-center">Collections Overview</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="withdrawals"
+              className="min-h-12 gap-1.5 rounded-[16px] px-2 py-2 text-[11px] font-semibold leading-tight text-gray-500 transition-all data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm sm:text-sm"
+            >
+              <History className="h-4 w-4 shrink-0" />
+              <span className="text-center">Withdrawal Transactions</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="collections" className="m-0 focus-visible:outline-none focus-visible:ring-0">
 
-      <div className="bg-white w-full max-w-full shadow-md rounded-lg mb-8">
-        <div className="px-4 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-700">Collection Earnings</h2>
+      <div className="w-full max-w-full overflow-hidden rounded-[24px] border border-gray-100 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-normal text-gray-950">Collection Earnings</h2>
+            <p className="mt-1 text-sm text-gray-500">Swipe sideways to view all balance columns.</p>
+          </div>
         </div>
-        {/* Responsive table: horizontal and vertical scroll with sticky header */}
-        <div className="overflow-auto w-full max-h-[600px] relative">
-          <table className="min-w-[1000px] w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0 z-10 outline outline-1 outline-gray-200">
+        <div className="relative max-h-[620px] w-full overflow-auto [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[980px] divide-y divide-gray-100">
+            <thead className="sticky top-0 z-10 bg-gray-50/95 outline outline-1 outline-gray-100 backdrop-blur">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Name</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Type</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Total Amount Raised</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Current Balance</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Amount Withdrawn</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Available Balance</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Pending Balance</th>
+                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Collection Name</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Collection Type</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Total Raised</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Current Balance</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Withdrawn</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Available</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Pending</th>
+                <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Open</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {collectionsLoading && <TableRowsSkeleton rows={6} columns={7} />}
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {collectionsLoading && <TableRowsSkeleton rows={6} columns={8} />}
               {!collectionsLoading && collectionEarnings.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-3 py-8 text-sm text-gray-500 text-center"
                   >
                     No collections found.
                   </td>
                 </tr>
               )}
-              {collectionEarnings.map((earning, idx) => (
-                <tr key={earning.id} className={idx % 2 === 1 ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"}>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{earning.name}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{earning.type}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(earning.totalRaised)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.currentBalance)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{formatCurrency(earning.amountWithdrawn)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">{formatCurrency(earning.availableBalance)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-yellow-600 font-medium">{formatCurrency(earning.pendingBalance)}</td>
+              {collectionEarnings.map((earning) => {
+                const typeMeta = getCollectionTypeMeta(earning.typeKey);
+                const TypeIcon = typeMeta.icon;
+
+                return (
+                <tr key={earning.id} className="transition hover:bg-emerald-50/35">
+                  <td className="px-5 py-4 text-sm font-medium text-gray-950">
+                    <div className="flex min-w-[260px] items-center gap-3">
+                      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${typeMeta.iconClassName}`}>
+                        <TypeIcon className="h-5 w-5" />
+                      </span>
+                      <span className="max-w-[260px] whitespace-normal break-words leading-snug">{earning.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-sm">
+                    <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${typeMeta.pillClassName}`}>
+                      {earning.type}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-950">{formatCurrency(earning.totalRaised)}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600">{formatCurrency(earning.currentBalance)}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600">{formatCurrency(earning.amountWithdrawn)}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-emerald-700">{formatCurrency(earning.availableBalance)}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-amber-700">{formatCurrency(earning.pendingBalance)}</td>
+                  <td className="px-5 py-4 text-right text-gray-400">
+                    <ChevronRight className="ml-auto h-5 w-5" />
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -232,22 +425,22 @@ const TransactionHistoryPage: React.FC = () => {
       </TabsContent>
 
       <TabsContent value="withdrawals" className="m-0 focus-visible:outline-none focus-visible:ring-0">
-      <div className="bg-white w-full max-w-full shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-700">Withdrawal Transactions</h2>
+      <div className="w-full max-w-full overflow-hidden rounded-[24px] border border-gray-100 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
+        <div className="border-b border-gray-100 px-4 py-5 sm:px-5">
+          <h2 className="text-2xl font-semibold tracking-normal text-gray-950">Withdrawal Transactions</h2>
+          <p className="mt-1 text-sm text-gray-500">Swipe sideways to view status and dates.</p>
         </div>
-        {/* Responsive table: horizontal and vertical scroll with sticky header */}
-        <div className="overflow-auto w-full max-h-[600px] relative">
-          <table className="min-w-[800px] w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0 z-10 outline outline-1 outline-gray-200">
+        <div className="relative max-h-[620px] w-full overflow-auto [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[820px] divide-y divide-gray-100">
+            <thead className="sticky top-0 z-10 bg-gray-50/95 outline outline-1 outline-gray-100 backdrop-blur">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Collection Title</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Amount</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Status</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap" scope="col">Date & Time</th>
+                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Collection Title</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Amount</th>
+                <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Status</th>
+                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500" scope="col">Date & Time</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100 bg-white">
               {withdrawalsLoading && <TableRowsSkeleton rows={6} columns={4} />}
               {!withdrawalsLoading && recentTransactions.length === 0 && (
                 <tr>
@@ -260,19 +453,22 @@ const TransactionHistoryPage: React.FC = () => {
                 </tr>
               )}
               {recentTransactions.map(transaction => (
-                <tr key={transaction.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{transaction.collection}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatCurrency(transaction.amount)}</td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm">
+                <tr key={transaction.id} className="transition hover:bg-emerald-50/35">
+                  <td className="px-5 py-4 text-sm font-medium text-gray-950">
+                    <span className="block max-w-[320px] whitespace-normal break-words leading-snug">{transaction.collection}</span>
+                    <span className="mt-1 block max-w-[360px] whitespace-normal break-words text-xs font-normal text-gray-500">{transaction.description}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-gray-950">{formatCurrency(transaction.amount)}</td>
+                  <td className="whitespace-nowrap px-4 py-4 text-sm">
                     <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${
-                      transaction.status === 'successful' || transaction.status === 'completed' ? 'bg-green-100 text-green-800 border border-green-200' :
-                      transaction.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                        'bg-red-100 text-red-800 border border-red-200'
+                      transaction.status === 'successful' || transaction.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                      transaction.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                        'bg-red-50 text-red-700'
                       }`}>
                       {transaction.status}
                     </span>
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{transaction.date}</td>
+                  <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-500">{transaction.date}</td>
                 </tr>
               ))}
             </tbody>

@@ -10,6 +10,7 @@ import { Lock, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from 'react-icons/fa';
 import ContributeFlow from '@/components/contribute/ContributeFlow';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -124,7 +125,7 @@ const ContributePage: React.FC = () => {
 
         setCollection(annotateTierAvailability(enrichedCollection, paidContributions || []));
       } catch (err: any) {
-        setError(err.message || 'Failed to load collection.');
+        setError(toFriendlyErrorMessage(err, 'Could not load this collection. Please check the link and try again.'));
       } finally {
         setLoading(false);
       }

@@ -16,8 +16,10 @@ import {
     Wallet,
     Users,
     Clock,
+    ArrowLeft,
     AlertCircle,
     CheckCircle,
+    Edit,
     TimerOff,
     Filter,
     X
@@ -36,6 +38,7 @@ import {
     getCollectionContributorFields,
     getContributorFieldValue,
 } from '@/utils/contributions';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -357,7 +360,7 @@ const PwaCollectionDetails: React.FC = () => {
             }, 2000);
         } catch (error: any) {
             console.error('Withdrawal error:', error);
-            toast.error(error.message || 'Failed to submit withdrawal request');
+            toast.error(toFriendlyErrorMessage(error, 'Could not submit withdrawal request. Please try again.'));
             setIsWithdrawDialogOpen(false);
         }
     };
@@ -419,55 +422,81 @@ const PwaCollectionDetails: React.FC = () => {
     });
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <div className="flex-1">
+        <div className="space-y-5 pb-6">
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-bold">{currentCollection.title}</h1>
-                        <span className={`px-2 py-0.5 rounded-full text-xs flex items-center ${statusColors[computedStatus]}`}>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/collections')}
+                            aria-label="Back to all collections"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 active:scale-[0.96]"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </button>
+                        <p className="text-xs font-semibold uppercase text-emerald-700">Collection Details</p>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <h1 className="min-w-0 text-2xl font-bold leading-tight text-gray-900 break-words">{currentCollection.title}</h1>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[computedStatus]}`}>
                             {statusIcons[computedStatus]}
                             {computedStatus}
                         </span>
-                        <CollectionManagementMenu
-                            collectionId={id as string}
-                            onEditClick={handleEditCollection}
-                            currentStatus={currentCollection.status || 'active'}
-                            onDeleteSuccess={handleCollectionDeleted}
-                        />
                     </div>
                     {currentCollection.description && (
-                        <p className="text-gray-600 mt-1">{currentCollection.description}</p>
+                        <p className="mt-2 text-sm leading-relaxed text-gray-600 break-words">{currentCollection.description}</p>
                     )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button
-                        onClick={handleShare}
-                        className="bg-emerald-600 hover:bg-emerald-700 flex items-center"
-                    >
-                        <Share className="mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Share</span>
-                    </Button>
+                <div className="grid grid-cols-4 gap-2 sm:flex sm:justify-end">
                     <Button
                         onClick={handleWithdraw}
-                        variant="outline"
-                        className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 flex items-center"
+                        className="min-h-11 min-w-0 justify-center gap-1.5 bg-emerald-600 px-2 hover:bg-emerald-700 sm:px-3"
                         disabled={withdrawableAmount <= 0}
+                        aria-label="Withdraw"
                     >
-                        <Wallet className="mr-2 h-4 w-4" />
+                        <Wallet className="h-4 w-4 shrink-0" />
                         <span className="hidden sm:inline">Withdraw</span>
                     </Button>
-                    {colType === 'fundraising' && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsFlierOpen(true)}
-                            className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 flex items-center"
-                        >
-                            <Download className="mr-2 h-4 w-4" />
-                            <span className="hidden sm:inline">Campaign Flyer</span>
-                        </Button>
-                    )}
+                    <Button
+                        variant="outline"
+                        onClick={handleEditCollection}
+                        className="min-h-11 min-w-0 justify-center gap-1.5 px-2 sm:px-3"
+                        aria-label="Edit collection"
+                    >
+                        <Edit className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                    <Button
+                        onClick={handleShare}
+                        variant="outline"
+                        className="min-h-11 min-w-0 justify-center gap-1.5 px-2 sm:px-3"
+                        aria-label="Share collection"
+                    >
+                        <Share className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">Share</span>
+                    </Button>
+                    <CollectionManagementMenu
+                        collectionId={id as string}
+                        onEditClick={handleEditCollection}
+                        currentStatus={currentCollection.status || 'active'}
+                        onDeleteSuccess={handleCollectionDeleted}
+                        triggerClassName="h-11 w-full rounded-md border border-input bg-background text-gray-700 hover:bg-accent hover:text-accent-foreground sm:w-11"
+                    />
+                </div>
                 </div>
             </div>
+
+            {colType === 'fundraising' && (
+                <Button
+                    variant="outline"
+                    onClick={() => setIsFlierOpen(true)}
+                    className="min-h-10 justify-center gap-1.5 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                >
+                    <Download className="h-4 w-4" />
+                    Campaign Flyer
+                </Button>
+            )}
 
             {showQR && (
                 <div className="mb-6">
@@ -480,14 +509,14 @@ const PwaCollectionDetails: React.FC = () => {
             )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-3 w-full">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="contributors">Contributors</TabsTrigger>
-                    <TabsTrigger value="activity">Activity</TabsTrigger>
+                <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-gray-100 p-1">
+                    <TabsTrigger value="overview" className="min-h-11 rounded-xl px-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm">Overview</TabsTrigger>
+                    <TabsTrigger value="contributors" className="min-h-11 rounded-xl px-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm">Contributors</TabsTrigger>
+                    <TabsTrigger value="activity" className="min-h-11 rounded-xl px-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm">Activity</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                         {colType === "fixed" && (
                             <Card>
                                 <CardHeader className="pb-2">

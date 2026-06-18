@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from 'sonner';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 const ResetPasswordForm: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -53,7 +54,7 @@ const ResetPasswordForm: React.FC = () => {
       });
 
       if (error) {
-        setError(error.message);
+        setError(toFriendlyErrorMessage(error, 'Could not reset your password. Please try again.'));
         toast.error('Failed to reset password');
       } else {
         toast.success('Password has been reset successfully');
@@ -63,7 +64,7 @@ const ResetPasswordForm: React.FC = () => {
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+      setError(toFriendlyErrorMessage(err, 'Could not reset your password. Please try again.'));
       toast.error('Failed to reset password');
     } finally {
       setIsLoading(false);

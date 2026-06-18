@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -52,8 +53,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
         navigate(resolvedRedirect);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-      toast.error(err.message);
+      const message = toFriendlyErrorMessage(err, 'Sign in failed. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +82,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
         toast.success('Magic link sent! Check your email.');
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+      setError(toFriendlyErrorMessage(err, 'Could not send magic link. Please try again.'));
       toast.error('Could not send magic link');
     } finally {
       setIsMagicLinkLoading(false);

@@ -1,4 +1,5 @@
 // API utility functions for authenticated requests with cross-origin cookies
+import { toFriendlyErrorMessage } from "./errorMessages";
 
 // API configuration
 const API_BASE_URL = import.meta.env.MODE === 'production' 
@@ -51,7 +52,7 @@ export const handleApiResponse = async (response: Response) => {
     }
     
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || error.message || `HTTP ${response.status}`);
+    throw new Error(toFriendlyErrorMessage(error, "Something went wrong. Please try again."));
   }
 
   return response.json();

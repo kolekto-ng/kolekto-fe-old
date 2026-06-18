@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useActivities } from '@/store/useDashboard';
-import { ArrowDownLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  ListFilter,
+  Search,
+  Users,
+  WalletCards,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { ActivityListSkeleton } from '@/components/ui/page-skeletons';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
@@ -37,7 +48,7 @@ function relativeTime(dateStr: string): string {
 }
 
 function formatCurrency(amount: number) {
-  return `₦${amount.toLocaleString('en-NG', {
+  return `\u20A6${amount.toLocaleString('en-NG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -58,7 +69,7 @@ function getActivityMeta(activity: any) {
       iconBg: 'bg-amber-50 border border-amber-200',
       title: 'Withdrawal Requested',
       amountColor: 'text-amber-700',
-      amountPrefix: '−',
+      amountPrefix: '-',
       statusLabel: 'Pending admin approval',
     };
   }
@@ -68,7 +79,7 @@ function getActivityMeta(activity: any) {
       iconBg: 'bg-green-50 border border-green-200',
       title: 'Withdrawal Approved',
       amountColor: 'text-green-700',
-      amountPrefix: '−',
+      amountPrefix: '-',
       statusLabel: 'Paid out',
     };
   }
@@ -78,7 +89,7 @@ function getActivityMeta(activity: any) {
       iconBg: 'bg-red-50 border border-red-200',
       title: 'Withdrawal Declined',
       amountColor: 'text-red-500',
-      amountPrefix: '−',
+      amountPrefix: '-',
       statusLabel: 'Funds returned to wallet',
     };
   }
@@ -97,6 +108,7 @@ type Tab = 'all' | 'contributions' | 'wallet';
 const ActivitiesPage: React.FC = () => {
   const { activities, isLoading, getActivities } = useActivities() as any;
   const [tab, setTab] = useState<Tab>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const user = useAuthStore((state: any) => state.user);
   const notificationUserId = getNotificationUserId(user);
 
@@ -149,87 +161,183 @@ const ActivitiesPage: React.FC = () => {
           meta,
           collectionName,
           primaryLabel,
-          amount: activity.amount,
+          amount: Number(activity.amount || 0),
           createdAt: activity.created_at ? relativeTime(activity.created_at) : '',
         };
       }),
     [filtered]
   );
 
-  const Pill = ({ id, label, count }: { id: Tab; label: string; count: number }) => (
+  const visibleActivityCards = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return activityCards;
+
+    return activityCards.filter((activity: any) => {
+      const searchable = [
+        activity.primaryLabel,
+        activity.collectionName,
+        activity.meta?.title,
+        activity.meta?.statusLabel,
+        formatCurrency(activity.amount),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [activityCards, searchTerm]);
+
+  const StatTab = ({
+    id,
+    label,
+    count,
+    icon: Icon,
+  }: {
+    id: Tab;
+    label: string;
+    count: number;
+    icon: React.ElementType;
+  }) => (
     <button
       type="button"
       onClick={() => setTab(id)}
-      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+      className={`group min-w-0 rounded-3xl p-3 text-left transition-all duration-200 sm:p-4 ${
         tab === id
-          ? 'bg-green-100 text-green-800 border border-green-200'
-          : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+          ? 'bg-emerald-50 text-emerald-800 shadow-sm ring-1 ring-emerald-100'
+          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
       }`}
     >
-      {label} <span className="opacity-60">({count})</span>
+      <span
+        className={`mb-3 flex h-11 w-11 items-center justify-center rounded-full transition ${
+          tab === id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+        }`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="block break-words text-xs font-semibold leading-tight sm:text-sm">{label}</span>
+      <span className="mt-1 block text-2xl font-semibold leading-none tracking-normal text-gray-950 sm:text-3xl">
+        {count}
+      </span>
     </button>
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Contributions you've received and withdrawals you've requested.
-        </p>
+    <div className="space-y-5 pb-6">
+      <section className="overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-[0_16px_34px_rgba(15,23,42,0.07)]">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3 p-5 sm:p-6">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Activity Center</p>
+            <h1 className="mt-2 text-3xl font-semibold leading-none tracking-normal text-gray-950 min-[380px]:text-4xl sm:text-5xl">
+              Activities
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
+              Contributions you've received and withdrawals you've requested.
+            </p>
+          </div>
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center min-[380px]:h-28 min-[380px]:w-28 sm:h-36 sm:w-36">
+            <div className="absolute inset-3 rounded-full bg-emerald-50 blur-xl" />
+            <img
+              src="/activity-wallet.png"
+              alt="Wallet activity illustration"
+              className="relative h-full w-full object-contain"
+              loading="eager"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[28px] border border-gray-100 bg-white p-2 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+          <StatTab id="all" label="All Activities" count={totalCount} icon={ListFilter} />
+          <StatTab id="contributions" label="Contributions" count={contribCount} icon={Users} />
+          <StatTab id="wallet" label="Wallet" count={walletCount} icon={WalletCards} />
+        </div>
+      </section>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search activities..."
+          className="h-14 w-full rounded-2xl border border-gray-100 bg-white pl-12 pr-12 text-base text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-emerald-200 focus:ring-4 focus:ring-emerald-50"
+        />
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Clear activity search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill id="all" label="All" count={totalCount} />
-        <Pill id="contributions" label="Contributions" count={contribCount} />
-        <Pill id="wallet" label="Wallet" count={walletCount} />
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 min-h-[500px]">
+      <section className="min-h-[500px] overflow-hidden rounded-[28px] border border-gray-100 bg-white shadow-[0_16px_34px_rgba(15,23,42,0.07)]">
         {isLoading ? (
-          <ActivityListSkeleton count={6} />
+          <div className="p-4 sm:p-5">
+            <ActivityListSkeleton count={6} />
+          </div>
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-gray-100">
             {filtered.length === 0 && (
-              <p className="text-sm text-muted-foreground">No activity in this category yet.</p>
+              <p className="p-5 text-sm text-muted-foreground">No activity in this category yet.</p>
             )}
-            {activityCards.map((activity: any) => {
+            {filtered.length > 0 && visibleActivityCards.length === 0 && (
+              <p className="p-5 text-sm text-muted-foreground">No activities match your search.</p>
+            )}
+            {visibleActivityCards.map((activity: any) => {
+              const isContribution = activity.meta.amountPrefix === '+';
+
               return (
-                <div
+                <article
                   key={activity.id}
-                  className="flex flex-col sm:flex-row sm:items-center bg-gray-50 hover:bg-gray-100 transition-colors py-4 px-4 rounded-xl justify-between gap-3 sm:gap-4 border border-gray-100"
+                  className="grid grid-cols-[3.5rem_1fr] gap-3 px-4 py-4 transition-all duration-200 hover:bg-emerald-50/30 sm:grid-cols-[3.5rem_1fr_auto] sm:px-5"
                 >
-                  <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1 w-full">
-                    <div className={`p-2 rounded-full shrink-0 ${activity.meta.iconBg}`}>{activity.meta.icon}</div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 break-words leading-snug">{activity.primaryLabel}</p>
-                      <p className="text-sm text-gray-500 flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1 leading-snug">
-                        <span className={`font-semibold ${activity.meta.amountColor}`}>
-                          {activity.meta.amountPrefix}{formatCurrency(activity.amount)}
-                        </span>
-                        {activity.collectionName && (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-gray-600 font-medium break-words min-w-0">
-                              {activity.collectionName}
-                            </span>
-                          </>
-                        )}
-                      </p>
-                      {activity.meta.statusLabel && (
-                        <p className="text-[11px] text-gray-400 mt-1 break-words">{activity.meta.statusLabel}</p>
-                      )}
-                    </div>
+                  <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ${activity.meta.iconBg}`}>
+                    {activity.meta.icon}
                   </div>
-                  <span className="text-xs font-medium text-gray-400 shrink-0 whitespace-nowrap bg-white px-2.5 py-1 rounded-md shadow-sm border border-gray-100 self-start sm:self-center ml-11 sm:ml-0">
-                    {activity.createdAt}
-                  </span>
-                </div>
+
+                  <div className="min-w-0">
+                    <h2 className="break-words text-base font-semibold leading-snug text-gray-950 sm:text-lg">
+                      {activity.primaryLabel}
+                    </h2>
+                    {activity.collectionName && (
+                      <p className="mt-1 break-words text-sm font-medium leading-snug text-gray-600">
+                        {activity.collectionName}
+                      </p>
+                    )}
+                    <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-gray-500">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                      <span className="break-words">{activity.createdAt}</span>
+                    </p>
+                  </div>
+
+                  <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-start-auto sm:flex-col sm:items-end sm:justify-center">
+                    <span className={`break-words text-right text-lg font-semibold leading-tight ${activity.meta.amountColor}`}>
+                      {activity.meta.amountPrefix}{formatCurrency(activity.amount)}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        isContribution
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : activity.meta.amountColor === 'text-red-500'
+                            ? 'bg-red-50 text-red-600'
+                            : 'bg-blue-50 text-blue-700'
+                      }`}
+                    >
+                      {isContribution ? 'Contribution' : activity.meta.statusLabel}
+                    </span>
+                  </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

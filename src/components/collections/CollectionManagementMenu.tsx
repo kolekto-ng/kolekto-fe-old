@@ -22,6 +22,7 @@ import { MoreVertical, Edit, Trash2, Pause, Play, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCollectionStore } from '@/store';
+import { cn } from '@/lib/utils';
 
 interface CollectionManagementMenuProps {
   collectionId: string;
@@ -31,6 +32,7 @@ interface CollectionManagementMenuProps {
   onEditClick: () => void;
   onDeleteSuccess?: () => void;
   onStatusChange?: () => void; // refresh callback
+  triggerClassName?: string;
 }
 
 const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
@@ -41,6 +43,7 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
   onEditClick,
   onDeleteSuccess,
   onStatusChange,
+  triggerClassName,
 }) => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -101,7 +104,12 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
     <>
       <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", triggerClassName)}
+            aria-label="More collection actions"
+          >
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>

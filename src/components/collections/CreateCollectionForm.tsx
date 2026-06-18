@@ -10,6 +10,7 @@ import UniqueCodesSection from './form/UniqueCodesSection';
 import ContributorFieldsSection from './form/ContributorFieldsSection';
 import { FormField, PriceTier } from '@/types';
 import { useAuthStore } from '@/store';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface CreateCollectionFormProps {
   onPreview?: (data: any) => void;
@@ -410,7 +411,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       navigate('/dashboard/collections');
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      toast.error(err.response.data.message || "An unexpected error occurred while creating the collection.");
+      toast.error(toFriendlyErrorMessage(err, "Could not create collection. Please check the details and try again."));
     }
 
 

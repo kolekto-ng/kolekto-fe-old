@@ -70,7 +70,7 @@ const CollectionsPage: React.FC = () => {
                 id={collection.id}
                 title={collection.title}
                 amount={collection.amount}
-                deadline={collection.deadline || undefined}
+                deadline={collection.deadline || new Date().toISOString()}
                 status={collection.status}
                 type={collection.collection_type || collection.type || 'fixed'}
                 participantsCount={collection.total_contributions || collection.participants_count || 0}

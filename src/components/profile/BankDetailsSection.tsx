@@ -28,6 +28,7 @@ import {
   CreditCard,
   AlertCircle,
 } from 'lucide-react';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import { toast } from 'sonner';
 import { useSettings } from '@/store/useSettings';
 import { axiosInstance } from '@/utils/axios';
@@ -66,11 +67,7 @@ const BankDetailsSection: React.FC = () => {
         const payload = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
         setBanks(dedupeBanks(payload));
       }).catch((error: any) => {
-        const message =
-          error?.response?.data?.error ||
-          error?.response?.data?.message ||
-          error?.message ||
-          'Failed to load banks';
+        const message = toFriendlyErrorMessage(error, 'Could not load banks. Please try again.');
         toast.error(message);
       });
     }
@@ -89,11 +86,7 @@ const BankDetailsSection: React.FC = () => {
       setAccountName('');
       toast.error('Unable to verify that bank account.');
     } catch (error: any) {
-      const message =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.message ||
-        'Unable to verify that bank account.';
+      const message = toFriendlyErrorMessage(error, 'Unable to verify that bank account.');
       toast.error(message);
     }
   };
@@ -113,11 +106,7 @@ const BankDetailsSection: React.FC = () => {
       toast.success('Bank account saved successfully.');
     } catch (error) {
       console.error('Save account error:', error);
-      const message =
-        (error as any)?.response?.data?.error ||
-        (error as any)?.response?.data?.message ||
-        (error as any)?.message ||
-        'Failed to save bank account.';
+      const message = toFriendlyErrorMessage(error, 'Could not save bank account. Please try again.');
       toast.error(message);
     } finally {
       setSaving(false);

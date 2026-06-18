@@ -7,6 +7,7 @@ import {
   getValidAuthSessionFromStorage,
   withOneHourExpiry,
 } from "@/utils/authSession";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 // B-16: after the auth store completes a sign-in/sign-up/sign-out via our
 // backend (axios), mirror the session state into the Supabase client so
@@ -126,11 +127,7 @@ export const useAuthStore = create((set, get) => ({
       return { user, error: null };
     } catch (error: any) {
       console.log(error, "sign in error");
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.message ||
-        "Sign in failed";
+      const errorMessage = toFriendlyErrorMessage(error, "Sign in failed. Please check your details and try again.");
       console.log(errorMessage);
 
       set({ error: errorMessage, isLoading: false });
@@ -192,11 +189,7 @@ export const useAuthStore = create((set, get) => ({
         error: null,
       };
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Sign up failed";
+      const errorMessage = toFriendlyErrorMessage(error, "Sign up failed. Please check your details and try again.");
       set({ error: errorMessage, isLoading: false });
       return { user: null, error: { message: errorMessage } };
     }
@@ -215,7 +208,7 @@ export const useAuthStore = create((set, get) => ({
       // callers that immediately navigate.
       await mirrorSignOutOnSupabase();
     } catch (error: any) {
-      const errorMessage = error.message || "Sign out failed";
+      const errorMessage = toFriendlyErrorMessage(error, "Sign out failed. Please try again.");
       set({ error: errorMessage, isLoading: false });
       // Still clear local state even if server call fails
       clearAuthSessionStorage();
@@ -240,10 +233,7 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to send magic link";
+      const errorMessage = toFriendlyErrorMessage(error, "Could not send the magic link. Please try again.");
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
     }
@@ -263,10 +253,7 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to send password reset email";
+      const errorMessage = toFriendlyErrorMessage(error, "Could not send the password reset email. Please try again.");
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
     }
@@ -287,10 +274,7 @@ export const useAuthStore = create((set, get) => ({
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Failed to reset password";
+      const errorMessage = toFriendlyErrorMessage(error, "Could not reset your password. Please try again.");
       set({ error: errorMessage, isLoading: false });
       return { error: { message: errorMessage } };
     }

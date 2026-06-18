@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { isNetworkError } from '@/utils/dbHelpers';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 export interface PaystackMetadata {
   collectionId: string;
@@ -121,7 +122,7 @@ export const usePaystack = () => {
         cause: error.cause,
         stack: error.stack,
       });
-      toast.error(`Payment initialization failed: ${error.message || 'An unexpected error occurred'}`);
+      toast.error(toFriendlyErrorMessage(error, 'We could not start your payment. Please try again.'));
       throw error;
     } finally {
       setIsLoading(false);
@@ -179,8 +180,9 @@ export const usePaystack = () => {
         cause: error.cause,
         stack: error.stack,
       });
-      toast.error(`Payment verification failed: ${error.message || 'An unexpected error occurred'}`);
-      return { status: 'error', message: error.message || 'An unexpected error occurred' };
+      const message = toFriendlyErrorMessage(error, 'We could not verify your payment. Please try again.');
+      toast.error(message);
+      return { status: 'error', message };
     } finally {
       setIsLoading(false);
     }

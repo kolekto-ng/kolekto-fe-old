@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { axiosInstance } from "@/utils/axios";
 import { createClient } from "@supabase/supabase-js";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -78,7 +79,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       return true;
     } catch (error: any) {
       console.error("Profile update error:", error);
-      toast.error(error.message || "Failed to update profile");
+      toast.error(toFriendlyErrorMessage(error, "Could not update profile. Please try again."));
       set({ profileLoading: false });
       return false;
     }
@@ -178,12 +179,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       toast.success("OTP sent to your email");
       return true;
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to send OTP";
+      const msg = toFriendlyErrorMessage(error, "Could not send OTP. Please try again.");
       set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
@@ -220,12 +216,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
       return true;
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to change password";
+      const msg = toFriendlyErrorMessage(error, "Could not change password. Please try again.");
       set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;

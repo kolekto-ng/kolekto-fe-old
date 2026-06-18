@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { axiosInstance } from '@/utils/axios';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface DocumentUploadFormProps {
   open: boolean;
@@ -219,7 +220,7 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       console.error(error);
       toast({
         title: "Upload Failed",
-        description: error.message || "Something went wrong",
+        description: toFriendlyErrorMessage(error, "Could not upload document. Please try again."),
         variant: "destructive"
       });
       setIsUploading(false);
