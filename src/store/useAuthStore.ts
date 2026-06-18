@@ -162,7 +162,8 @@ export const useAuthStore = create((set, get) => ({
     phoneNumber?: string,
     recaptcherToken?: string,
     recatcherType?: string,
-    emailRedirectTo?: string
+    emailRedirectTo?: string,
+    ambassadorReferralCode?: string
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -176,6 +177,7 @@ export const useAuthStore = create((set, get) => ({
         recaptcherToken,
         recatcherType,
         emailRedirectTo,
+        ambassadorReferralCode,
       });
       const { data } = res;
       console.log(data, "Sign up data");

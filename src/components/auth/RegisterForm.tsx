@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [ambassadorReferralCode, setAmbassadorReferralCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -34,11 +35,23 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const [showV2, setShowV2] = useState(false);
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const { executeRecaptcha } = useGoogleReCaptcha();
   const resolvedRedirect = redirectTo === "/create-collection"
     ? "/create-collection?resumePublish=1"
     : redirectTo;
+
+  useEffect(() => {
+    const codeFromUrl =
+      searchParams.get("ref") ||
+      searchParams.get("ambassador") ||
+      searchParams.get("ambassador_code");
+
+    if (codeFromUrl) {
+      setAmbassadorReferralCode(codeFromUrl.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -121,7 +134,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         phoneNumber,
         recaptcherToken,
         recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`
+        `${window.location.origin}${resolvedRedirect}`,
+        ambassadorReferralCode.trim() || undefined
       );
 
       if (error) {
@@ -230,7 +244,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         phoneNumber,
         recaptcherToken,
         recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`
+        `${window.location.origin}${resolvedRedirect}`,
+        ambassadorReferralCode.trim() || undefined
       );
       console.log(user, 'user');
 
@@ -364,6 +379,24 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
           onChange={(e) => setPhoneNumber(e.target.value)}
           className="w-full"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="ambassadorReferralCode">
+          Ambassador Referral Code
+        </Label>
+        <Input
+          id="ambassadorReferralCode"
+          type="text"
+          placeholder="GHAZAL"
+          maxLength={6}
+          value={ambassadorReferralCode}
+          onChange={(e) => setAmbassadorReferralCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6))}
+          className="w-full"
+        />
+        <p className="text-xs text-neutral-500">
+          Optional. If an ambassador referred you, enter their code so your account is connected to them.
+        </p>
       </div>
 
       <div className="space-y-2">

@@ -16,7 +16,7 @@ const Footer: React.FC = () => {
 
   return (
     <footer className="bg-white border-t py-8">
-      <div className="container mx-auto">
+      <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-1">
             <Logo />
@@ -47,10 +47,11 @@ const Footer: React.FC = () => {
           <div className="col-span-1">
             <h3 className="font-semibold text-sm mb-4">Company</h3>
             <ul className="space-y-2">
-              <li><a href="#" className="text-sm text-gray-600 hover:text-kolekto">About Us</a></li>
-              <li><a href="#" className="text-sm text-gray-600 hover:text-kolekto">Contact</a></li>
-              <li><a href="#" className="text-sm text-gray-600 hover:text-kolekto">Terms of Service</a></li>
-              <li><a href="#" className="text-sm text-gray-600 hover:text-kolekto">Privacy Policy</a></li>
+              <li><Link to="/about" className="text-sm text-gray-600 hover:text-kolekto">About Us</Link></li>
+              <li><Link to="/contact" className="text-sm text-gray-600 hover:text-kolekto">Contact</Link></li>
+              <li><Link to="/ambassadors" className="text-sm text-gray-600 hover:text-kolekto">Ambassador</Link></li>
+              <li><Link to="/terms" className="text-sm text-gray-600 hover:text-kolekto">Terms of Service</Link></li>
+              <li><Link to="/privacy" className="text-sm text-gray-600 hover:text-kolekto">Privacy Policy</Link></li>
             </ul>
           </div>
           

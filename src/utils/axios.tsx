@@ -21,6 +21,12 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const method = (config.method || "get").toLowerCase();
     const url = config.url || "";
+    const isAmbassadorEndpoint = url.includes("/ambassadors/");
+    const isAmbassadorPublicEndpoint = [
+      "/ambassadors/apply",
+      "/ambassadors/auth/signin",
+      "/ambassadors/auth/setup-pin",
+    ].some((endpoint) => url.includes(endpoint));
     const isAuthPublicEndpoint = [
       "/auth/signin",
       "/auth/signup",
@@ -36,6 +42,16 @@ axiosInstance.interceptors.request.use(
       !(config.data instanceof FormData)
     ) {
       config.headers["Content-Type"] = "application/json";
+    }
+
+    if (isAmbassadorEndpoint && !isAmbassadorPublicEndpoint) {
+      const ambassadorToken = localStorage.getItem("kolekto-ambassador-token");
+      if (ambassadorToken) {
+        config.headers.Authorization = `Bearer ${ambassadorToken}`;
+      } else {
+        delete config.headers.Authorization;
+      }
+      return config;
     }
 
     // Get session from localStorage
@@ -97,6 +113,7 @@ function isPublicAuthCall(url: string | undefined): boolean {
 // will keep the session alive.
 function shouldAutoLogout(url: string | undefined): boolean {
   if (!url) return false;
+  if (url.includes("/ambassadors/")) return false;
   return url.includes("/auth/me");
 }
 

@@ -18,6 +18,8 @@ const TransactionHistoryPage = lazy(() => import("./pages/dashboard/TransactionH
 const ActivitiesPage = lazy(() => import("./pages/dashboard/ActivitiesPage"));
 const ContributePage = lazy(() => import("./pages/contribute/ContributePage"));
 const ActiveCampaignsPage = lazy(() => import("./pages/ActiveCampaignsPage"));
+const AmbassadorsPage = lazy(() => import("./pages/AmbassadorsPage"));
+const AmbassadorPortal = lazy(() => import("./pages/ambassador/AmbassadorPortal"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
@@ -56,6 +58,24 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
+  const isAmbassadorHost = window.location.hostname.startsWith("ambassador.");
+
+  if (isAmbassadorHost) {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex justify-center items-center h-screen">
+            <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/*" element={<AmbassadorPortal />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <Suspense
       fallback={
@@ -80,6 +100,8 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
       <Route path="/active-campaigns" element={<ActiveCampaignsPage />} />
+      <Route path="/ambassadors" element={<AmbassadorsPage />} />
+      <Route path="/ambassador/*" element={<AmbassadorPortal />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
@@ -115,7 +137,11 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   const location = useLocation();
+  const isAmbassadorExperience =
+    window.location.hostname.startsWith("ambassador.") ||
+    location.pathname.startsWith("/ambassador");
   const shouldShowWhatsAppButton =
+    !isAmbassadorExperience &&
     !location.pathname.startsWith("/dashboard") &&
     location.pathname !== "/create-collection";
 

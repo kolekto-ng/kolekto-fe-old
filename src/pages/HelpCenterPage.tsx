@@ -126,7 +126,7 @@ const FAQItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
     <div style={{ borderRadius: 12, border: `1.5px solid ${open ? "#BBF7D0" : "#E5E7EB"}`, overflow: "hidden", transition: "border-color 0.2s" }}>
       <button
         onClick={() => setOpen(!open)}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left", gap: 12 }}
+        style={{ width: "100%", minHeight: 48, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left", gap: 12 }}
       >
         <span style={{ fontSize: 14, fontWeight: 600, color: "#1A1A2E", lineHeight: 1.4 }}>{q}</span>
         <ChevronDown size={16} color="#6B7280" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.25s" }} />
@@ -189,7 +189,7 @@ const HelpCenterPage: React.FC = () => {
             </h2>
             <p style={{ fontSize: 15, color: "#6B7280" }}>Everything you need to go from zero to collecting payments.</p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: 24 }}>
             {guides.map((guide, i) => (
               <div key={i} style={{ background: guide.color, borderRadius: 18, padding: "28px 24px", border: "1.5px solid #E5E7EB" }}>
                 <div style={{ width: 52, height: 52, borderRadius: 14, background: guide.iconBg, display: "flex", alignItems: "center", justifyContent: "center", color: guide.iconColor, marginBottom: 16 }}>
@@ -226,7 +226,7 @@ const HelpCenterPage: React.FC = () => {
               <button
                 key={cat.category}
                 onClick={() => setActiveCategory(cat.category)}
-                style={{ padding: "8px 18px", borderRadius: 32, fontSize: 13, fontWeight: 600, border: "1.5px solid", borderColor: activeCategory === cat.category ? "#2E7D32" : "#E5E7EB", background: activeCategory === cat.category ? "#F0FDF4" : "white", color: activeCategory === cat.category ? "#1B5E20" : "#6B7280", cursor: "pointer", transition: "all 0.15s" }}
+                style={{ minHeight: 44, padding: "8px 18px", borderRadius: 32, fontSize: 13, fontWeight: 600, border: "1.5px solid", borderColor: activeCategory === cat.category ? "#2E7D32" : "#E5E7EB", background: activeCategory === cat.category ? "#F0FDF4" : "white", color: activeCategory === cat.category ? "#1B5E20" : "#6B7280", cursor: "pointer", transition: "all 0.15s" }}
               >
                 {cat.category}
               </button>

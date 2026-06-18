@@ -62,7 +62,7 @@ const AboutPage: React.FC = () => {
 
       {/* Mission & Vision */}
       <section style={{ padding: "80px 24px", background: "white" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}>
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-16" style={{ maxWidth: 1280, margin: "0 auto", alignItems: "center" }}>
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#F1F8F2", border: "1px solid #E8F5E9", borderRadius: 32, padding: "5px 14px", fontSize: 13, fontWeight: 600, color: "#2E7D32", marginBottom: 20 }}>
               <Target size={13} /> Our Mission
@@ -83,7 +83,7 @@ const AboutPage: React.FC = () => {
               Start Collecting Free <ArrowRight size={16} />
             </Link>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
             {stats.map((s, i) => (
               <div key={i} style={{ background: i === 0 ? "linear-gradient(135deg, #1C5C23, #2E7D32)" : "#F9FAFB", borderRadius: 18, padding: "28px 24px", border: "1.5px solid #E5E7EB" }}>
                 <div style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)", fontWeight: 800, color: i === 0 ? "white" : "#1A1A2E", marginBottom: 6 }}>{s.value}</div>
@@ -108,7 +108,7 @@ const AboutPage: React.FC = () => {
               These aren't wall posters. They're the principles that shape every product decision we make.
             </p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: 24 }}>
             {values.map((v, i) => (
               <div key={i} style={{ background: "white", borderRadius: 18, padding: "28px 24px", border: "1.5px solid #E5E7EB", transition: "box-shadow 0.25s, transform 0.25s" }}
                 onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 40px rgba(0,0,0,0.1)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-4px)"; }}
@@ -169,7 +169,7 @@ const AboutPage: React.FC = () => {
           </div>
           <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap" }}>
             {team.map((member, i) => (
-              <div key={i} style={{ background: "white", borderRadius: 18, padding: "32px 28px", border: "1.5px solid #E5E7EB", textAlign: "center", width: 280 }}>
+              <div key={i} style={{ background: "white", borderRadius: 18, padding: "32px 28px", border: "1.5px solid #E5E7EB", textAlign: "center", width: 280, maxWidth: "100%" }}>
                 <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #1C5C23, #388E3C)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 22, margin: "0 auto 16px" }}>
                   {member.initials}
                 </div>

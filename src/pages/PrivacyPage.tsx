@@ -163,10 +163,10 @@ const PolicySection: React.FC<{ section: typeof sections[0] }> = ({ section }) =
     <div style={{ borderRadius: 14, border: "1.5px solid #E5E7EB", overflow: "hidden", marginBottom: 12 }}>
       <button
         onClick={() => setOpen(!open)}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", background: open ? "#F9FAFB" : "white", border: "none", cursor: "pointer", textAlign: "left", gap: 12 }}
+        style={{ width: "100%", minHeight: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", background: open ? "#F9FAFB" : "white", border: "none", cursor: "pointer", textAlign: "left", gap: 12 }}
       >
         <span style={{ fontSize: 16, fontWeight: 700, color: "#1A1A2E" }}>{section.title}</span>
-        <ChevronDown size={18} color="#6B7280" style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.25s" }} />
+        <ChevronDown size={18} color="#6B7280" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.25s" }} />
       </button>
       {open && (
         <div style={{ padding: "4px 22px 20px", background: "white" }}>
