@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { useActivities } from '@/store/useDashboard';
 import { useNavigate } from 'react-router-dom';
 import { useCollectionStore } from '@/store';
-import { Loader2, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ActivityListSkeleton } from '@/components/ui/page-skeletons';
 
 function relativeTime(dateStr: string): string {
   try {
@@ -108,8 +109,12 @@ const ActivityFeed: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-48">
-        <Loader2 className="animate-spin h-6 w-6 text-gray-400" />
+      <div className="p-0 md:p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="h-7 w-44 rounded-md bg-muted animate-pulse" />
+          <div className="h-8 w-24 rounded-lg bg-muted animate-pulse" />
+        </div>
+        <ActivityListSkeleton count={PREVIEW_COUNT} />
       </div>
     );
   }

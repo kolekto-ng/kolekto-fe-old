@@ -1,12 +1,18 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/store';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Bell } from 'lucide-react';
 import { SidebarTrigger } from '../ui/sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '../Logo';
 import { useActivities } from '@/store/useDashboard';
+import {
+  countUnseenContributorActivities,
+  getLastSeenContributorsAt,
+  getNotificationUserId,
+  markContributorsSeen,
+} from '@/utils/contributorNotifications';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Home',
@@ -23,12 +29,32 @@ const DashboardNavbar: React.FC = () => {
   const isMobile = useIsMobile();
   const user = useAuthStore((state) => state.user);
   const { activities, getActivities } = useActivities();
+  const notificationUserId = getNotificationUserId(user);
+  const [lastSeenContributorsAt, setLastSeenContributorsAt] = useState(() =>
+    getLastSeenContributorsAt(notificationUserId),
+  );
 
   useEffect(() => {
     getActivities();
   }, []);
 
-  const activityCount = (activities as any[]).length;
+  useEffect(() => {
+    setLastSeenContributorsAt(getLastSeenContributorsAt(notificationUserId));
+  }, [notificationUserId]);
+
+  const activityCount = useMemo(
+    () =>
+      countUnseenContributorActivities(
+        activities as any[],
+        lastSeenContributorsAt,
+      ),
+    [activities, lastSeenContributorsAt],
+  );
+
+  const openActivities = () => {
+    setLastSeenContributorsAt(markContributorsSeen(notificationUserId));
+    navigate('/dashboard/activities');
+  };
 
   const getPageTitle = () => {
     if (location.pathname.startsWith('/dashboard/collections/')) return 'Collection Details';
@@ -45,8 +71,8 @@ const DashboardNavbar: React.FC = () => {
       variant="ghost"
       size="icon"
       className="relative h-9 w-9"
-      onClick={() => navigate('/dashboard/activities')}
-      aria-label={`Activities${activityCount > 0 ? ` (${activityCount})` : ''}`}
+      onClick={openActivities}
+      aria-label={`Contributor notifications${activityCount > 0 ? ` (${activityCount})` : ''}`}
     >
       <Bell className="h-5 w-5 text-gray-600" />
       {activityCount > 0 && (

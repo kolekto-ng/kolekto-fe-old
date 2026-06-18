@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../../store';
-import { Loader2, Home, Grid3X3, Wallet, User, Plus } from 'lucide-react';
+import { Home, Grid3X3, Wallet, User, Plus } from 'lucide-react';
+import { DashboardHomeSkeleton } from '@/components/ui/page-skeletons';
 
 const PwaAppLayout: React.FC = () => {
     const navigate = useNavigate();
@@ -29,11 +30,7 @@ const PwaAppLayout: React.FC = () => {
     }, [user, authLoading, navigate]);
 
     if (authLoading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-            </div>
-        );
+        return <DashboardHomeSkeleton />;
     }
 
     if (!user) return null;

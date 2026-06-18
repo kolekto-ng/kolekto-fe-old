@@ -5,8 +5,8 @@ import DashboardSidebar from './DashboardSidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store';
-import { Loader2 } from 'lucide-react';
 import DashboardNavbar from './DashboardNavbar';
+import { DashboardShellSkeleton } from '@/components/ui/page-skeletons';
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -35,11 +35,7 @@ const DashboardLayout: React.FC = () => {
   const { user, isLoading } = useAuthStore();
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-      </div>
-    );
+    return <DashboardShellSkeleton />;
   }
 
   if (!user) {

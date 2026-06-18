@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/store";
+import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
 import axios from "axios";
 
 // API configuration following the backend pattern
@@ -39,19 +40,10 @@ axiosInstance.interceptors.request.use(
     }
 
     // Get session from localStorage
-    const sessionStr = localStorage.getItem("kolekto-auth-token");
-    if (sessionStr && !isAuthPublicEndpoint) {
-      try {
-        const session = JSON.parse(sessionStr);
-        if (session && session.access_token) {
-          // Add Authorization header with Bearer token
-          config.headers.Authorization = `Bearer ${session.access_token}`;
-        }
-      } catch (e) {
-        // Invalid token in storage, remove it
-        localStorage.removeItem("kolekto-auth-token");
-        delete config.headers.Authorization;
-      }
+    const session = !isAuthPublicEndpoint ? getValidAuthSessionFromStorage() : null;
+    if (session?.access_token) {
+      // Add Authorization header with Bearer token
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     } else {
       delete config.headers.Authorization;
     }
@@ -128,7 +120,7 @@ async function performSignOutAndRedirect() {
         await useAuthStore.getState().signOut();
       } catch (err) {
         console.error("[axios] signOut on 401 failed:", err);
-        localStorage.removeItem("kolekto-auth-token");
+        clearAuthSessionStorage();
         useAuthStore.setState({ user: null, session: null } as any);
       } finally {
         const path = window.location.pathname;
@@ -136,7 +128,7 @@ async function performSignOutAndRedirect() {
           || path.startsWith("/contribute/")
           || path.startsWith("/payment/");
         if (!onPublicPage) {
-          window.location.href = "/login";
+          window.location.href = path.startsWith("/pwa") ? "/pwa/login" : "/login";
         }
         signingOutPromise = null;
       }

@@ -15,6 +15,7 @@ import { useActivities } from '@/store/useDashboard';
 import { axiosInstance } from '@/utils/axios';
 import { Link } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface WithdrawFundsDialogProps {
   open: boolean;
@@ -202,7 +203,11 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
 
         {step === 1 ? (
           loadingCols ? (
-            <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="space-y-2 py-3">
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+            </div>
           ) : collections.length === 0 ? (
             <p className="text-gray-500 py-8 text-center text-sm">No collections with available funds to withdraw.</p>
           ) : (

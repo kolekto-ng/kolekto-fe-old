@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
 import {
@@ -507,8 +508,16 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-gray-100 bg-white">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#1C5C23]/20 border-t-[#1C5C23]" />
+      <div className="space-y-6 rounded-2xl border border-gray-100 bg-white p-6">
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-2 flex-1 rounded-full" />
+          ))}
+        </div>
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-32 w-full rounded-xl" />
       </div>
     );
   }

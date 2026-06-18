@@ -24,7 +24,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@
 import { toast } from 'sonner';
 import {
   Wallet, Share2, Edit, QrCode, ScanLine, Download, Search, ChevronDown,
-  Loader2, ArrowLeft, Users, Calendar, Clock, TrendingUp,
+  ArrowLeft, Users, Calendar, Clock, TrendingUp,
   CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,6 +39,11 @@ import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialo
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
+import {
+  ActivityListSkeleton,
+  CollectionDetailsSkeleton,
+  TableRowsSkeleton,
+} from '@/components/ui/page-skeletons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -498,11 +503,7 @@ const CollectionDetailsPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-      </div>
-    );
+    return <CollectionDetailsSkeleton />;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -685,7 +686,11 @@ const CollectionDetailsPage: React.FC = () => {
         {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
         <TabsContent value="overview" className="mt-6 space-y-6">
           {loadingContribs ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-28 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
           ) : (
             <>
               {/* Fundraising banner + summary */}
@@ -860,7 +865,13 @@ const CollectionDetailsPage: React.FC = () => {
 
             {/* Table */}
             {loadingContribs ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <Table>
+                  <TableBody>
+                    <TableRowsSkeleton rows={6} columns={Math.max(contributorColumnCount, 1)} />
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 <Table>
@@ -923,7 +934,7 @@ const CollectionDetailsPage: React.FC = () => {
         {colType === 'fundraising' && (
           <TabsContent value="contributors" className="mt-6 space-y-5">
             {loadingContribs ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              <ActivityListSkeleton count={5} />
             ) : paidContributions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="w-12 h-12 text-gray-200 mb-3" />
@@ -1182,7 +1193,7 @@ const CollectionDetailsPage: React.FC = () => {
         {/* ── ACTIVITIES ──────────────────────────────────────────────────── */}
         <TabsContent value="activities" className="mt-6 space-y-4">
           {loadingContribs ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <ActivityListSkeleton count={6} />
           ) : paidContributions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <TrendingUp className="w-12 h-12 text-gray-300 mb-3" />

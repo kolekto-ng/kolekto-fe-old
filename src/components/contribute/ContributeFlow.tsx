@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, ArrowRight, Check, Loader2, CreditCard, User, Tag, Ticket, Heart,
   Phone, Info, ChevronLeft, ChevronRight, Trophy, Users,
@@ -205,7 +206,18 @@ const FundraisingContributors: React.FC<{ collectionId: string }> = ({ collectio
       });
   }, [collectionId]);
 
-  if (loading) return <div className="py-4 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>;
+  if (loading) {
+    return (
+      <div className="mt-8 space-y-5">
+        <Skeleton className="h-44 rounded-[24px]" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+          <Skeleton className="h-24 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   const topContributors = [...contributors]
     .sort((a, b) => b.amount - a.amount)

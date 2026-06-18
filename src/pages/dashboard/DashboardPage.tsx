@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Wallet,
   BarChart3,
-  Loader2,
   ChevronRight,
   Plus,
   Share2,
@@ -27,6 +26,7 @@ import { axiosInstance } from "@/utils/axios";
 import { formatDistanceToNow } from "date-fns";
 import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialog";
 import { useAuthStore } from "@/store/useAuthStore";
+import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ const STATUS_COLORS: Record<string, string> = {
   deleted: "bg-gray-300 text-gray-600",
   pending_review: "bg-amber-100 text-amber-700",
 };
-const RECENT_COLLECTION_LIMIT = 6;
+const RECENT_COLLECTION_LIMIT = 3;
 const RECENT_ACTIVITY_LIMIT = 5;
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
@@ -226,6 +226,7 @@ const DashboardPage: React.FC = () => {
           .from("collections")
           .select("id, title, status, collection_type, deadline, created_at")
           .eq("user_id", userId)
+          .eq("status", "active")
           .order("created_at", { ascending: false })
           .limit(RECENT_COLLECTION_LIMIT);
 
@@ -455,11 +456,7 @@ const DashboardPage: React.FC = () => {
   /* ── Loading state ────────────────────────────────────────────────────────── */
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    );
+    return <DashboardHomeSkeleton />;
   }
 
   /* ── Render ───────────────────────────────────────────────────────────────── */
@@ -709,6 +706,15 @@ const DashboardPage: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+          <div className="mt-4 flex justify-center">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto border-green-100 text-green-700 hover:bg-green-50 hover:text-green-800"
+              onClick={() => navigate("/dashboard/collections")}
+            >
+              View All Collections <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}

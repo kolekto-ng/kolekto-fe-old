@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../store';
-import { Loader2 } from 'lucide-react';
+import { DashboardHomeSkeleton } from '@/components/ui/page-skeletons';
 
 interface PwaLayoutProps {
     children: React.ReactNode;
@@ -19,11 +19,7 @@ const PwaLayout: React.FC<PwaLayoutProps> = ({ children }) => {
     }, [user, authLoading, navigate]);
 
     if (authLoading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-            </div>
-        );
+        return <DashboardHomeSkeleton />;
     }
 
     if (!user) {

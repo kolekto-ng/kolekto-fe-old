@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { authAPI, axiosInstance } from "../utils/axios";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  clearAuthSessionStorage,
+  getValidAuthSessionFromStorage,
+  withOneHourExpiry,
+} from "@/utils/authSession";
 
 // B-16: after the auth store completes a sign-in/sign-up/sign-out via our
 // backend (axios), mirror the session state into the Supabase client so
@@ -42,29 +47,7 @@ interface SessionData {
 }
 
 function getValidSessionFromStorage(): SessionData | null {
-  const sessionStr = localStorage.getItem("kolekto-auth-token");
-  if (!sessionStr) return null;
-
-  try {
-    const session: SessionData = JSON.parse(sessionStr);
-    const { expires_at } = session;
-
-    if (!session || !expires_at) return null;
-
-    const now = Math.floor(Date.now() / 1000); // seconds
-    // console.log(now > Number(expires_at), "now:", now, expires_at, "expiry");
-
-    if (now > Number(expires_at)) {
-      localStorage.removeItem("kolekto-auth-token");
-      return null;
-    }
-
-    return session;
-  } catch (error) {
-    console.error("Error parsing session from storage:", error);
-    localStorage.removeItem("kolekto-auth-token");
-    return null;
-  }
+  return getValidAuthSessionFromStorage() as SessionData | null;
 }
 
 // Initial state from localStorage if valid
@@ -95,13 +78,13 @@ export const useAuthStore = create((set, get) => ({
       } else {
         // No valid session
         set({ user: null, session: null, isLoading: false });
-        localStorage.removeItem("kolekto-auth-token");
+        clearAuthSessionStorage();
       }
     } catch (error) {
       console.error("Auth check error:", error);
       if (error?.response?.status === 401) {
         set({ user: null, session: null, isLoading: false });
-        localStorage.removeItem("kolekto-auth-token");
+        clearAuthSessionStorage();
       } else {
         toast.error("Network error. Please try again.");
         set({ isLoading: false });
@@ -122,14 +105,15 @@ export const useAuthStore = create((set, get) => ({
       console.log(res, "Sign in data");
 
       const { user, session, profile } = res.data.data;
+      const timedSession = withOneHourExpiry(session);
       console.log(res.data, "Session");
       // Save to localStorage
-      localStorage.setItem("kolekto-auth-token", JSON.stringify(session));
+      localStorage.setItem("kolekto-auth-token", JSON.stringify(timedSession));
 
       set({
         user: user,
         profile,
-        session: session,
+        session: timedSession,
         isLoading: false,
       });
 
@@ -137,7 +121,7 @@ export const useAuthStore = create((set, get) => ({
       // queries are authenticated. Awaited so subsequent calls see the
       // session, but its failure is logged-and-swallowed inside the helper
       // — sign-in does not regress if mirroring breaks.
-      await mirrorSetSessionOnSupabase(session);
+      await mirrorSetSessionOnSupabase(timedSession);
 
       return { user, error: null };
     } catch (error: any) {
@@ -183,12 +167,14 @@ export const useAuthStore = create((set, get) => ({
       const hasSession = Boolean(data?.session?.access_token);
 
       if (hasSession) {
-        localStorage.setItem("kolekto-auth-token", JSON.stringify(data.session));
+        localStorage.setItem("kolekto-auth-token", JSON.stringify(withOneHourExpiry(data.session)));
       }
+
+      const timedSession = hasSession ? withOneHourExpiry(data.session) : null;
 
       set({
         user: data?.requireV2 || !hasSession ? null : data?.user ?? null,
-        session: data?.requireV2 || !hasSession ? null : data?.session ?? null,
+        session: data?.requireV2 || !hasSession ? null : timedSession,
         isLoading: false,
       });
 
@@ -196,12 +182,12 @@ export const useAuthStore = create((set, get) => ({
       // (signup often returns no session — email verification flow — in
       // which case we skip the mirror; user will sign in later.)
       if (hasSession) {
-        await mirrorSetSessionOnSupabase(data.session);
+        await mirrorSetSessionOnSupabase(timedSession);
       }
 
       return {
         user: data?.user ?? null,
-        session: hasSession ? data?.session ?? null : null,
+        session: timedSession,
         verificationRequired: Boolean(data?.requiresEmailVerification || (!hasSession && data?.user)),
         error: null,
       };
@@ -221,7 +207,7 @@ export const useAuthStore = create((set, get) => ({
 
     try {
       await axiosInstance.post("auth/signout");
-      localStorage.removeItem("kolekto-auth-token");
+      clearAuthSessionStorage();
       set({ user: null, session: null, isLoading: false });
       // B-16: mirror sign-out into the supabase client so its persisted
       // session is also cleared. Awaited so the SIGNED_OUT event from
@@ -232,7 +218,7 @@ export const useAuthStore = create((set, get) => ({
       const errorMessage = error.message || "Sign out failed";
       set({ error: errorMessage, isLoading: false });
       // Still clear local state even if server call fails
-      localStorage.removeItem("kolekto-auth-token");
+      clearAuthSessionStorage();
       set({ user: null, session: null, isLoading: false });
       // Mirror the sign-out on the supabase client even on backend error
       // so the user is fully signed out client-side regardless.

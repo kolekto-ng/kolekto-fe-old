@@ -6,9 +6,10 @@ import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Lock, AlertTriangle, Clock, XCircle } from 'lucide-react';
+import { Lock, AlertTriangle, Clock, XCircle } from 'lucide-react';
 import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from 'react-icons/fa';
 import ContributeFlow from '@/components/contribute/ContributeFlow';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -197,8 +198,15 @@ const ContributePage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col">
         <ContributionNavBar />
-        <main className="flex-grow flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+        <main className="flex-grow bg-gray-50 p-4">
+          <div className="mx-auto grid w-full max-w-5xl gap-6 py-8 lg:grid-cols-[1fr_420px]">
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-3/5" />
+              <Skeleton className="h-5 w-4/5" />
+              <Skeleton className="h-56 rounded-2xl" />
+            </div>
+            <Skeleton className="h-[460px] rounded-2xl" />
+          </div>
         </main>
         <Footer />
       </div>

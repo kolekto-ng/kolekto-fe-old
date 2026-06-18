@@ -27,11 +27,11 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
 const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
-import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import "aos/dist/aos.css";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
+import SessionTimeoutGuard from "./components/SessionTimeoutGuard";
+import { AppRouteSkeleton, DashboardShellSkeleton } from "@/components/ui/page-skeletons";
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -40,11 +40,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuthStore() as any;
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-      </div>
-    );
+    return <DashboardShellSkeleton />;
   }
 
   if (!user) {
@@ -57,13 +53,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AppRouteSkeleton />}>
       <Routes>
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
@@ -130,9 +120,9 @@ const App = () => {
 
   useEffect(() => {
     // AOS is purely a UX enhancement; keep it out of the initial JS chunk.
-    import("aos")
-      .then((mod) => mod.default)
-      .then((AOS) => {
+    Promise.all([import("aos"), import("aos/dist/aos.css")])
+      .then(([mod]) => {
+        const AOS = mod.default;
         AOS.init({
           offset: 120, // offset (in px) from the original trigger point
           delay: 0, // delay in ms
@@ -169,6 +159,7 @@ const App = () => {
       <Toaster />
       <Sonner />
       <ScrollToTop />
+      <SessionTimeoutGuard />
       <AuthenticatedApp />
       {shouldShowWhatsAppButton && <WhatsAppButton />}
       {/* <AuthSessionWatcher /> */}

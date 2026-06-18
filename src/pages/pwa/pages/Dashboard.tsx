@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../../../components/ui/button'
-import { useAuthStore } from '../../../store'
+import { useAuthStore } from '../../../store/useAuthStore'
 import {
-  Loader2, Plus, Lock, Layers, Waves, Ticket, Heart,
+  Plus, Lock, Layers, Waves, Ticket, Heart,
   Bell,
 } from 'lucide-react'
 import WalletOverview from '../../../components/WalletOverview'
@@ -11,6 +11,13 @@ import CollectionsOverview from '../../../components/dashboard/CollectionOvervie
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import ActivityFeed from '../../../components/dashboard/ActivityOverview'
 import { useActivities } from '../../../store/useDashboard'
+import { DashboardHomeSkeleton } from '@/components/ui/page-skeletons'
+import {
+  countUnseenContributorActivities,
+  getLastSeenContributorsAt,
+  getNotificationUserId,
+  markContributorsSeen,
+} from '@/utils/contributorNotifications'
 
 const QUICK_ACTIONS = [
   { label: 'Fixed', icon: Lock, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', desc: 'Fixed amount' },
@@ -24,17 +31,35 @@ const PwaDashboard: React.FC = () => {
   const navigate = useNavigate()
   const { user, isLoading: authLoading } = useAuthStore()
   const { activities, getActivities } = useActivities()
+  const notificationUserId = getNotificationUserId(user)
+  const [lastSeenContributorsAt, setLastSeenContributorsAt] = useState(() =>
+    getLastSeenContributorsAt(notificationUserId),
+  )
 
   useEffect(() => {
     getActivities()
   }, [])
 
+  useEffect(() => {
+    setLastSeenContributorsAt(getLastSeenContributorsAt(notificationUserId))
+  }, [notificationUserId])
+
+  const notificationCount = useMemo(
+    () =>
+      countUnseenContributorActivities(
+        activities as any[],
+        lastSeenContributorsAt,
+      ),
+    [activities, lastSeenContributorsAt],
+  )
+
+  const openActivities = () => {
+    setLastSeenContributorsAt(markContributorsSeen(notificationUserId))
+    navigate('/dashboard/activities')
+  }
+
   if (authLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-[#16a34a]" />
-      </div>
-    )
+    return <DashboardHomeSkeleton />
   }
 
   if (!user) {
@@ -75,13 +100,13 @@ const PwaDashboard: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 className="relative"
-                onClick={() => navigate('/dashboard/activities')}
-                aria-label={`Notifications${(activities as any[]).length > 0 ? ` (${(activities as any[]).length})` : ''}`}
+                onClick={openActivities}
+                aria-label={`Contributor notifications${notificationCount > 0 ? ` (${notificationCount})` : ''}`}
               >
                 <Bell className="h-5 w-5" />
-                {(activities as any[]).length > 0 && (
+                {notificationCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 shadow-sm">
-                    {(activities as any[]).length > 99 ? '99+' : (activities as any[]).length}
+                    {notificationCount > 99 ? '99+' : notificationCount}
                   </span>
                 )}
               </Button>

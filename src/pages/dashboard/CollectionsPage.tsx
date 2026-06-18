@@ -6,8 +6,8 @@ import CollectionCard from '@/components/collections/CollectionCard';
 import { toast } from 'sonner';
 
 import { useCollectionStore } from '@/store/useCollectionStore';
-import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
 
 const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -59,14 +59,7 @@ const CollectionsPage: React.FC = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
-          <Card className="col-span-full">
-            <CardContent className="py-10 text-center">
-              <div className="flex justify-center mb-4">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-              </div>
-              <p className="text-gray-500">Loading collections...</p>
-            </CardContent>
-          </Card>
+          <CollectionGridSkeleton />
         ) : sortedCollections && sortedCollections.length > 0 ? (
 
           sortedCollections.map(collection => {

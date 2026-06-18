@@ -15,7 +15,7 @@ export default defineConfig({
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
         description: "Simplify group payments and collections with Kolekto",
-        start_url: "/",
+        start_url: "/pwa/dashboard",
         scope: "/",
         display: "standalone",
         orientation: "portrait",

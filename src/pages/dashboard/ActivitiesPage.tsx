@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useActivities } from '@/store/useDashboard';
-import { Loader2, ArrowDownLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowDownLeft, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ActivityListSkeleton } from '@/components/ui/page-skeletons';
+import { useAuthStore } from '@/store/useAuthStore';
+import {
+  getNotificationUserId,
+  markContributorsSeen,
+} from '@/utils/contributorNotifications';
 
 function relativeTime(dateStr: string): string {
   try {
@@ -91,6 +97,8 @@ type Tab = 'all' | 'contributions' | 'wallet';
 const ActivitiesPage: React.FC = () => {
   const { activities, isLoading, getActivities } = useActivities() as any;
   const [tab, setTab] = useState<Tab>('all');
+  const user = useAuthStore((state: any) => state.user);
+  const notificationUserId = getNotificationUserId(user);
 
   // The BE merges contributions + withdrawals into one sorted feed under
   // /dashboard/activities. Previously this page queried Supabase
@@ -99,6 +107,11 @@ const ActivitiesPage: React.FC = () => {
   useEffect(() => {
     getActivities();
   }, [getActivities]);
+
+  useEffect(() => {
+    if (!notificationUserId || isLoading) return;
+    markContributorsSeen(notificationUserId);
+  }, [activities, isLoading, notificationUserId]);
 
   const { filtered, walletCount, contribCount, totalCount } = useMemo(() => {
     const rows = Array.isArray(activities) ? activities : [];
@@ -172,11 +185,9 @@ const ActivitiesPage: React.FC = () => {
         <Pill id="wallet" label="Wallet" count={walletCount} />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 min-h-[500px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 min-h-[500px]">
         {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <Loader2 className="animate-spin h-6 w-6 text-gray-500" />
-          </div>
+          <ActivityListSkeleton count={6} />
         ) : (
           <div className="space-y-4">
             {filtered.length === 0 && (
@@ -186,31 +197,31 @@ const ActivitiesPage: React.FC = () => {
               return (
                 <div
                   key={activity.id}
-                  className="flex items-center bg-gray-50 hover:bg-gray-100 transition-colors py-4 px-4 rounded-xl justify-between gap-4 border border-gray-100"
+                  className="flex flex-col sm:flex-row sm:items-center bg-gray-50 hover:bg-gray-100 transition-colors py-4 px-4 rounded-xl justify-between gap-3 sm:gap-4 border border-gray-100"
                 >
-                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1 w-full">
                     <div className={`p-2 rounded-full shrink-0 ${activity.meta.iconBg}`}>{activity.meta.icon}</div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{activity.primaryLabel}</p>
-                      <p className="text-sm text-gray-500 truncate flex items-center gap-1.5 mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 break-words leading-snug">{activity.primaryLabel}</p>
+                      <p className="text-sm text-gray-500 flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1 leading-snug">
                         <span className={`font-semibold ${activity.meta.amountColor}`}>
                           {activity.meta.amountPrefix}{formatCurrency(activity.amount)}
                         </span>
                         {activity.collectionName && (
                           <>
                             <span className="text-gray-300">•</span>
-                            <span className="text-gray-600 font-medium truncate min-w-0">
+                            <span className="text-gray-600 font-medium break-words min-w-0">
                               {activity.collectionName}
                             </span>
                           </>
                         )}
                       </p>
                       {activity.meta.statusLabel && (
-                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">{activity.meta.statusLabel}</p>
+                        <p className="text-[11px] text-gray-400 mt-1 break-words">{activity.meta.statusLabel}</p>
                       )}
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-gray-400 shrink-0 whitespace-nowrap bg-white px-2.5 py-1 rounded-md shadow-sm border border-gray-100">
+                  <span className="text-xs font-medium text-gray-400 shrink-0 whitespace-nowrap bg-white px-2.5 py-1 rounded-md shadow-sm border border-gray-100 self-start sm:self-center ml-11 sm:ml-0">
                     {activity.createdAt}
                   </span>
                 </div>

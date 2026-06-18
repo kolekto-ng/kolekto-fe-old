@@ -97,6 +97,62 @@ function useIntersect(options?: IntersectionObserverInit) {
 // ═══════════════════════════════════════════════════════════════════════
 //  GLOBAL STYLES
 // ═══════════════════════════════════════════════════════════════════════
+const LandingSectionSkeleton = ({ minHeight = 360 }: { minHeight?: number }) => (
+  <section style={{ minHeight, padding: "72px 24px", background: "white" }}>
+    <div
+      style={{
+        maxWidth: 1280,
+        margin: "0 auto",
+        display: "grid",
+        gap: 20,
+      }}
+    >
+      <div
+        className="skeleton-shimmer"
+        style={{ height: 18, width: 160, borderRadius: 999 }}
+      />
+      <div
+        className="skeleton-shimmer"
+        style={{ height: 42, width: "min(520px, 100%)", borderRadius: 12 }}
+      />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 18,
+        }}
+      >
+        {[0, 1, 2].map((item) => (
+          <div
+            key={item}
+            className="skeleton-shimmer"
+            style={{ height: 180, borderRadius: 20 }}
+          />
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+const DeferredSection = ({
+  children,
+  minHeight,
+}: {
+  children: React.ReactNode;
+  minHeight?: number;
+}) => {
+  const { ref, isVisible } = useIntersect({
+    rootMargin: "700px 0px",
+    threshold: 0.01,
+  });
+
+  return (
+    <div ref={ref}>
+      {isVisible ? children : <LandingSectionSkeleton minHeight={minHeight} />}
+    </div>
+  );
+};
+
 const GlobalStyles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
@@ -956,7 +1012,7 @@ const HeroSection = () => {
               style={{ display: "flex", gap: 12, flexWrap: "wrap" }}
             >
               <Link
-                to="/create-collection"
+                to="/register"
                 className="btn-primary"
                 style={{
                   background: "linear-gradient(135deg, #1C5C23, #2E7D32)",
@@ -4432,17 +4488,39 @@ const LandingPage: React.FC = () => {
       <GlobalStyles />
       <Navbar />
       <HeroSection />
-      <MarqueeStrip />
-      <CinematicUseCasesSection />
-      <CollectionTypesSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <ActiveFundraisingSection />
-      <TestimonialsSection />
-      <WhyKolektoSection />
-      <FAQSection />
-      <FinalCTASection />
-      <FooterSection />
+      <DeferredSection minHeight={160}>
+        <MarqueeStrip />
+      </DeferredSection>
+      <DeferredSection minHeight={720}>
+        <CinematicUseCasesSection />
+      </DeferredSection>
+      <DeferredSection minHeight={720}>
+        <CollectionTypesSection />
+      </DeferredSection>
+      <DeferredSection minHeight={680}>
+        <FeaturesSection />
+      </DeferredSection>
+      <DeferredSection minHeight={640}>
+        <HowItWorksSection />
+      </DeferredSection>
+      <DeferredSection minHeight={600}>
+        <ActiveFundraisingSection />
+      </DeferredSection>
+      <DeferredSection minHeight={540}>
+        <TestimonialsSection />
+      </DeferredSection>
+      <DeferredSection minHeight={560}>
+        <WhyKolektoSection />
+      </DeferredSection>
+      <DeferredSection minHeight={520}>
+        <FAQSection />
+      </DeferredSection>
+      <DeferredSection minHeight={420}>
+        <FinalCTASection />
+      </DeferredSection>
+      <DeferredSection minHeight={360}>
+        <FooterSection />
+      </DeferredSection>
     </div>
   );
 };

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, History, Loader2 } from 'lucide-react';
+import { Wallet, History } from 'lucide-react';
 import {
   isCompletedWithdrawal,
   withdrawalStatusBucket,
 } from '@/utils/withdrawalStatus';
+import { TableRowsSkeleton } from '@/components/ui/page-skeletons';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
@@ -202,19 +203,7 @@ const TransactionHistoryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {collectionsLoading && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-10 text-sm text-gray-500 text-center"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading collection earnings...
-                    </span>
-                  </td>
-                </tr>
-              )}
+              {collectionsLoading && <TableRowsSkeleton rows={6} columns={7} />}
               {!collectionsLoading && collectionEarnings.length === 0 && (
                 <tr>
                   <td
@@ -259,19 +248,7 @@ const TransactionHistoryPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {withdrawalsLoading && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-3 py-10 text-sm text-gray-500 text-center"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading withdrawal transactions...
-                    </span>
-                  </td>
-                </tr>
-              )}
+              {withdrawalsLoading && <TableRowsSkeleton rows={6} columns={4} />}
               {!withdrawalsLoading && recentTransactions.length === 0 && (
                 <tr>
                   <td
