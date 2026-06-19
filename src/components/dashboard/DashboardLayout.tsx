@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store/useAuthStore';
 import DashboardNavbar from './DashboardNavbar';
 import { DashboardShellSkeleton } from '@/components/ui/page-skeletons';
+import PushNotificationPrompt from '@/components/PushNotificationPrompt';
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -23,6 +24,7 @@ const DashboardContent = () => {
   return (
     <div className="flex-1 w-full flex flex-col bg-gray-50 min-w-0">
       <DashboardNavbar />
+      <PushNotificationPrompt />
       <main className="p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
         <div
           key={location.pathname}

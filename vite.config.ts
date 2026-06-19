@@ -44,7 +44,7 @@ export default defineConfig({
       },
       workbox: {
         cacheId: "kolekto-pwa-v2",
-        importScripts: ["sw-cleanup.js"],
+        importScripts: ["sw-cleanup.js", "push-sw.js"],
 
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB

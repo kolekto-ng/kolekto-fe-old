@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Collection, FormField, PriceTier } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
+import { axiosInstance } from "@/utils/axios";
 
 // ─── Auth token helper ────────────────────────────────────────────────────────
 // The app uses a custom JWT stored in localStorage. We pass it to Edge Functions
@@ -261,25 +262,9 @@ export const useCollectionStore = create((set, get: any) => ({
   updateCollectionStatus: async (id: string, newStatus: string) => {
     set({ isLoading: true, error: null });
     try {
-      let userId: string | undefined;
-      try {
-        const raw = localStorage.getItem("kolekto-auth-token");
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          userId = parsed?.user?.id || parsed?.id || undefined;
-        }
-      } catch {}
-
-      const { data, error } = await supabase.functions.invoke(
-        "update-collection-status",
-        {
-          body: { id, status: newStatus, user_id: userId },
-          headers: authHeaders(),
-        }
-      );
-
-      if (error) throw new Error(error.message);
-      if (data?.error) throw new Error(data.error);
+      const { data } = await axiosInstance.put(`/collections/status/${id}`, {
+        newStatus,
+      });
 
       set((state: any) => ({
         collections: state.collections.map((c: Collection) =>
@@ -294,7 +279,7 @@ export const useCollectionStore = create((set, get: any) => ({
         lastFetchedAt: Date.now(),
       }));
 
-      return data.data;
+      return data;
     } catch (err: any) {
       set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
