@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowLeft, ArrowRight, Check, Loader2, CreditCard, User, Tag, Ticket, Heart,
-  Phone, Info, ChevronLeft, ChevronRight, Trophy, Users,
+  Phone, Info, ChevronLeft, ChevronRight, Trophy, Users, MessageCircle, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/formatters';
@@ -40,6 +40,8 @@ type TicketTierSelection = {
 const FUNDRAISING_PRESETS = [5000, 10000, 20000, 50000];
 const MAX_TICKETS_PER_ORDER = 10;
 const CONTRIBUTOR_FIELD_MAP_KEY = "__fieldValues";
+const ORGANIZER_NOTE =
+  "Kolekto only provides the payment collection platform. The organizer is responsible for this collection, including the purpose, service, item, event, or delivery connected to your payment.";
 
 function calcFees(amount: number, feeBearer: string, collectionType: string) {
   // Fundraising: fee is invisible to donor — backend embeds 2.5% in stored amount
@@ -55,6 +57,37 @@ function roundCurrency(value: number) {
 
 function fmt(n: number) {
   return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
+}
+
+function normalizeWhatsappPhone(phone: string) {
+  return phone.replace(/[^\d+]/g, "").replace(/^\+?0?/, "234");
+}
+
+function getOrganizerName(collection: any) {
+  return (
+    collection.organizer_name ||
+    collection.organizer_full_name ||
+    collection.host_name ||
+    collection.creator_name ||
+    collection.user_name ||
+    collection.profile?.full_name ||
+    collection.organizer?.full_name ||
+    "Collection organizer"
+  );
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map(part => part[0]?.toUpperCase()).join("");
+  return initials || "KO";
+}
+
+function getCollectionTypeLabel(colType: string, isTicket: boolean, isFundraising: boolean) {
+  if (isFundraising) return "Fundraising";
+  if (isTicket) return "Ticketing";
+  if (colType === "open_pool") return "Open pool";
+  if (colType === "tiered") return "Tiered collection";
+  return "Fixed collection";
 }
 
 function getFieldStorageKey(field: any) {
@@ -188,6 +221,61 @@ const FeeBreakdown: React.FC<{
 );
 
 // ── Fundraising contributors section ─────────────────────────────────────────
+const OrganizerContactCard: React.FC<{ collection: any; supportPhone?: string }> = ({ collection, supportPhone }) => {
+  const organizerName = getOrganizerName(collection);
+  const whatsappUrl = supportPhone ? `https://wa.me/${normalizeWhatsappPhone(supportPhone)}` : "";
+
+  return (
+    <section className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_1.2fr]">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow duration-200 hover:shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-kolekto/10 text-sm font-bold text-kolekto ring-1 ring-kolekto/15">
+            {getInitials(organizerName)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Organizer</p>
+            <p className="truncate text-sm font-semibold text-slate-950">{organizerName}</p>
+            <p className="truncate text-sm text-slate-600">{supportPhone || "Contact not provided"}</p>
+          </div>
+        </div>
+
+        {supportPhone && (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <a
+              href={`tel:${supportPhone}`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800 transition-colors duration-200 hover:border-kolekto/30 hover:bg-kolekto/5"
+            >
+              <Phone className="h-4 w-4 text-kolekto" />
+              Call
+            </a>
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-700 transition-colors duration-200 hover:bg-green-100"
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </a>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-950">
+        <div className="flex gap-3">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-amber-700 ring-1 ring-amber-200">
+            <Info className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="font-semibold text-amber-950">Organizer responsibility</p>
+            <p className="mt-1 leading-6 text-amber-900">{ORGANIZER_NOTE}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const FundraisingContributors: React.FC<{ collectionId: string }> = ({ collectionId }) => {
   const [contributors, setContributors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -656,12 +744,12 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
     switch (field.type) {
       case 'textarea':
-        return <Textarea value={value} onChange={e => onChange(e.target.value)} placeholder={`Enter ${field.name.toLowerCase()}`} />;
+        return <Textarea className="min-h-24 rounded-lg border-slate-200 text-base shadow-sm focus-visible:ring-kolekto/30" value={value} onChange={e => onChange(e.target.value)} placeholder={`Enter ${field.name.toLowerCase()}`} />;
       case 'select':
       case 'selectdropdown':
         return (
           <Select value={value} onValueChange={onChange}>
-            <SelectTrigger><SelectValue placeholder={`Select ${field.name.toLowerCase()}`} /></SelectTrigger>
+            <SelectTrigger className="min-h-12 rounded-lg border-slate-200 text-base shadow-sm focus:ring-kolekto/30"><SelectValue placeholder={`Select ${field.name.toLowerCase()}`} /></SelectTrigger>
             <SelectContent>
               {field.options?.map((opt: string, i: number) => <SelectItem key={i} value={opt}>{opt}</SelectItem>)}
             </SelectContent>
@@ -669,26 +757,27 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         );
       case 'radio':
         return (
-          <RadioGroup value={value} onValueChange={onChange}>
+          <RadioGroup value={value} onValueChange={onChange} className="grid gap-2">
             {field.options?.map((opt: string, i: number) => (
-              <div key={i} className="flex items-center space-x-2">
+              <div key={i} className="flex min-h-11 items-center space-x-2 rounded-lg border border-slate-200 bg-white px-3">
                 <RadioGroupItem value={opt} id={`${inputId}-${i}`} />
-                <Label htmlFor={`${inputId}-${i}`}>{opt}</Label>
+                <Label htmlFor={`${inputId}-${i}`} className="flex-1 text-sm text-slate-700">{opt}</Label>
               </div>
             ))}
           </RadioGroup>
         );
       case 'checkbox':
         return (
-          <div className="flex items-center space-x-2">
+          <div className="flex min-h-11 items-center space-x-2 rounded-lg border border-slate-200 bg-white px-3">
             <Checkbox checked={value === 'true'} onCheckedChange={(c: boolean | 'indeterminate') => onChange(c.toString())} id={inputId} />
-            <Label htmlFor={inputId}>{field.name}</Label>
+            <Label htmlFor={inputId} className="flex-1 text-sm text-slate-700">{field.name}</Label>
           </div>
         );
       default:
         return (
           <Input
             type={field.type || 'text'}
+            className="min-h-12 rounded-lg border-slate-200 text-base shadow-sm focus-visible:ring-kolekto/30"
             value={value}
             onChange={e => onChange(e.target.value)}
             placeholder={`Enter ${field.name.toLowerCase()}`}
@@ -702,15 +791,15 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
     <div className="space-y-5">
       {/* Open Pool: raised/remaining bar */}
       {isOpenPool && (totalContributed > 0 || openPoolRemaining !== null) && (
-        <div className="rounded-xl bg-cyan-50 border border-cyan-100 p-4 flex items-center justify-between text-sm">
+        <div className="rounded-xl bg-kolekto/5 border border-kolekto/15 p-4 grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-xs text-cyan-600 uppercase tracking-wide font-medium">Total Raised So Far</p>
-            <p className="text-lg font-bold text-cyan-800">{formatCurrency(totalContributed)}</p>
+            <p className="text-[11px] text-kolekto uppercase tracking-[0.16em] font-semibold">Raised</p>
+            <p className="mt-1 text-lg font-bold text-slate-950">{formatCurrency(totalContributed)}</p>
           </div>
           {openPoolRemaining !== null && (
             <div className="text-right">
-              <p className="text-xs text-cyan-600 uppercase tracking-wide font-medium">Remaining</p>
-              <p className="text-lg font-bold text-cyan-800">{formatCurrency(openPoolRemaining)}</p>
+              <p className="text-[11px] text-kolekto uppercase tracking-[0.16em] font-semibold">Remaining</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{formatCurrency(openPoolRemaining)}</p>
             </div>
           )}
         </div>
@@ -725,17 +814,17 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
             const storyWhy = collection.story?.why || collection.story_why;
             const storyImpact = collection.story?.impact || collection.story_impact;
             return (storyWhat || storyWhy || storyImpact) ? (
-              <div className="border border-gray-200 rounded-xl p-4 space-y-3 text-sm text-gray-800">
-                {storyWhat && <div><p className="font-semibold text-gray-900">What we're doing</p><p className="text-gray-600 mt-0.5">{storyWhat}</p></div>}
-                {storyWhy && <div><p className="font-semibold mt-2 text-gray-900">Why it matters</p><p className="text-gray-600 mt-0.5">{storyWhy}</p></div>}
-                {storyImpact && <div><p className="font-semibold mt-2 text-gray-900">The impact</p><p className="text-gray-600 mt-0.5">{storyImpact}</p></div>}
+              <div className="border border-slate-200 rounded-xl bg-slate-50/70 p-4 space-y-3 text-sm text-slate-800">
+                {storyWhat && <div><p className="font-semibold text-slate-950">What we're doing</p><p className="text-slate-600 mt-1 leading-6">{storyWhat}</p></div>}
+                {storyWhy && <div><p className="font-semibold mt-2 text-slate-950">Why it matters</p><p className="text-slate-600 mt-1 leading-6">{storyWhy}</p></div>}
+                {storyImpact && <div><p className="font-semibold mt-2 text-slate-950">The impact</p><p className="text-slate-600 mt-1 leading-6">{storyImpact}</p></div>}
               </div>
             ) : null;
           })()}
 
           {/* Donation amount */}
           <div className="space-y-2">
-            <Label className="font-medium flex items-center gap-2">
+            <Label className="font-semibold text-slate-900 flex items-center gap-2">
               <Heart className="h-4 w-4 text-rose-500" /> Donation Amount
             </Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -744,7 +833,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                   key={p}
                   type="button"
                   onClick={() => { setPresetAmount(p); setCustomAmount(''); }}
-                  className={`rounded-lg border py-2 text-sm font-medium transition-colors ${presetAmount === p ? 'border-kolekto bg-kolekto text-white' : 'border-gray-200 hover:border-kolekto'}`}
+                  className={`min-h-11 rounded-lg border px-2 py-2 text-sm font-semibold transition-colors duration-200 ${presetAmount === p ? 'border-kolekto bg-kolekto text-white shadow-sm' : 'border-slate-200 bg-white text-slate-800 hover:border-kolekto/40 hover:bg-kolekto/5'}`}
                 >
                   {formatCurrency(p)}
                 </button>
@@ -754,14 +843,14 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₦</span>
               <Input
                 type="number"
-                className="pl-7"
+                className="min-h-12 rounded-lg border-slate-200 pl-7 text-base shadow-sm focus-visible:ring-kolekto/30"
                 placeholder={minAmount ? `Min ${formatCurrency(minAmount)}` : 'Custom amount'}
                 value={customAmount}
                 onChange={e => { setCustomAmount(e.target.value); setPresetAmount(null); }}
                 min={minAmount || 1}
               />
             </div>
-            {minAmount > 0 && <p className="text-xs text-gray-500">Minimum donation: {formatCurrency(minAmount)}</p>}
+            {minAmount > 0 && <p className="text-xs text-slate-500">Minimum donation: {formatCurrency(minAmount)}</p>}
           </div>
 
           {/* Fee breakdown — below amount selection */}
@@ -769,9 +858,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
             <FeeBreakdown gatewayFee={gatewayFee} platformFee={platformFee} total={total} isFundraising={true} />
           )}
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-start space-x-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
             <Checkbox id="anonymous" checked={isAnonymous} onCheckedChange={(c: boolean | 'indeterminate') => setIsAnonymous(!!c)} />
-            <Label htmlFor="anonymous" className="text-sm cursor-pointer">
+            <Label htmlFor="anonymous" className="text-sm leading-5 text-slate-700 cursor-pointer">
               Donate anonymously (your name will not be shown publicly)
             </Label>
           </div>
@@ -782,19 +871,19 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {isOpenPool && (
         <>
           <div className="space-y-2">
-            <Label className="font-medium">Contribution Amount</Label>
+            <Label className="font-semibold text-slate-900">Contribution Amount</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₦</span>
               <Input
                 type="number"
-                className="pl-7"
+                className="min-h-12 rounded-lg border-slate-200 pl-7 text-base shadow-sm focus-visible:ring-kolekto/30"
                 placeholder={minAmount ? `Min ${formatCurrency(minAmount)}` : 'Enter amount'}
                 value={openPoolAmount}
                 onChange={e => setOpenPoolAmount(e.target.value)}
                 min={minAmount || 1}
               />
             </div>
-            {minAmount > 0 && <p className="text-xs text-gray-500">Minimum: {formatCurrency(minAmount)}</p>}
+            {minAmount > 0 && <p className="text-xs text-slate-500">Minimum: {formatCurrency(minAmount)}</p>}
           </div>
 
           {/* Fee breakdown — below amount input */}
@@ -808,7 +897,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {isTiered && tiers.length > 0 && (
         <>
           <div className="space-y-2">
-            <Label className="font-medium flex items-center gap-2"><Tag className="h-4 w-4" /> {isTicket ? 'Select Ticket Mix' : 'Select Tier'}</Label>
+            <Label className="font-semibold text-slate-900 flex items-center gap-2"><Tag className="h-4 w-4" /> {isTicket ? 'Select Ticket Mix' : 'Select Tier'}</Label>
             <div className="space-y-2">
               {normalizedTiers.map((tier, i) => {
                 const isTierSoldOut = isTicket && tier.remainingCapacity !== null && tier.remainingCapacity !== undefined && Number(tier.remainingCapacity) <= 0;
@@ -816,11 +905,11 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
                 if (isTicket) {
                   return (
-                    <div key={i} className={`rounded-xl border p-4 space-y-3 ${isTierSoldOut ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-200'}`}>
-                      <div className="flex justify-between items-start gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`font-medium ${isTierSoldOut ? 'text-gray-400' : ''}`}>{tier.tierName}</span>
+                    <div key={i} className={`rounded-xl border p-4 space-y-3 transition-colors duration-200 ${isTierSoldOut ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-slate-200 bg-white hover:border-kolekto/25'}`}>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`font-semibold break-words ${isTierSoldOut ? 'text-gray-400' : 'text-slate-900'}`}>{tier.tierName}</span>
                             {isTierSoldOut
                               ? <Badge variant="outline" className="text-xs text-red-500 border-red-200">Sold Out</Badge>
                               : tier.remainingCapacity !== null && (
@@ -828,15 +917,15 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                                 )
                             }
                           </div>
-                          {tier.description && <p className="text-sm text-gray-500 mt-1">{tier.description}</p>}
+                          {tier.description && <p className="text-sm text-slate-500 mt-1 leading-5">{tier.description}</p>}
                         </div>
-                        <span className={`font-bold ${isTierSoldOut ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
+                        <span className={`shrink-0 font-bold ${isTierSoldOut ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
                       </div>
                       {isTierSoldOut ? (
                         <p className="text-xs text-red-400 text-center py-1">This tier is no longer available</p>
                       ) : (
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs text-gray-500">Add this tier to your ticket cart.</p>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs text-slate-500">Add this tier to your ticket cart.</p>
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
@@ -846,7 +935,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                                   [String(tier.tierId)]: Math.max(0, (prev[String(tier.tierId)] || 0) - 1),
                                 }))
                               }
-                              className="w-9 h-9 rounded-lg border border-gray-200 text-lg font-medium hover:bg-gray-50 flex items-center justify-center"
+                              className="w-11 h-11 rounded-lg border border-slate-200 bg-white text-lg font-medium hover:bg-slate-50 flex items-center justify-center transition-colors duration-200"
                             >
                               -
                             </button>
@@ -867,7 +956,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                                   [String(tier.tierId)]: currentTierQty + 1,
                                 }));
                               }}
-                              className="w-9 h-9 rounded-lg border border-gray-200 text-lg font-medium hover:bg-gray-50 flex items-center justify-center"
+                              className="w-11 h-11 rounded-lg border border-slate-200 bg-white text-lg font-medium hover:bg-slate-50 flex items-center justify-center transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                               disabled={
                                 totalTicketQuantity >= MAX_TICKETS_PER_ORDER ||
                                 (tier.remainingCapacity !== null && tier.remainingCapacity !== undefined &&
@@ -889,24 +978,24 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                     type="button"
                     onClick={() => { if (!isTierFull) setSelectedTier(tier); }}
                     disabled={isTierFull}
-                    className={`w-full text-left rounded-xl border p-4 transition-colors ${
+                    className={`w-full text-left rounded-xl border p-4 transition-colors duration-200 ${
                       isTierFull
                         ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
                         : selectedTier?.tierId === tier.tierId
                         ? 'border-kolekto bg-kolekto/5'
-                        : 'border-gray-200 hover:border-gray-300'
+                        : 'border-slate-200 bg-white hover:border-kolekto/30 hover:bg-kolekto/5'
                     }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
                             isTierFull ? 'border-gray-300 bg-gray-200'
                             : selectedTier?.tierId === tier.tierId ? 'border-kolekto bg-kolekto' : 'border-gray-300'
                           }`}>
                             {!isTierFull && selectedTier?.tierId === tier.tierId && <Check className="h-2.5 w-2.5 text-white" />}
                           </div>
-                          <span className={`font-medium ${isTierFull ? 'text-gray-400' : ''}`}>{tier.tierName}</span>
+                          <span className={`font-semibold break-words ${isTierFull ? 'text-gray-400' : 'text-slate-900'}`}>{tier.tierName}</span>
                           {isTierFull
                             ? <Badge variant="outline" className="text-xs text-red-500 border-red-200">Sold Out</Badge>
                             : tier.remainingCapacity !== null && (
@@ -914,9 +1003,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                               )
                           }
                         </div>
-                        {tier.description && <p className="text-sm text-gray-500 mt-1 ml-6">{tier.description}</p>}
+                        {tier.description && <p className="text-sm text-slate-500 mt-1 sm:ml-6 leading-5">{tier.description}</p>}
                       </div>
-                      <span className={`font-bold ${isTierFull ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
+                      <span className={`shrink-0 font-bold ${isTierFull ? 'text-gray-400' : 'text-kolekto'}`}>{formatCurrency(tier.price)}</span>
                     </div>
                   </button>
                 );
@@ -934,9 +1023,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {/* ── FIXED (non-tiered, non-fundraising, non-pool) ───────────────────── */}
       {!isFundraising && !isOpenPool && !isTiered && (
         <>
-          <div className="rounded-xl bg-kolekto/5 border border-kolekto/20 p-4 text-center">
-            <p className="text-sm text-gray-500">Collection Amount</p>
-            <p className="text-3xl font-bold text-kolekto mt-1">{formatCurrency(collection.amount || 0)}</p>
+          <div className="rounded-xl bg-kolekto/5 border border-kolekto/15 p-5 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-kolekto">Collection Amount</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{formatCurrency(collection.amount || 0)}</p>
           </div>
 
           {/* Fee breakdown — below fixed amount display */}
@@ -949,9 +1038,9 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
       {/* ── TICKET quantity (all ticket types) ──────────────────────────────── */}
       {isTicket && (
         <div className="space-y-2">
-          <Label className="font-medium flex items-center gap-2"><Ticket className="h-4 w-4" /> Number of Tickets</Label>
+          <Label className="font-semibold text-slate-900 flex items-center gap-2"><Ticket className="h-4 w-4" /> Number of Tickets</Label>
           {isTiered ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 flex items-center justify-between">
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 flex items-center justify-between">
               <span>Total tickets selected</span>
               <span className="font-semibold text-gray-900">{totalTicketQuantity}</span>
             </div>
@@ -961,11 +1050,11 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                 <button
                   type="button"
                   onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center"
+                  className="w-11 h-11 rounded-lg border border-slate-200 bg-white text-xl font-medium hover:bg-slate-50 flex items-center justify-center transition-colors duration-200"
                 >
                   −
                 </button>
-                <span className="w-12 text-center text-lg font-semibold">{quantity}</span>
+                <span className="w-12 text-center text-lg font-semibold text-slate-950">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -978,12 +1067,12 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                     quantity >= MAX_TICKETS_PER_ORDER ||
                     (spotsRemaining !== null && quantity >= spotsRemaining)
                   }
-                  className="w-10 h-10 rounded-lg border border-gray-200 text-xl font-medium hover:bg-gray-50 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-11 h-11 rounded-lg border border-slate-200 bg-white text-xl font-medium hover:bg-slate-50 flex items-center justify-center transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   +
                 </button>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500">
                 {spotsRemaining !== null && spotsRemaining < MAX_TICKETS_PER_ORDER
                   ? `${spotsRemaining} ticket${spotsRemaining === 1 ? '' : 's'} remaining`
                   : `Max ${MAX_TICKETS_PER_ORDER} tickets per order`}
@@ -995,13 +1084,13 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
       {/* ── Custom form fields ───────────────────────────────────────────────── */}
       {formFields.filter(f => f.name.toLowerCase() !== 'unique code').length > 0 && (
-        <div className="space-y-4 pt-2 border-t">
-          <p className="text-sm font-medium text-gray-700">Additional Details</p>
+        <div className="space-y-4 pt-5 border-t border-slate-100">
+          <p className="text-sm font-semibold text-slate-900">Additional Details</p>
           {formFields.map((field, i) => {
             if (field.name.toLowerCase() === 'unique code') return null;
             return (
               <div key={field.id || `${field.name}-${i}`} className="space-y-1.5">
-                <Label>{field.name}{field.required && <span className="text-red-500 ml-0.5">*</span>}</Label>
+                <Label className="text-sm font-medium text-slate-800">{field.name}{field.required && <span className="text-red-500 ml-0.5">*</span>}</Label>
                 {renderField(field)}
               </div>
             );
@@ -1014,31 +1103,34 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
   const renderContact = () => (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="cf-name">{isAnonymous && isFundraising ? 'Your Name (private)' : 'Full Name'} *</Label>
+        <Label htmlFor="cf-name" className="text-sm font-medium text-slate-800">{isAnonymous && isFundraising ? 'Your Name (private)' : 'Full Name'} *</Label>
         <Input
           id="cf-name"
+          className="min-h-12 rounded-lg border-slate-200 text-base shadow-sm focus-visible:ring-kolekto/30"
           value={contact.name}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContact(p => ({ ...p, name: e.target.value }))}
           placeholder="Enter your full name"
         />
-        {isAnonymous && isFundraising && <p className="text-xs text-gray-500">This will not be shown publicly.</p>}
+        {isAnonymous && isFundraising && <p className="text-xs text-slate-500">This will not be shown publicly.</p>}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="cf-email">Email *</Label>
+        <Label htmlFor="cf-email" className="text-sm font-medium text-slate-800">Email *</Label>
         <Input
           id="cf-email"
           type="email"
+          className="min-h-12 rounded-lg border-slate-200 text-base shadow-sm focus-visible:ring-kolekto/30"
           value={contact.email}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContact(p => ({ ...p, email: e.target.value }))}
           placeholder="Enter your email address"
         />
-        <p className="text-xs text-gray-500">Your receipt will be sent to this email.</p>
+        <p className="text-xs text-slate-500">Your receipt will be sent to this email.</p>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="cf-phone">Phone Number *</Label>
+        <Label htmlFor="cf-phone" className="text-sm font-medium text-slate-800">Phone Number *</Label>
         <Input
           id="cf-phone"
           type="tel"
+          className="min-h-12 rounded-lg border-slate-200 text-base shadow-sm focus-visible:ring-kolekto/30"
           value={contact.phone}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setContact(p => ({ ...p, phone: e.target.value }))}
           placeholder="e.g. 08012345678"
@@ -1049,68 +1141,68 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
 
   const renderSummary = () => (
     <div className="space-y-4">
-      <div className="rounded-xl bg-blue-50 border border-blue-100 p-5 space-y-3">
-        <h3 className="font-semibold text-blue-900 flex items-center gap-2">
+      <div className="rounded-xl bg-kolekto/5 border border-kolekto/15 p-5 space-y-3">
+        <h3 className="font-semibold text-slate-950 flex items-center gap-2">
           <CreditCard className="h-4 w-4" /> Payment Summary
         </h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Collection</span>
-            <span className="font-medium">{collection.title}</span>
+          <div className="flex justify-between gap-4">
+            <span className="shrink-0 text-slate-600">Collection</span>
+            <span className="min-w-0 text-right font-medium text-slate-900 break-words">{collection.title}</span>
           </div>
           {!isTicket && selectedTier && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tier</span>
-              <span className="font-medium">{selectedTier.tierName || selectedTier.name}</span>
+            <div className="flex justify-between gap-4">
+              <span className="shrink-0 text-slate-600">Tier</span>
+              <span className="min-w-0 text-right font-medium text-slate-900 break-words">{selectedTier.tierName || selectedTier.name}</span>
             </div>
           )}
           {isTicket && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tickets</span>
-              <span className="font-medium">{totalTicketQuantity}</span>
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-600">Tickets</span>
+              <span className="font-medium text-slate-900">{totalTicketQuantity}</span>
             </div>
           )}
           {isTicket && isTiered && selectedTicketSelections.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-blue-100 bg-white/70 p-3">
+            <div className="space-y-2 rounded-lg border border-kolekto/10 bg-white/80 p-3">
               {selectedTicketSelections.map(selection => (
-                <div key={`${selection.tierId || selection.tierName}`} className="flex items-center justify-between">
-                  <span className="text-gray-600">{selection.quantity} x {selection.tierName}</span>
-                  <span className="font-medium">{formatCurrency(selection.subtotal)}</span>
+                <div key={`${selection.tierId || selection.tierName}`} className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 text-slate-600 break-words">{selection.quantity} x {selection.tierName}</span>
+                  <span className="shrink-0 font-medium text-slate-900">{formatCurrency(selection.subtotal)}</span>
                 </div>
               ))}
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-gray-600">{isFundraising ? 'Contribution amount' : isTicket ? 'Ticket subtotal' : 'Contribution amount'}</span>
-            <span className="font-medium">{formatCurrency(amount)}</span>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-600">{isFundraising ? 'Contribution amount' : isTicket ? 'Ticket subtotal' : 'Contribution amount'}</span>
+            <span className="font-medium text-slate-900">{formatCurrency(amount)}</span>
           </div>
           {feeBearer === 'contributor' && (
             <>
-              <div className="flex justify-between text-gray-500">
+              <div className="flex justify-between gap-4 text-slate-500">
                 <span>Gateway fee (1.5%)</span>
                 <span>{formatCurrency(gatewayFee)}</span>
               </div>
-              <div className="flex justify-between text-gray-500">
+              <div className="flex justify-between gap-4 text-slate-500">
                 <span>Platform fee ({isFundraising ? '1%' : '0.5%'}, max ₦2,000)</span>
                 <span>{formatCurrency(platformFee)}</span>
               </div>
             </>
           )}
           <Separator />
-          <div className="flex justify-between font-bold text-blue-900 text-base">
+          <div className="flex justify-between gap-4 font-bold text-slate-950 text-base">
             <span>Total paid</span>
             <span>{formatCurrency(total)}</span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border p-4 space-y-2 text-sm">
-        <p className="font-medium text-gray-700 flex items-center gap-2"><User className="h-4 w-4" /> Paying as</p>
-        <p className="text-gray-600">{isAnonymous && isFundraising ? 'Anonymous' : contact.name}</p>
-        <p className="text-gray-500">{contact.email}</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 text-sm">
+        <p className="font-medium text-slate-800 flex items-center gap-2"><User className="h-4 w-4" /> Paying as</p>
+        <p className="text-slate-700 break-words">{isAnonymous && isFundraising ? 'Anonymous' : contact.name}</p>
+        <p className="text-slate-500 break-words">{contact.email}</p>
       </div>
 
-      <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500 text-center">
+      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500 text-center">
         Secure payment powered by Paystack. You'll be redirected to complete payment.
       </div>
     </div>
@@ -1124,44 +1216,36 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
   const stepIndex = steps.findIndex(s => s.key === step);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
-      {/* Organizer contact bar */}
-      {supportPhone && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm">
-          <div className="flex items-center gap-2 text-gray-600">
-            <Phone className="h-4 w-4 text-kolekto flex-shrink-0" />
-            <span>Need help? Contact the organizer:</span>
-            <a href={`tel:${supportPhone}`} className="font-semibold text-kolekto hover:underline whitespace-nowrap">{supportPhone}</a>
-          </div>
-          <a
-            href={`https://wa.me/${supportPhone.replace(/^\+?0?/, '234')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-green-600 font-medium hover:underline flex-shrink-0 self-start sm:self-auto"
-          >
-            WhatsApp
-          </a>
-        </div>
-      )}
+    <div className="mx-auto w-full max-w-3xl space-y-4">
+      <OrganizerContactCard collection={collection} supportPhone={supportPhone} />
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden rounded-xl border-slate-200 bg-white shadow-sm">
         {/* ── Poster-sized image slideshow ─────────────────────────────────── */}
         {showSlideshow && <ImageSlideshow images={allImages} title={collection.title} />}
 
-        <CardHeader>
-          <CardTitle className="text-lg">{collection.title}</CardTitle>
+        <CardHeader className="space-y-3 px-5 pb-4 pt-5 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-kolekto/20 bg-kolekto/5 text-kolekto">
+              {getCollectionTypeLabel(colType, isTicket, isFundraising)}
+            </Badge>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+              <ShieldCheck className="h-3.5 w-3.5 text-kolekto" />
+              Secure checkout
+            </span>
+          </div>
+          <CardTitle className="text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{collection.title}</CardTitle>
           {(collection.campaign_summary || collection.description) && (
-            <CardDescription className="mt-1">{collection.campaign_summary || collection.description}</CardDescription>
+            <CardDescription className="mt-1 text-sm leading-6 text-slate-600">{collection.campaign_summary || collection.description}</CardDescription>
           )}
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 px-5 sm:px-6">
           {/* Step indicators */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             {steps.map((s, idx) => (
               <React.Fragment key={s.key}>
-                <div className="flex flex-col items-center">
-                  <div className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-medium ${
+                <div className="flex min-w-0 flex-col items-center">
+                  <div className={`w-8 h-8 flex items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors duration-200 ${
                     idx === stepIndex
                       ? 'border-kolekto bg-kolekto text-white'
                       : idx < stepIndex
@@ -1170,12 +1254,12 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                   }`}>
                     {idx < stepIndex ? <Check className="w-4 h-4" /> : idx + 1}
                   </div>
-                  <span className={`mt-1 text-xs ${idx === stepIndex ? 'font-semibold text-kolekto' : 'text-gray-400'}`}>
+                  <span className={`mt-1 max-w-20 truncate text-xs ${idx === stepIndex ? 'font-semibold text-kolekto' : 'text-gray-400'}`}>
                     {s.label}
                   </span>
                 </div>
                 {idx < steps.length - 1 && (
-                  <div className={`flex-1 h-px mx-2 ${idx < stepIndex ? 'bg-green-400' : 'bg-gray-200'}`} />
+                  <div className={`mt-4 h-px flex-1 mx-2 ${idx < stepIndex ? 'bg-green-400' : 'bg-gray-200'}`} />
                 )}
               </React.Fragment>
             ))}
@@ -1187,22 +1271,22 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
           {step === 'summary' && renderSummary()}
         </CardContent>
 
-        <CardFooter className="border-t pt-4 flex flex-col gap-3">
+        <CardFooter className="border-t border-slate-100 bg-slate-50/70 px-5 py-4 flex flex-col gap-3 sm:px-6">
           {step !== 'summary' && (
             <div className="w-full flex justify-between items-center text-sm text-gray-500">
               <span>Total</span>
-              <span className="font-bold text-base text-gray-800">{formatCurrency(total)}</span>
+              <span className="font-bold text-base text-slate-900">{formatCurrency(total)}</span>
             </div>
           )}
 
           <div className="flex gap-2 w-full">
             {step !== 'details' && (
-              <Button type="button" variant="outline" onClick={goBack} className="flex-1">
+              <Button type="button" variant="outline" onClick={goBack} className="min-h-12 flex-1 rounded-lg border-slate-200 bg-white">
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
             )}
             {step !== 'summary' ? (
-              <Button type="button" onClick={goNext} className="flex-1 bg-kolekto hover:bg-kolekto/90">
+              <Button type="button" onClick={goNext} className="min-h-12 flex-1 rounded-lg bg-kolekto font-semibold hover:bg-kolekto/90">
                 Continue <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
@@ -1210,7 +1294,7 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
                 type="button"
                 onClick={spotsRemaining === 0 ? undefined : handlePay}
                 disabled={isSubmitting || spotsRemaining === 0}
-                className="flex-1 bg-kolekto hover:bg-kolekto/90 disabled:bg-gray-400"
+                className="min-h-12 flex-1 rounded-lg bg-kolekto font-semibold hover:bg-kolekto/90 disabled:bg-gray-400"
               >
                 {isSubmitting
                   ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>

@@ -6,7 +6,7 @@ import Footer from '@/components/Footer';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Lock, AlertTriangle, Clock, XCircle } from 'lucide-react';
+import { Lock, AlertTriangle, Clock, XCircle, ShieldCheck } from 'lucide-react';
 import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from 'react-icons/fa';
 import ContributeFlow from '@/components/contribute/ContributeFlow';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -172,23 +172,23 @@ const ContributePage: React.FC = () => {
   }, [collection?.id]);
 
   const ContributionNavBar = () => (
-    <nav className="border-b py-3 bg-white">
-      <div className="container mx-auto px-4 flex justify-between items-center">
+    <nav className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 py-3 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center">
           <Logo size="md" />
         </Link>
-        <div className="flex items-center space-x-3">
-          <a href="https://x.com/kolektng" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
-            <FaTwitter className="text-gray-600 hover:text-kolekto text-xl" />
+        <div className="flex items-center gap-1.5">
+          <a className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-kolekto/5 hover:text-kolekto" href="https://x.com/kolektng" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+            <FaTwitter className="text-lg" />
           </a>
-          <a href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-            <FaFacebook className="text-gray-600 hover:text-kolekto text-xl" />
+          <a className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-kolekto/5 hover:text-kolekto" href="https://www.facebook.com/share/1AVyxK7Prc/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+            <FaFacebook className="text-lg" />
           </a>
-          <a href="https://www.instagram.com/kolekto.ng" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-            <FaInstagram className="text-gray-600 hover:text-kolekto text-xl" />
+          <a className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-kolekto/5 hover:text-kolekto" href="https://www.instagram.com/kolekto.ng" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+            <FaInstagram className="text-lg" />
           </a>
-          <a href="https://wa.me/+2349019840377" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
-            <FaWhatsapp className="text-gray-600 hover:text-kolekto text-xl" />
+          <a className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-kolekto/5 hover:text-kolekto" href="https://wa.me/+2349019840377" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+            <FaWhatsapp className="text-lg" />
           </a>
         </div>
       </div>
@@ -197,16 +197,17 @@ const ContributePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50">
         <ContributionNavBar />
-        <main className="flex-grow bg-gray-50 p-4">
-          <div className="mx-auto grid w-full max-w-5xl gap-6 py-8 lg:grid-cols-[1fr_420px]">
+        <main className="flex-grow p-4 sm:p-6">
+          <div className="mx-auto grid w-full max-w-5xl gap-6 py-6 lg:grid-cols-[1fr_420px]">
             <div className="space-y-4">
-              <Skeleton className="h-8 w-3/5" />
-              <Skeleton className="h-5 w-4/5" />
-              <Skeleton className="h-56 rounded-2xl" />
+              <Skeleton className="h-10 w-3/5 rounded-lg" />
+              <Skeleton className="h-5 w-4/5 rounded-lg" />
+              <Skeleton className="h-36 rounded-xl" />
+              <Skeleton className="h-52 rounded-xl" />
             </div>
-            <Skeleton className="h-[460px] rounded-2xl" />
+            <Skeleton className="h-[480px] rounded-xl" />
           </div>
         </main>
         <Footer />
@@ -216,15 +217,19 @@ const ContributePage: React.FC = () => {
 
   if (error || !collection) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-h-screen flex flex-col bg-slate-50">
         <ContributionNavBar />
         <main className="flex-grow flex items-center justify-center p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="pt-6 text-center space-y-4">
-              <XCircle className="h-12 w-12 text-red-400 mx-auto" />
-              <h2 className="text-xl font-bold">Collection Not Found</h2>
-              <p className="text-gray-600">{error || 'The requested collection does not exist.'}</p>
-              <Button onClick={() => navigate('/')}>Return to Home</Button>
+          <Card className="w-full max-w-md rounded-xl border-slate-200 shadow-sm">
+            <CardContent className="px-5 py-7 text-center space-y-4">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-red-500">
+                <XCircle className="h-7 w-7" />
+              </span>
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Collection Not Found</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{error || 'The requested collection does not exist.'}</p>
+              </div>
+              <Button className="min-h-11 rounded-lg bg-kolekto hover:bg-kolekto/90" onClick={() => navigate('/')}>Return to Home</Button>
             </CardContent>
           </Card>
         </main>
@@ -245,12 +250,12 @@ const ContributePage: React.FC = () => {
     if (!supportPhone) return null;
     const wa = `https://wa.me/${supportPhone.replace(/^\+?0?/, '234')}`;
     return (
-      <div className="mt-4 pt-4 border-t border-current/20 space-y-2 text-sm">
-        <p className="font-semibold">Need help? Contact the organizer:</p>
-        <div className="flex items-center justify-center gap-3">
-          <a href={`tel:${supportPhone}`} className="underline font-medium">{supportPhone}</a>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+        <p className="font-semibold text-slate-900">Need help? Contact the organizer</p>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          <a href={`tel:${supportPhone}`} className="inline-flex min-h-10 items-center rounded-lg border border-slate-200 px-3 font-medium text-kolekto">{supportPhone}</a>
           <span className="opacity-40">·</span>
-          <a href={wa} target="_blank" rel="noopener noreferrer" className="text-green-600 font-medium underline">WhatsApp</a>
+          <a href={wa} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-green-200 bg-green-50 px-3 font-medium text-green-700">WhatsApp</a>
         </div>
       </div>
     );
@@ -259,30 +264,30 @@ const ContributePage: React.FC = () => {
   const renderStatusGate = () => {
     if (isExpired) {
       return (
-        <Card className="w-full max-w-md border-red-200 bg-red-50">
-          <CardContent className="pt-6 text-center space-y-3">
+        <Card className="w-full max-w-md rounded-xl border-red-200 bg-red-50 shadow-sm">
+          <CardContent className="px-5 py-7 text-center space-y-3">
             <Clock className="h-12 w-12 text-red-400 mx-auto" />
             <h2 className="text-xl font-bold text-red-700">Collection Expired</h2>
             <p className="text-red-600">
               The deadline for <strong>{collection.title}</strong> has passed.
             </p>
             <ContactHostBlock />
-            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button className="min-h-11 rounded-lg" variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
     }
     if (status === 'paused') {
       return (
-        <Card className="w-full max-w-md border-yellow-200 bg-yellow-50">
-          <CardContent className="pt-6 text-center space-y-3">
+        <Card className="w-full max-w-md rounded-xl border-yellow-200 bg-yellow-50 shadow-sm">
+          <CardContent className="px-5 py-7 text-center space-y-3">
             <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto" />
             <h2 className="text-xl font-bold text-yellow-800">Collection Paused</h2>
             <p className="text-yellow-700">
               <strong>{collection.title}</strong> is temporarily paused by the organizer. Please check back later.
             </p>
             <ContactHostBlock />
-            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button className="min-h-11 rounded-lg" variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
@@ -291,29 +296,29 @@ const ContributePage: React.FC = () => {
     // Do NOT show contact prompt for either — contributor should simply wait.
     if (status === 'pending_review' || status === 'pending_verification') {
       return (
-        <Card className="w-full max-w-md border-amber-200 bg-amber-50">
-          <CardContent className="pt-6 text-center space-y-3">
+        <Card className="w-full max-w-md rounded-xl border-amber-200 bg-amber-50 shadow-sm">
+          <CardContent className="px-5 py-7 text-center space-y-3">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto" />
             <h2 className="text-xl font-bold text-amber-800">Under Review</h2>
             <p className="text-amber-700">
               This collection is pending review and will be available soon.
             </p>
-            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button className="min-h-11 rounded-lg" variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
     }
     if (status === 'closed' || status === 'completed') {
       return (
-        <Card className="w-full max-w-md border-gray-200 bg-gray-50">
-          <CardContent className="pt-6 text-center space-y-3">
+        <Card className="w-full max-w-md rounded-xl border-gray-200 bg-gray-50 shadow-sm">
+          <CardContent className="px-5 py-7 text-center space-y-3">
             <Lock className="h-12 w-12 text-gray-400 mx-auto" />
             <h2 className="text-xl font-bold text-gray-700">Collection Closed</h2>
             <p className="text-gray-600">
               <strong>{collection.title}</strong> is no longer accepting contributions.
             </p>
             <ContactHostBlock />
-            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button className="min-h-11 rounded-lg" variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
@@ -321,15 +326,15 @@ const ContributePage: React.FC = () => {
     const maxContributions = collection.max_contributions ?? collection.max_participants ?? 0;
     if (maxContributions > 0 && (collection.participants_count ?? 0) >= maxContributions) {
       return (
-        <Card className="w-full max-w-md border-red-200 bg-red-50">
-          <CardContent className="pt-6 text-center space-y-3">
+        <Card className="w-full max-w-md rounded-xl border-red-200 bg-red-50 shadow-sm">
+          <CardContent className="px-5 py-7 text-center space-y-3">
             <Lock className="h-12 w-12 text-red-400 mx-auto" />
             <h2 className="text-xl font-bold text-red-700">Collection Full</h2>
             <p className="text-red-600">
               <strong>{collection.title}</strong> has reached its maximum number of contributors.
             </p>
             <ContactHostBlock />
-            <Button variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
+            <Button className="min-h-11 rounded-lg" variant="outline" onClick={() => navigate('/')}>Back to Home</Button>
           </CardContent>
         </Card>
       );
@@ -340,21 +345,24 @@ const ContributePage: React.FC = () => {
   const gate = renderStatusGate();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50">
       <ContributionNavBar />
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto">
+      <main className="flex-grow px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto w-full max-w-4xl">
           {gate ? (
             <div className="flex justify-center">{gate}</div>
           ) : (
             <ContributeFlow collection={collection} />
           )}
-          <div className="mt-12 text-center">
-            <h2 className="text-2xl font-bold mb-4">Ready to Start Collecting?</h2>
-            <p className="text-gray-600 mb-6">
+          <div className="mx-auto mt-10 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 text-center shadow-sm sm:p-6">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-kolekto/10 text-kolekto">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-slate-950">Ready to Start Collecting?</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
               Join thousands of organizers across Africa who use Kolekto to simplify group payments.
             </p>
-            <Button asChild>
+            <Button asChild className="mt-5 min-h-11 rounded-lg bg-kolekto px-5 hover:bg-kolekto/90">
               <Link to="/register">Create Your Account</Link>
             </Button>
           </div>
