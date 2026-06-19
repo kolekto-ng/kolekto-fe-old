@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProfileStore } from '@/store/useProfileStore';
 import PersonalInfoSection from '@/components/profile/PersonalInfoSection';
@@ -11,6 +12,8 @@ import {
   Lock,
   Shield,
   Building2,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 
 const sections = [
@@ -35,8 +38,10 @@ const sections = [
 ];
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuthStore() as any;
+  const navigate = useNavigate();
+  const { user, signOut } = useAuthStore() as any;
   const { activeSection, setActiveSection, fetchKYCStatus } = useProfileStore();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -59,6 +64,19 @@ const ProfilePage: React.FC = () => {
 
   const currentSection = sections.find((section) => section.id === activeSection);
   const isPersonalView = !currentSection;
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      setActiveSection('personal');
+      navigate('/login', { replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto pb-24">
@@ -89,6 +107,32 @@ const ProfilePage: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+
+          <div className="md:hidden rounded-2xl border border-red-100 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="flex min-h-12 w-full items-center gap-3 rounded-xl p-3 text-left text-red-600 transition-all hover:bg-red-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Log out of Kolekto"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                {isSigningOut ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="h-4 w-4" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                  {isSigningOut ? 'Logging out...' : 'Log out'}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-red-500/80">
+                  Sign out of this device
+                </span>
+              </span>
+            </button>
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
