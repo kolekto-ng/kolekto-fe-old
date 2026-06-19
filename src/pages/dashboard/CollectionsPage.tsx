@@ -16,12 +16,14 @@ const CollectionsPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      fetchCollections(user.id).catch((err) => {
+      fetchCollections(user.id, {
+        silent: Array.isArray(collections) && collections.length > 0,
+      }).catch((err) => {
         console.error('Error loading collections:', err);
         toast.error('Failed to load collections. Please try again.');
       });
     }
-  }, [user, fetchCollections]);
+  }, [user?.id, collections?.length, fetchCollections]);
 
   const handleShare = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,7 +60,7 @@ const CollectionsPage: React.FC = () => {
       </div> */}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
+        {isLoading && sortedCollections.length === 0 ? (
           <CollectionGridSkeleton />
         ) : sortedCollections && sortedCollections.length > 0 ? (
 

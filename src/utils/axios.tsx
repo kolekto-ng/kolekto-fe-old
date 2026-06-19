@@ -128,7 +128,8 @@ async function performSignOutAndRedirect() {
           || path.startsWith("/contribute/")
           || path.startsWith("/payment/");
         if (!onPublicPage) {
-          window.location.href = "/login";
+          window.history.replaceState(null, "", "/login");
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }
         signingOutPromise = null;
       }

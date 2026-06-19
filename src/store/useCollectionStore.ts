@@ -57,23 +57,53 @@ export const useCollectionStore = create((set, get: any) => ({
   collections: [] as Collection[],
   currentCollection: null as Collection | null,
   isLoading: false,
+  isRefreshing: false,
   error: null as string | null,
+  lastFetchedAt: 0,
+  lastFetchKey: "",
+  inFlight: null as Promise<Collection[]> | null,
 
   // ── Fetch all collections for the current user ──────────────────────────────
-  fetchCollections: async (userId?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      // Resolve user_id
-      let uid = userId;
-      if (!uid) {
-        try {
-          const raw = localStorage.getItem("kolekto-auth-token");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            uid = parsed?.user?.id || parsed?.id || undefined;
-          }
-        } catch {}
-      }
+  fetchCollections: async (
+    userId?: string,
+    opts: { force?: boolean; silent?: boolean } = {},
+  ) => {
+    // Resolve user_id
+    let uid = userId;
+    if (!uid) {
+      try {
+        const raw = localStorage.getItem("kolekto-auth-token");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          uid = parsed?.user?.id || parsed?.id || undefined;
+        }
+      } catch {}
+    }
+
+    const key = uid || "all";
+    const state = get();
+    const hasCachedData =
+      state.lastFetchKey === key &&
+      Array.isArray(state.collections) &&
+      state.collections.length > 0;
+    const isFresh =
+      hasCachedData && Date.now() - Number(state.lastFetchedAt || 0) < 30_000;
+
+    if (!opts.force && state.inFlight && state.lastFetchKey === key) {
+      return state.inFlight;
+    }
+    if (!opts.force && isFresh) {
+      return state.collections;
+    }
+
+    const request = (async () => {
+      set({
+        isLoading: !hasCachedData && !opts.silent,
+        isRefreshing: hasCachedData || !!opts.silent,
+        error: null,
+        lastFetchKey: key,
+      });
+      try {
 
       let query = supabase
         .from("collections")
@@ -86,25 +116,35 @@ export const useCollectionStore = create((set, get: any) => ({
       if (error) throw new Error(error.message);
 
       const formatted = (data ?? []).map(formatCollection);
-      set({ collections: formatted, isLoading: false });
+      set({
+        collections: formatted,
+        isLoading: false,
+        isRefreshing: false,
+        lastFetchedAt: Date.now(),
+      });
       return formatted;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: err.message, isLoading: false, isRefreshing: false });
       throw err;
+    } finally {
+      set({ inFlight: null });
     }
+    })();
+
+    set({ inFlight: request });
+    return request;
   },
 
   // ── Fetch single collection by ID ───────────────────────────────────────────
   fetchCollectionById: async (id: string) => {
+    const cached = (get().collections as Collection[]).find((c) => c.id === id);
+    if (cached) {
+      set({ currentCollection: cached, isLoading: false, error: null });
+      return cached;
+    }
+
     set({ isLoading: true, error: null });
     try {
-      // Try memory first
-      const cached = (get().collections as Collection[]).find((c) => c.id === id);
-      if (cached) {
-        set({ currentCollection: cached, isLoading: false });
-        return cached;
-      }
-
       const { data, error } = await supabase
         .from("collections")
         .select("*, contributions(*), wallets(*)")
@@ -114,7 +154,14 @@ export const useCollectionStore = create((set, get: any) => ({
       if (error) throw new Error(error.message);
 
       const formatted = formatCollection(data);
-      set({ currentCollection: formatted, isLoading: false });
+      set((state: any) => ({
+        currentCollection: formatted,
+        collections: [
+          formatted,
+          ...(state.collections || []).filter((c: Collection) => c.id !== id),
+        ],
+        isLoading: false,
+      }));
       return formatted;
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
@@ -152,6 +199,8 @@ export const useCollectionStore = create((set, get: any) => ({
       set((state: any) => ({
         collections: [newCollection, ...state.collections],
         isLoading: false,
+        isRefreshing: false,
+        lastFetchedAt: Date.now(),
       }));
 
       return newCollection;
@@ -196,6 +245,8 @@ export const useCollectionStore = create((set, get: any) => ({
             ? { ...state.currentCollection, ...updated }
             : state.currentCollection,
         isLoading: false,
+        isRefreshing: false,
+        lastFetchedAt: Date.now(),
       }));
 
       return updated;
@@ -238,6 +289,8 @@ export const useCollectionStore = create((set, get: any) => ({
             ? { ...state.currentCollection, status: newStatus }
             : state.currentCollection,
         isLoading: false,
+        isRefreshing: false,
+        lastFetchedAt: Date.now(),
       }));
 
       return data.data;

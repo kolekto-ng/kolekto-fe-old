@@ -139,7 +139,7 @@ const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { updateCollectionStatus } = useCollectionStore();
+  const { updateCollectionStatus, collections } = useCollectionStore() as any;
 
   const [col, setCol] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
@@ -259,6 +259,17 @@ const CollectionDetailsPage: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
+    const cachedCollection = Array.isArray(collections)
+      ? collections.find((collection: any) => collection.id === id)
+      : null;
+
+    if (cachedCollection) {
+      setCol(cachedCollection);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     loadCollection();
     loadContributions();
     loadBalanceStats();

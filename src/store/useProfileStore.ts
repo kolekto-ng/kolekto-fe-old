@@ -17,6 +17,9 @@ interface ProfileState {
   kycData: any;
   kycLoading: boolean;
   profileLoading: boolean;
+  profileRefreshing: boolean;
+  profileLastFetchedAt: number;
+  profileInFlight: Promise<void> | null;
   passwordStep: "idle" | "requesting" | "otp-sent" | "verifying" | "success" | "error";
   passwordError: string | null;
   otpEmail: string | null;
@@ -35,6 +38,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   kycData: null,
   kycLoading: false,
   profileLoading: false,
+  profileRefreshing: false,
+  profileLastFetchedAt: 0,
+  profileInFlight: null,
   passwordStep: "idle",
   passwordError: null,
   otpEmail: null,
@@ -43,14 +49,37 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   setActiveSection: (section: string) => set({ activeSection: section }),
 
   fetchProfile: async () => {
-    set({ profileLoading: true });
-    try {
-      const { data } = await axiosInstance.get("/settings/profile");
-      set({ profile: data.data, profileLoading: false });
-    } catch (error) {
-      console.error("Failed to fetch profile:", error);
-      set({ profileLoading: false });
-    }
+    const { profile, profileLastFetchedAt, profileInFlight } = get();
+    const hasCachedProfile = !!profile;
+    const isFresh =
+      hasCachedProfile && Date.now() - Number(profileLastFetchedAt || 0) < 60_000;
+
+    if (profileInFlight) return profileInFlight;
+    if (isFresh) return;
+
+    const request = (async () => {
+      set({
+        profileLoading: !hasCachedProfile,
+        profileRefreshing: hasCachedProfile,
+      });
+      try {
+        const { data } = await axiosInstance.get("/settings/profile");
+        set({
+          profile: data.data,
+          profileLoading: false,
+          profileRefreshing: false,
+          profileLastFetchedAt: Date.now(),
+        });
+      } catch (error) {
+        console.error("Failed to fetch profile:", error);
+        set({ profileLoading: false, profileRefreshing: false });
+      } finally {
+        set({ profileInFlight: null });
+      }
+    })();
+
+    set({ profileInFlight: request });
+    return request;
   },
 
   updateProfile: async (profileData: any) => {
@@ -74,7 +103,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to update profile");
 
-      set({ profile: result.data, profileLoading: false });
+      set({
+        profile: result.data,
+        profileLoading: false,
+        profileRefreshing: false,
+        profileLastFetchedAt: Date.now(),
+      });
       toast.success("Profile updated successfully");
       return true;
     } catch (error: any) {
@@ -210,7 +244,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
         // Give the success state a beat so the user sees the confirmation.
         setTimeout(() => {
-          window.location.href = "/login";
+          window.history.replaceState(null, "", "/login");
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }, 1200);
       }
 
