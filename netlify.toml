@@ -2,15 +2,20 @@
   command = "npm run build"
   publish = "dist"
 
-# PWA routes - must come BEFORE the catch-all
+# Legacy PWA routes now load the main SPA and redirect client-side.
 [[redirects]]
   from = "/pwa"
-  to = "/pwa.html"
+  to = "/index.html"
   status = 200
 
 [[redirects]]
   from = "/pwa/*"
-  to = "/pwa.html"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/pwa.html"
+  to = "/index.html"
   status = 200
 
 # Catch-all for main SPA (must be LAST)

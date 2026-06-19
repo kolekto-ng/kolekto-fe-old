@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
-import { resolve } from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -15,7 +14,7 @@ export default defineConfig({
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
         description: "Simplify group payments and collections with Kolekto",
-        start_url: "/pwa/dashboard",
+        start_url: "/dashboard",
         scope: "/",
         display: "standalone",
         orientation: "portrait",
@@ -44,6 +43,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cacheId: "kolekto-pwa-v2",
+        importScripts: ["sw-cleanup.js"],
+
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
 
@@ -67,7 +69,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "google-fonts-cache",
+              cacheName: "kolekto-google-fonts-v2",
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -79,7 +81,7 @@ export default defineConfig({
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "images-cache",
+              cacheName: "kolekto-images-v2",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -135,12 +137,6 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB
-    rollupOptions: {
-      input: {
-        landing: resolve(__dirname, "index.html"),
-        pwa: resolve(__dirname, "pwa.html"),
-      },
-    },
   },
   define: {
     global: "globalThis",

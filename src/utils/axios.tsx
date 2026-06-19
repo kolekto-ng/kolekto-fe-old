@@ -128,7 +128,7 @@ async function performSignOutAndRedirect() {
           || path.startsWith("/contribute/")
           || path.startsWith("/payment/");
         if (!onPublicPage) {
-          window.location.href = path.startsWith("/pwa") ? "/pwa/login" : "/login";
+          window.location.href = "/login";
         }
         signingOutPromise = null;
       }

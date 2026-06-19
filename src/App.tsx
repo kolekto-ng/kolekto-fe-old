@@ -50,6 +50,61 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+function getLegacyPwaTarget(pathname: string): string {
+  const legacyPath = pathname.replace(/^\/pwa\/?/, "/");
+  const normalizedPath = legacyPath === "" ? "/" : legacyPath;
+
+  if (normalizedPath === "/" || normalizedPath === "/dashboard") {
+    return "/dashboard";
+  }
+
+  if (
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(
+      normalizedPath
+    )
+  ) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.startsWith("/dashboard")) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath === "/activities") {
+    return "/dashboard/activities";
+  }
+
+  if (normalizedPath === "/create-collection") {
+    return "/dashboard/create-collection";
+  }
+
+  if (normalizedPath === "/collections" || normalizedPath.startsWith("/collections/")) {
+    return `/dashboard${normalizedPath}`;
+  }
+
+  if (normalizedPath === "/wallet") {
+    return "/dashboard/transactions";
+  }
+
+  if (normalizedPath === "/profile") {
+    return "/dashboard/settings";
+  }
+
+  return "/dashboard";
+}
+
+const LegacyPwaRedirect = () => {
+  const location = useLocation();
+  const targetPath = getLegacyPwaTarget(location.pathname);
+
+  return (
+    <Navigate
+      to={`${targetPath}${location.search}${location.hash}`}
+      replace
+    />
+  );
+};
+
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
   return (
@@ -76,6 +131,7 @@ const AuthenticatedApp = () => {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/help" element={<HelpCenterPage />} />
       <Route path="/payment/verify" element={<PaymentCallback />} />
+      <Route path="/pwa/*" element={<LegacyPwaRedirect />} />
 
       {/* Protected Dashboard Routes */}
       <Route

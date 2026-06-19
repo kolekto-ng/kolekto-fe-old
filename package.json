@@ -8,7 +8,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "preview:pwa": "vite preview --strictPort --port 4173 --open /pwa.html"
+    "preview:pwa": "vite preview --strictPort --port 4173 --open /dashboard"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

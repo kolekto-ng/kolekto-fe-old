@@ -10,12 +10,42 @@ import { useAuthStore } from "@/store";
 import { useRecaptcher } from "@/hooks/useRecaptcher";
 import ReCAPTCHA from "react-google-recaptcha";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
-import { Eye, EyeOff } from "lucide-react"; // Add this import for icons
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  Phone,
+  User,
+  UserPlus,
+  type LucideIcon,
+} from "lucide-react";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface RegisterFormProps {
   redirectTo?: string;
 }
+
+const AuthSectionHeader = ({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) => (
+  <div className="flex items-center gap-4">
+    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+      <Icon className="h-6 w-6" />
+    </span>
+    <div>
+      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      <p className="text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  </div>
+);
 
 const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }) => {
   const [firstName, setFirstName] = useState("");
@@ -276,15 +306,18 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
 
   if (isSignupComplete) {
     return (
-      <div className="text-center space-y-4">
-        <div className="bg-green-50 text-green-700 p-4 rounded-md">
+      <div className="space-y-5 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+          <Mail className="h-6 w-6" />
+        </div>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-800">
           <h3 className="font-medium">Registration successful!</h3>
-          <p className="text-sm mt-1">
+          <p className="mt-1 text-sm leading-6">
             Your account has been created. Check your email, verify your account, and we will resume your saved collection publishing flow when you return.
           </p>
         </div>
-        <div className="mt-4">
-          <Link to={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`} className="text-kolekto hover:underline">
+        <div className="pt-1">
+          <Link to={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`} className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium text-kolekto hover:bg-emerald-50">
             Continue to sign in
           </Link>
         </div>
@@ -293,179 +326,237 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
-      {/* Add required fields note */}
-      <p className="text-xs text-neutral-500 mb-2">
-        Fields marked * are required.
+    <form onSubmit={handleSubmit} className="space-y-7">
+      <p className="text-xs font-medium text-slate-500">
+        Fields marked <span className="text-red-500">*</span> are required.
       </p>
 
       {error && (
         <Alert
           variant="destructive"
-          className="bg-red-50 text-red-800 border-red-200"
+          className="rounded-2xl border-red-200 bg-red-50 text-red-800"
         >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      <div className="space-y-2">
-        <Label htmlFor="firstName">
-          First Name *
-        </Label>
-        <Input
-          id="firstName"
-          type="text"
-          placeholder="Enter your first name"
-          required
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          className="w-full"
+      <section className="space-y-5">
+        <AuthSectionHeader
+          icon={User}
+          title="Personal Information"
+          description="Tell us about yourself"
         />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="lastName">
-          Last Name *
-        </Label>
-        <Input
-          id="lastName"
-          type="text"
-          placeholder="Enter your last name"
-          required
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          className="w-full"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="email">
-          Email *
-        </Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="name@example.com"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="phoneNumber">
-          Phone Number (WhatsApp preferred) *
-        </Label>
-        <Input
-          id="phoneNumber"
-          type="tel"
-          placeholder="+2348012345678"
-          required
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          className="w-full"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="password">
-          Password *
-        </Label>
-        <div className="relative">
-          <Input
-            id="password"
-            placeholder="Create a password"
-            type={showPassword ? "text" : "password"}
-            required
-            autoComplete="new-password"
-            aria-required="true"
-            aria-invalid={!!error && error.toLowerCase().includes("password")}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setPasswordStrength(getPasswordStrength(e.target.value));
-            }}
-            className="w-full pr-10"
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            className="absolute right-2 top-2 text-neutral-500 hover:text-neutral-700"
-            onClick={() => setShowPassword((prev) => !prev)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="firstName" className="font-medium text-slate-900">
+              First Name <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <User className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="firstName"
+                type="text"
+                placeholder="Enter your first name"
+                required
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastName" className="font-medium text-slate-900">
+              Last Name <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <User className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="lastName"
+                type="text"
+                placeholder="Enter your last name"
+                required
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+            </div>
+          </div>
         </div>
-        {password && (
-          <p className={`text-sm mt-1 ${passwordStrength === "Weak" ? "text-red-600" :
-            passwordStrength === "Medium" ? "text-yellow-600" :
-              "text-green-600"
-            }`}>
-            Password Strength: {passwordStrength}
-          </p>
-        )}
-      </div>
+      </section>
 
-      <div className="space-y-2">
-        <Label htmlFor="confirmPassword">
-          Confirm Password *
-        </Label>
-        <div className="relative">
-          <Input
-            id="confirmPassword"
-            placeholder="Re-enter your password"
-            type={showConfirmPassword ? "text" : "password"}
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full pr-10"
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            className="absolute right-2 top-2 text-neutral-500 hover:text-neutral-700"
-            onClick={() => setShowConfirmPassword((prev) => !prev)}
-            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-          >
-            {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </button>
+      <div className="border-t border-dashed border-slate-200" />
+
+      <section className="space-y-5">
+        <AuthSectionHeader
+          icon={Mail}
+          title="Account Information"
+          description="We'll use this to secure your account"
+        />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="font-medium text-slate-900">
+              Email Address <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phoneNumber" className="font-medium text-slate-900">
+              Phone Number (WhatsApp preferred) <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Phone className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="+2348012345678"
+                required
+                autoComplete="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center space-x-2">
+      <div className="border-t border-dashed border-slate-200" />
+
+      <section className="space-y-5">
+        <AuthSectionHeader
+          icon={LockKeyhole}
+          title="Security"
+          description="Create a strong password to protect your account"
+        />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password" className="font-medium text-slate-900">
+              Password <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <LockKeyhole className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="password"
+                placeholder="Create a password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="new-password"
+                aria-required="true"
+                aria-invalid={!!error && error.toLowerCase().includes("password")}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordStrength(getPasswordStrength(e.target.value));
+                }}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 pr-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            {password && (
+              <p className={`text-sm font-medium ${passwordStrength === "Weak" ? "text-red-600" :
+                passwordStrength === "Medium" ? "text-yellow-600" :
+                  "text-green-600"
+                }`}>
+                Password Strength: {passwordStrength}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword" className="font-medium text-slate-900">
+              Confirm Password <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <LockKeyhole className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="confirmPassword"
+                placeholder="Confirm your password"
+                type={showConfirmPassword ? "text" : "password"}
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 pr-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex items-start gap-3">
         <input
           type="checkbox"
           id="terms"
           checked={agreed}
           onChange={(e) => setAgreed(e.target.checked)}
-          className="accent-kolekto"
+          className="mt-1 h-5 w-5 rounded border-slate-300 accent-kolekto"
           required
         />
-        <label htmlFor="terms" className="text-sm text-neutral-700">
+        <label htmlFor="terms" className="text-sm leading-6 text-slate-700">
           I agree to the{" "}
-          <a href="/terms" target="_blank" className="text-kolekto underline">
+          <a href="/terms" target="_blank" className="font-medium text-kolekto underline">
             Terms of Service
           </a>{" "}
           and{" "}
-          <a href="/privacy" target="_blank" className="text-kolekto underline">
+          <a href="/privacy" target="_blank" className="font-medium text-kolekto underline">
             Privacy Policy
           </a>
-          *
         </label>
       </div>
 
       <Button
         type="submit"
-        className="w-full bg-kolekto hover:bg-kolekto/90"
+        className="h-14 w-full rounded-2xl bg-gradient-to-r from-kolekto to-emerald-500 text-base font-semibold shadow-lg shadow-emerald-900/15 hover:from-kolekto hover:to-emerald-600"
         disabled={isLoading}
       >
-        {isLoading ? "Creating Account..." : "Create Account"}
+        {isLoading ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Creating Account...
+          </>
+        ) : (
+          <>
+            <UserPlus className="h-5 w-5" />
+            Create Account
+          </>
+        )}
       </Button>
 
-      <div className="text-center text-sm">
+      <div className="pt-1 text-center text-base text-slate-700">
         Already have an account?{" "}
-        <Link to="/login" className="text-kolekto hover:underline">
+        <Link to="/login" className="font-medium text-kolekto hover:underline">
           Sign in
         </Link>
       </div>
@@ -479,10 +570,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       )}
 
       {isLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 shadow-lg flex items-center max-w-[calc(100vw-2rem)] mx-4">
-            <span className="loader mr-2"></span>
-            <span className="text-kolekto font-semibold">Creating Account...</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4">
+          <div className="flex max-w-[calc(100vw-2rem)] items-center rounded-2xl bg-white p-4 shadow-lg">
+            <Loader2 className="mr-3 h-5 w-5 animate-spin text-kolekto" />
+            <span className="font-medium text-kolekto">Creating Account...</span>
           </div>
         </div>
       )}

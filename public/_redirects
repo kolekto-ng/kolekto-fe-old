@@ -1,6 +1,7 @@
-# PWA routes - must come BEFORE the catch-all
-/pwa /pwa.html 200
-/pwa/* /pwa.html 200
+# Legacy PWA URLs now load the main SPA and redirect client-side.
+/pwa /index.html 200
+/pwa/* /index.html 200
+/pwa.html /index.html 200
 
 # Catch-all for main SPA (must be LAST)
 /* /index.html 200
