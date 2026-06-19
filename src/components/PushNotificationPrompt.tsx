@@ -81,63 +81,65 @@ const PushNotificationPrompt: React.FC = () => {
   const isUnsupported = state === "unsupported";
 
   return (
-    <section
-      aria-live="polite"
-      className={cn(
-        "mx-3 mt-3 rounded-xl border border-emerald-100 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]",
-        "sm:mx-6 sm:mt-5 sm:p-4 lg:mx-8",
-        "animate-in fade-in-0 slide-in-from-top-2 duration-200"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
-          {isUnsupported ? <Smartphone className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-        </div>
+    <div className="fixed left-0 right-0 top-16 z-50 pointer-events-none px-3 sm:px-6 lg:px-8">
+      <section
+        aria-live="polite"
+        className={cn(
+          "pointer-events-auto mx-auto max-w-3xl rounded-xl border border-emerald-100 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]",
+          "sm:p-4",
+          "animate-in fade-in-0 slide-in-from-top-2 duration-200"
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+            {isUnsupported ? <Smartphone className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+          </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-5 text-slate-950">
-                {isUnsupported ? "Install Kolekto for alerts" : "Get payment updates"}
-              </p>
-              <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
-                {isUnsupported
-                  ? support.reason
-                  : "Receive collection, withdrawal, KYC, and payment updates on this device."}
-              </p>
-            </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-5 text-slate-950">
+                  {isUnsupported ? "Install Kolekto for alerts" : "Get payment updates"}
+                </p>
+                <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
+                  {isUnsupported
+                    ? support.reason
+                    : "Receive collection, withdrawal, KYC, and payment updates on this device."}
+                </p>
+              </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={dismiss}
-                className="h-10 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
-              >
-                <BellOff className="mr-2 h-4 w-4" />
-                Not now
-              </Button>
-
-              {!isUnsupported && (
+              <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
-                  onClick={handleEnable}
-                  disabled={isEnabling}
-                  className="h-10 rounded-lg bg-kolekto px-4 text-sm font-semibold text-white shadow-sm hover:bg-kolekto/90"
+                  variant="ghost"
+                  onClick={dismiss}
+                  className="h-10 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100"
                 >
-                  {isEnabling ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                  )}
-                  Enable
+                  <BellOff className="mr-2 h-4 w-4" />
+                  Not now
                 </Button>
-              )}
+
+                {!isUnsupported && (
+                  <Button
+                    type="button"
+                    onClick={handleEnable}
+                    disabled={isEnabling}
+                    className="h-10 rounded-lg bg-kolekto px-4 text-sm font-semibold text-white shadow-sm hover:bg-kolekto/90"
+                  >
+                    {isEnabling ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Enable
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 };
 
