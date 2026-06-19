@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["kelekto_logo-removebg-preview.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
@@ -43,14 +43,17 @@ export default defineConfig({
         ],
       },
       workbox: {
-        cacheId: "kolekto-pwa-v2",
+        cacheId: "kolekto-pwa-v3",
         importScripts: ["sw-cleanup.js", "push-sw.js"],
+        clientsClaim: true,
+        skipWaiting: true,
 
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
 
-        // Cache all static assets including HTML
-        globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2}"],
+        // Cache static assets needed for offline support.
+        // Navigation requests use NetworkFirst below so fresh HTML wins online.
+        globPatterns: ["**/*.{js,css,ico,png,jpg,jpeg,svg,woff2}"],
 
         // Clean URLs - remove hash from precache
         cleanupOutdatedCaches: true,
@@ -64,12 +67,26 @@ export default defineConfig({
 
         // Runtime caching strategies
         runtimeCaching: [
+          // Always prefer the latest app shell when the network is available.
+          {
+            urlPattern: ({ request, url }) =>
+              request.mode === "navigate" && !url.pathname.startsWith("/api"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "kolekto-pages-v3",
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+            },
+          },
           // Fonts
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "kolekto-google-fonts-v2",
+              cacheName: "kolekto-google-fonts-v3",
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -81,7 +98,7 @@ export default defineConfig({
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "kolekto-images-v2",
+              cacheName: "kolekto-images-v3",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,

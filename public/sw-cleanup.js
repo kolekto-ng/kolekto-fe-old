@@ -1,13 +1,15 @@
 self.addEventListener("activate", (event) => {
   const currentPrefixes = [
-    "kolekto-pwa-v2",
-    "kolekto-google-fonts-v2",
-    "kolekto-images-v2",
+    "kolekto-pwa-v3",
+    "kolekto-google-fonts-v3",
+    "kolekto-images-v3",
+    "kolekto-pages-v3",
   ];
 
   const legacyCacheNames = [
     "google-fonts-cache",
     "images-cache",
+    "kolekto-pages-v2",
     "api-cache",
     "api-no-cache",
   ];

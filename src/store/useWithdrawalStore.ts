@@ -14,14 +14,19 @@ export const useWithdrawalStore = create((set, get) => ({
   lastFetchedAt: 0,
   lastFetchKey: "",
 
-  fetchWithdrawals: async (userId?: string, collectionId?: string) => {
+  fetchWithdrawals: async (
+    userId?: string,
+    collectionId?: string,
+    opts: { force?: boolean } = {},
+  ) => {
     const key = `${userId || "all"}:${collectionId || "all"}`;
     const { inFlight, lastFetchedAt, lastFetchKey, withdrawals } = get();
+    const { force = false } = opts;
     const isFresh =
       lastFetchKey === key && Date.now() - Number(lastFetchedAt || 0) < 30_000;
 
-    if (inFlight && lastFetchKey === key) return inFlight;
-    if (isFresh && Array.isArray(withdrawals)) return { withdrawals };
+    if (!force && inFlight && lastFetchKey === key) return inFlight;
+    if (!force && isFresh && Array.isArray(withdrawals)) return { withdrawals };
 
     const request = (async () => {
       set({ isLoading: true, error: null, lastFetchKey: key });

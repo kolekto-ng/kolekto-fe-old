@@ -32,6 +32,7 @@ import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
 import SessionTimeoutGuard from "./components/SessionTimeoutGuard";
 import { AppRouteSkeleton, DashboardShellSkeleton } from "@/components/ui/page-skeletons";
+import PwaUpdatePrompt from "@/components/PwaUpdatePrompt";
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -214,6 +215,7 @@ const App = () => {
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <PwaUpdatePrompt />
       <ScrollToTop />
       <SessionTimeoutGuard />
       <AuthenticatedApp />

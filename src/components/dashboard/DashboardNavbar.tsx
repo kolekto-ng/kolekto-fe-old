@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '../Logo';
 import { useActivities } from '@/store/useDashboard';
+import { supabase } from '@/integrations/supabase/client';
 import {
   countUnseenContributorActivities,
   getLastSeenContributorsAt,
@@ -35,8 +36,65 @@ const DashboardNavbar: React.FC = () => {
   );
 
   useEffect(() => {
-    getActivities();
-  }, []);
+    void getActivities();
+  }, [getActivities]);
+
+  useEffect(() => {
+    let refreshTimeout: number | null = null;
+
+    const scheduleRefresh = () => {
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout);
+      }
+
+      refreshTimeout = window.setTimeout(() => {
+        void getActivities({ force: true });
+      }, 350);
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void getActivities({ force: true });
+      }
+    }, 30_000);
+
+    const handleFocus = () => {
+      void getActivities({ force: true });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void getActivities({ force: true });
+      }
+    };
+
+    const channel = supabase
+      .channel('dashboard-activities-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'contributions' },
+        scheduleRefresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'withdrawals' },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout);
+      }
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
+  }, [getActivities]);
 
   useEffect(() => {
     setLastSeenContributorsAt(getLastSeenContributorsAt(notificationUserId));

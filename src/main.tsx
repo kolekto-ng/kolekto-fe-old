@@ -7,6 +7,7 @@ import './index.css';
 
 // Register Service Worker for PWA
 import { registerSW } from 'virtual:pwa-register';
+import { registerPwaUpdater, setPwaUpdateState } from '@/lib/pwaUpdates';
 
 // Create a custom window property for debugging drag and drop
 if (process.env.NODE_ENV === 'development') {
@@ -15,15 +16,68 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
-// Register service worker
-const updateSW = registerSW({
-  onNeedRefresh() {
-    if (confirm('New content available. Reload to update?')) {
-      updateSW(true);
+function setupPwaUpdateChecks(registration?: ServiceWorkerRegistration) {
+  if (!registration || typeof window === 'undefined') return;
+
+  const runUpdateCheck = async () => {
+    if (!navigator.onLine) return;
+
+    try {
+      await registration.update();
+      setPwaUpdateState({ lastCheckedAt: Date.now() });
+    } catch (error) {
+      console.warn('[pwa] service worker update check failed:', error);
     }
+  };
+
+  const intervalId = window.setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      void runUpdateCheck();
+    }
+  }, 90_000);
+
+  const handleFocus = () => {
+    void runUpdateCheck();
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      void runUpdateCheck();
+    }
+  };
+
+  window.addEventListener('focus', handleFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  void runUpdateCheck();
+
+  return () => {
+    window.clearInterval(intervalId);
+    window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}
+
+const updateSW = registerSW({
+  immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    registerPwaUpdater(updateSW);
+    setPwaUpdateState({ lastCheckedAt: Date.now() });
+    setupPwaUpdateChecks(registration);
+  },
+  onNeedRefresh() {
+    setPwaUpdateState({
+      needRefresh: true,
+      offlineReady: false,
+      updateReadyAt: Date.now(),
+    });
   },
   onOfflineReady() {
     console.log('App ready to work offline');
+    setPwaUpdateState({ offlineReady: true });
+  },
+  onRegisterError(error) {
+    console.warn('[pwa] service worker registration failed:', error);
   },
 });
 

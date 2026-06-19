@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
+import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Wallet,
@@ -119,6 +120,72 @@ const TransactionHistoryPage: React.FC = () => {
       void fetchWithdrawals(user.id);
     }
   }, [activeTab, user?.id, fetchWithdrawals]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let refreshTimeout: number | null = null;
+
+    const refreshWalletView = () => {
+      void fetchCollections(user.id, { force: true, silent: true });
+      if (activeTab === 'withdrawals') {
+        void fetchWithdrawals(user.id, undefined, { force: true });
+      }
+    };
+
+    const scheduleRefresh = () => {
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout);
+      }
+
+      refreshTimeout = window.setTimeout(() => {
+        refreshWalletView();
+      }, 350);
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshWalletView();
+      }
+    }, 30_000);
+
+    const handleFocus = () => {
+      refreshWalletView();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshWalletView();
+      }
+    };
+
+    const channel = supabase
+      .channel(`wallet-live-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets' },
+        scheduleRefresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'withdrawals' },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (refreshTimeout) {
+        window.clearTimeout(refreshTimeout);
+      }
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
+  }, [activeTab, fetchCollections, fetchWithdrawals, user?.id]);
 
   const withdrawalsArray = useMemo(
     () =>
