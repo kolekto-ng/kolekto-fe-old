@@ -380,8 +380,8 @@ const PaymentSuccessful = ({
 
     navigator.clipboard
       .writeText(message)
-      .then(() => toast.success('Receipt details copied!'))
-      .catch(() => toast.error('Failed to copy receipt'));
+      .then(() => toast.success('Receipt copied'))
+      .catch(() => toast.error('Could not copy receipt'));
   };
 
   const getReceiptFilename = () => {

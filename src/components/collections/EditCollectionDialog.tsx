@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCollectionStore } from '@/store';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface ContributionField {
   id: string;
@@ -344,7 +345,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
           resolvedBanner = await uploadBanner(bannerFile);
         } catch {
           // Storage bucket may not be configured; keep current URL
-          toast('Banner upload failed — existing image kept.', { icon: '⚠️' });
+          toast.warning('Banner upload failed. Existing image kept.');
         }
       }
 
@@ -383,7 +384,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
             const url = await uploadStoryImage(file);
             uploadedUrls.push(url);
           } catch {
-            toast('Some story images failed to upload.', { icon: '⚠️' });
+            toast.warning('Some story images were not uploaded.');
           }
         }
         updateData.story_images = [...storyImageUrls, ...uploadedUrls];
@@ -398,7 +399,7 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
-      toast.error(`Failed to update: ${err.message}`);
+      toast.error(toFriendlyErrorMessage(err, 'Could not update collection. Please try again.'));
     } finally {
       setIsLoading(false);
     }

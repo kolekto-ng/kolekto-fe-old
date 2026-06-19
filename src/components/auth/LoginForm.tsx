@@ -45,11 +45,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
         const message =
           error.message === 'Email not confirmed'
             ? 'Please check your email and verify your account before signing in.'
-            : error.message;
+            : toFriendlyErrorMessage(error, 'Sign in failed. Please check your details and try again.');
         setError(message);
         toast.error(message);
       } else {
-        toast.success('Login successful!');
+        toast.success('Login successful');
         navigate(resolvedRedirect);
       }
     } catch (err: any) {
@@ -75,11 +75,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
     try {
       const { error } = await sendMagicLink(email);
       if (error) {
-        setError(error.message);
-        toast.error('Could not send magic link');
+        const message = toFriendlyErrorMessage(error, 'Could not send magic link. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
         setIsMagicLinkSent(true);
-        toast.success('Magic link sent! Check your email.');
+        toast.success('Magic link sent');
       }
     } catch (err: any) {
       setError(toFriendlyErrorMessage(err, 'Could not send magic link. Please try again.'));

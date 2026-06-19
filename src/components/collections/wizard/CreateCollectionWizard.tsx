@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import {
   CollectionType,
   STEP_FLOWS,
@@ -424,17 +425,14 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
       const newCollection = await publishCollection();
       toast.success(
         data.collection_type === 'fundraising'
-          ? 'Campaign submitted for review. We will notify you once it is reviewed.'
-          : 'Collection created successfully.'
+          ? 'Campaign submitted for review'
+          : 'Collection created successfully'
       );
       resetDraft();
       autoPublishTriggeredRef.current = false;
       navigate(`/dashboard/collections/${newCollection.id}`);
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'An error occurred while creating the collection.';
+      const message = toFriendlyErrorMessage(error, 'Could not create collection. Please try again.');
       if (isAutoTriggered) {
         autoPublishTriggeredRef.current = false;
       }

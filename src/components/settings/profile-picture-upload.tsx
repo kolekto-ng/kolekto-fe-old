@@ -3,6 +3,8 @@ import { Camera } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import { axiosInstance } from '@/utils/axios';
 import { useSettings } from '@/store/useSettings';
+import { toast } from 'sonner';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 // Avatar Components
 const Avatar = ({ className, children }) => (
@@ -107,7 +109,7 @@ export default function ProfilePictureUpload() {
       // await supabase.storage.from('avatars').remove([filePath]);
 
     } catch (error) {
-      alert('Upload failed: ' + error);
+      toast.error(toFriendlyErrorMessage(error, 'Could not upload profile picture. Please try again.'));
     } finally {
       setUploading(false);
     }

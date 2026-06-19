@@ -101,7 +101,7 @@ export const useTransactions = () => {
   }) => {
     try {
       const response = await axiosInstance.post("/withdrawals", data);
-      toast.success("Withdrawal submitted successfully");
+      toast.success("Withdrawal request sent");
       return response.data;
     } catch (error: any) {
       const message = toFriendlyErrorMessage(error, "Could not submit withdrawal. Please try again.");

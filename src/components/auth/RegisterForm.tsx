@@ -156,16 +156,18 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       );
 
       if (error) {
-        setError(error?.message);
-        toast.error("Registration failed");
+        const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
+        setError(message);
+        toast.error(message);
       } else {
         setIsSignupComplete(true);
-        toast.success("Account created. Check your email to verify your account.");
+        toast.success("Account created");
       }
     } catch (error: any) {
       console.log(error, 'error');
-      setError(toFriendlyErrorMessage(error, "Registration failed. Please try again."));
-      toast.error("Registration failed");
+      const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -236,7 +238,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
     setIsLoading(true);
 
     if (showV2) {
-      alert("Please complete the reCAPTCHA checkbox first.");
+      toast.error("Please complete the security check");
       setIsLoading(false);
       return;
     }
@@ -275,23 +277,25 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       }
 
       if (error) {
-        setError(error?.message);
-        toast.error("Registration failed");
+        const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
+        setError(message);
+        toast.error(message);
       } else {
         if (session?.access_token) {
-          toast.success("Account created successfully!");
+          toast.success("Account created");
           navigate(resolvedRedirect);
         } else if (verificationRequired) {
           setIsSignupComplete(true);
-          toast.success("Check your email to verify your account.");
+          toast.success("Check your email");
         } else {
           setIsSignupComplete(true);
-          toast.success("Registration successful!");
+          toast.success("Registration successful");
         }
       }
     } catch (err: any) {
-      setError(toFriendlyErrorMessage(err, "Registration failed. Please try again."));
-      toast.error("Registration failed");
+      const message = toFriendlyErrorMessage(err, "Registration failed. Please try again.");
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

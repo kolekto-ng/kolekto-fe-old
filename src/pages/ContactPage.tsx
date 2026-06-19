@@ -20,7 +20,7 @@ const ContactPage: React.FC = () => {
     const subject = encodeURIComponent(form.subject || "Message from Kolekto Contact Form");
     const body = encodeURIComponent(`Name: ${form.name}\nEmail: ${form.email}\n\n${form.message}`);
     window.open(`mailto:team@kolekto.com.ng?subject=${subject}&body=${body}`, "_blank");
-    toast.success("Your mail client has been opened. We'll get back to you within 24 hours.");
+    toast.success("Mail client opened");
     setForm({ name: "", email: "", subject: "", message: "" });
     setSending(false);
   };

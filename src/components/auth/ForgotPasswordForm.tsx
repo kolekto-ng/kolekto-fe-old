@@ -26,15 +26,17 @@ const ForgotPasswordForm: React.FC = () => {
       });
 
       if (error) {
-        setError(toFriendlyErrorMessage(error, 'Could not send the reset link. Please try again.'));
-        toast.error('Failed to send reset link');
+        const message = toFriendlyErrorMessage(error, 'Could not send the reset link. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
         setIsSubmitted(true);
         toast.success('Password reset link sent');
       }
     } catch (err: any) {
-      setError(toFriendlyErrorMessage(err, 'Could not send the reset link. Please try again.'));
-      toast.error('Failed to send reset link');
+      const message = toFriendlyErrorMessage(err, 'Could not send the reset link. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

@@ -4,6 +4,7 @@ import { Withdrawal, WithdrawalState } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toast } from "sonner";
 import { axiosInstance } from "@/utils/axios";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export const useWithdrawalStore = create((set, get) => ({
   withdrawals: [],
@@ -39,7 +40,7 @@ export const useWithdrawalStore = create((set, get) => ({
 
         return res.data;
       } catch (error: any) {
-        set({ error: error.message, isLoading: false });
+        set({ error: toFriendlyErrorMessage(error, "Could not load withdrawals. Please try again."), isLoading: false });
         throw error;
       } finally {
         set({ inFlight: null });
@@ -58,20 +59,16 @@ export const useWithdrawalStore = create((set, get) => ({
         withdrawalData
       );
       set({ isLoading: false });
-      toast.success("Withdrawal request submitted successfully");
+      toast.success("Withdrawal request sent");
       return data;
     } catch (error: any) {
       // Prefer the backend's specific error message (the controller now
       // returns `error`, `code`, `details`, `hint`). Falling back to the
       // raw axios message would show "Request failed with status code 500"
       // which is useless to the user.
-      const backendMessage =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Withdrawal request failed";
-      set({ error: backendMessage, isLoading: false });
-      toast.error(backendMessage);
+      const message = toFriendlyErrorMessage(error, "We could not send the withdrawal request. Please try again.");
+      set({ error: message, isLoading: false });
+      toast.error(message);
       throw error;
     }
   },

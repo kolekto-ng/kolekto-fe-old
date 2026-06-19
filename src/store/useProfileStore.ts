@@ -109,7 +109,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         profileRefreshing: false,
         profileLastFetchedAt: Date.now(),
       });
-      toast.success("Profile updated successfully");
+      toast.success("Profile updated");
       return true;
     } catch (error: any) {
       console.error("Profile update error:", error);
@@ -210,7 +210,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         otpEmail: email || null,
         passwordError: null,
       });
-      toast.success("OTP sent to your email");
+      toast.success("OTP sent");
       return true;
     } catch (error: any) {
       const msg = toFriendlyErrorMessage(error, "Could not send OTP. Please try again.");
@@ -230,7 +230,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       });
 
       set({ passwordStep: "success", passwordError: null });
-      toast.success("Password changed successfully!");
+      toast.success("Password changed");
 
       // Supabase invalidates active sessions when a password changes.
       // If the backend confirms this, clear local credentials and route the

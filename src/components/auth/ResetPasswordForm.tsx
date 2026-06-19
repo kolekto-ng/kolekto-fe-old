@@ -54,18 +54,20 @@ const ResetPasswordForm: React.FC = () => {
       });
 
       if (error) {
-        setError(toFriendlyErrorMessage(error, 'Could not reset your password. Please try again.'));
-        toast.error('Failed to reset password');
+        const message = toFriendlyErrorMessage(error, 'Could not reset your password. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
-        toast.success('Password has been reset successfully');
+        toast.success('Password reset successfully');
         // Give the toast time to be seen
         setTimeout(() => {
           navigate('/login');
         }, 2000);
       }
     } catch (err: any) {
-      setError(toFriendlyErrorMessage(err, 'Could not reset your password. Please try again.'));
-      toast.error('Failed to reset password');
+      const message = toFriendlyErrorMessage(err, 'Could not reset your password. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

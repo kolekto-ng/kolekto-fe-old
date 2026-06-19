@@ -80,11 +80,11 @@ export const usePaystack = () => {
       if (error) {
         console.error('Supabase function error:', error);
 
-        // Handle specific error messages from the edge function
-        let errorMessage = 'Failed to connect to payment service';
+        // Keep gateway and edge-function failures user-facing before they reach toast/UI.
+        let errorMessage = 'We could not start your payment. Please try again.';
 
         if (isNetworkError(error)) {
-          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+          errorMessage = 'Unable to connect. Check your internet and try again.';
         } else if (error.message?.includes('Server configuration error')) {
           errorMessage = 'Payment system is not properly configured. Please contact support.';
         } else if (error.message?.includes('Invalid response from payment gateway')) {
@@ -103,8 +103,6 @@ export const usePaystack = () => {
           errorMessage = 'Payment gateway returned an invalid response. Please try again later.';
         } else if (error.message?.includes('Failed to connect to payment service after')) {
           errorMessage = 'Payment service is temporarily unavailable. Please try again later.';
-        } else if (error.message) {
-          errorMessage = error.message;
         }
 
         throw new Error(errorMessage);
@@ -153,12 +151,10 @@ export const usePaystack = () => {
 
       if (error) {
         console.error('Verification function error:', error);
-        let errorMessage = 'Failed to verify payment';
+        let errorMessage = 'We could not verify your payment. Please try again.';
 
         if (isNetworkError(error)) {
-          errorMessage = 'Network connection error. Please check your internet connection.';
-        } else if (error.message) {
-          errorMessage = error.message;
+          errorMessage = 'Unable to connect. Check your internet and try again.';
         }
 
         throw new Error(errorMessage);

@@ -87,7 +87,7 @@ export const useAuthStore = create((set, get) => ({
         set({ user: null, session: null, isLoading: false });
         clearAuthSessionStorage();
       } else {
-        toast.error("Network error. Please try again.");
+        toast.error(toFriendlyErrorMessage(error, "Unable to connect. Check your internet and try again."));
         set({ isLoading: false });
         // Don't clear user/session for non-auth errors
       }
@@ -229,7 +229,7 @@ export const useAuthStore = create((set, get) => ({
       if (res.status !== 200) {
         throw new Error("Failed to send magic link");
       }
-      toast.success("Magic link sent! Please check your email.");
+      toast.success("Magic link sent");
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
@@ -249,7 +249,7 @@ export const useAuthStore = create((set, get) => ({
       if (res.status !== 200) {
         throw new Error("Failed to send password reset email");
       }
-      toast.success("Password reset email sent! Please check your inbox.");
+      toast.success("Password reset email sent");
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {
@@ -270,7 +270,7 @@ export const useAuthStore = create((set, get) => ({
       if (res.status !== 200) {
         throw new Error("Failed to reset password");
       }
-      toast.success("Password has been reset successfully!");
+      toast.success("Password reset successfully");
       set({ isLoading: false });
       return { error: null };
     } catch (error: any) {

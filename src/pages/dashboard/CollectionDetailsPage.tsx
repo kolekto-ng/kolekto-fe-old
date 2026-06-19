@@ -451,7 +451,7 @@ const CollectionDetailsPage: React.FC = () => {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
       }).from(el).save();
       document.body.removeChild(el);
-      toast.success('PDF exported successfully!');
+      toast.success('PDF exported');
     } catch (err) {
       console.error('PDF export error:', err);
       toast.error('Failed to export PDF');
@@ -701,7 +701,7 @@ const CollectionDetailsPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <Button
               variant="outline"
-              onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success('Link copied!'); }}
+              onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success('Link copied'); }}
               className="min-h-12 justify-center gap-2 rounded-2xl border-gray-200 px-4 text-green-700 shadow-sm hover:bg-green-50"
             >
               <Copy className="h-4 w-4" />
@@ -1346,7 +1346,7 @@ const CollectionDetailsPage: React.FC = () => {
           // pending request without requiring a manual reload.
           loadWallet();
           loadBalanceStats();
-          toast.success('Withdrawal submitted!');
+          toast.success('Withdrawal request sent');
         }}
       />
 

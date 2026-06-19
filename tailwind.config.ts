@@ -95,10 +95,43 @@ export default {
             height: "0",
           },
         },
+        "kolekto-toast-in": {
+          from: {
+            opacity: "0",
+            transform: "translateY(12px) scale(0.96)",
+            filter: "blur(4px)",
+          },
+          to: {
+            opacity: "1",
+            transform: "translateY(0) scale(1)",
+            filter: "blur(0)",
+          },
+        },
+        "kolekto-toast-out": {
+          from: {
+            opacity: "1",
+            transform: "translateY(0) scale(1)",
+          },
+          to: {
+            opacity: "0",
+            transform: "translateY(-8px) scale(0.97)",
+          },
+        },
+        "kolekto-toast-progress": {
+          from: {
+            transform: "scaleX(1)",
+          },
+          to: {
+            transform: "scaleX(0)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "kolekto-toast-in": "kolekto-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
+        "kolekto-toast-out": "kolekto-toast-out 0.16s ease-in forwards",
+        "kolekto-toast-progress": "kolekto-toast-progress 3.2s linear forwards",
       },
     },
   },

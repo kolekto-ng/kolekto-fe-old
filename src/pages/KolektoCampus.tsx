@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { axiosInstance } from "@/utils/axios";
 import { toast } from "sonner";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export default function KolektoCampusSignup() {
   // Animation controls
@@ -101,10 +102,10 @@ export default function KolektoCampusSignup() {
       if (res.data) {
         if (selectedCampus != "Other (Not Listed) OTHER") {
           setFormSuccess(`Thank you for joining the ${selectedCampus} campus community!`);
-          toast.success(`Thank you for joining the ${selectedCampus} campus community!`);
+          toast.success("Campus request sent");
         } else {
           setFormSuccess("Thank you for joining the Kolekto Campus community!");
-          toast.success("Thank you for joining the Kolekto Campus community!");
+          toast.success("Campus request sent");
         }
         e.target.reset();
         setSelectedCampus("");
@@ -115,8 +116,9 @@ export default function KolektoCampusSignup() {
         toast.error("Something went wrong. Please try again.");
       }
     } catch (error: any) {
-      setFormError(error?.response?.data?.message || "Network error. Please try again.");
-      toast.error(error?.response?.data?.message || "Network error. Please try again.");
+      const message = toFriendlyErrorMessage(error, "Unable to connect. Check your internet and try again.");
+      setFormError(message);
+      toast.error(message);
     } finally {
       setFormLoading(false);
     }

@@ -405,7 +405,7 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
       const data = await createCollection(collectionData);
       console.log(collectionData, 'collection data');
 
-      toast.success("Collection created successfully!");
+      toast.success("Collection created successfully");
       console.log("Collection created:", data);
 
       navigate('/dashboard/collections');

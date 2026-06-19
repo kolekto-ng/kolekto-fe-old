@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { Collection, FormField, PriceTier } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 // ─── Auth token helper ────────────────────────────────────────────────────────
 // The app uses a custom JWT stored in localStorage. We pass it to Edge Functions
@@ -124,7 +125,7 @@ export const useCollectionStore = create((set, get: any) => ({
       });
       return formatted;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false, isRefreshing: false });
+      set({ error: toFriendlyErrorMessage(err), isLoading: false, isRefreshing: false });
       throw err;
     } finally {
       set({ inFlight: null });
@@ -164,7 +165,7 @@ export const useCollectionStore = create((set, get: any) => ({
       }));
       return formatted;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
     }
   },
@@ -205,7 +206,7 @@ export const useCollectionStore = create((set, get: any) => ({
 
       return newCollection;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
     }
   },
@@ -251,7 +252,7 @@ export const useCollectionStore = create((set, get: any) => ({
 
       return updated;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
     }
   },
@@ -295,7 +296,7 @@ export const useCollectionStore = create((set, get: any) => ({
 
       return data.data;
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
     }
   },

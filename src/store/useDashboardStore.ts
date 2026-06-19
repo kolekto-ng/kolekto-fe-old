@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardState, DashboardStats, Transaction } from "@/types";
 import { useMemo } from "react";
 import { isAfter } from "date-fns";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export function useDashboard(collections = [], contributions = [], userId) {
   // Ensure collections and contributions are always arrays
@@ -113,7 +114,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
       return stats;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -172,7 +173,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
       return formattedPayments;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },

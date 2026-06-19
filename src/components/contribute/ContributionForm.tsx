@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
 import { formatCurrency } from "@/utils/formatters";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface PriceTier {
   name: string;
@@ -258,7 +259,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
       return response.data.contributor?.id || response.data.contributor?._id;
     } catch (error: any) {
       console.error("Create contributor error:", error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || "Failed to create contributor");
+      throw new Error(toFriendlyErrorMessage(error, "Could not prepare your payment. Please try again."));
     }
   };
 
@@ -335,7 +336,7 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
     } catch (error: any) {
       console.error("Payment error:", error);
       setIsLoading(false);
-      const errorMsg = error.message || "Payment failed. Please try again.";
+      const errorMsg = toFriendlyErrorMessage(error, "Payment failed. Please try again.");
       toast.error(errorMsg);
       if (onPaymentError) {
         onPaymentError(errorMsg);

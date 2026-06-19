@@ -3,6 +3,7 @@ import { PaystackState } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { axiosInstance } from "@/utils/axios";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export const usePaystackStore = create((set) => ({
   isInitiating: false,
@@ -18,7 +19,7 @@ export const usePaystackStore = create((set) => ({
         data
       );
       set({ isInitiating: false });
-      toast.success(response.data.message);
+      toast.success("Payment started");
 
       return {
         authorization_url: response.data.authorizationUrl,
@@ -27,12 +28,7 @@ export const usePaystackStore = create((set) => ({
     } catch (error: any) {
       console.error("Payment initialization failed:", error);
       set({ isInitiating: false });
-      const msg =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to initialize payment";
-      toast.error(msg);
+      toast.error(toFriendlyErrorMessage(error, "We could not start your payment. Please try again."));
       return undefined;
     }
   },
@@ -79,8 +75,9 @@ export const usePaystackStore = create((set) => ({
       // Edge function returns { status, receiptData, contributions, ... } at top level
       return response || {};
     } catch (error: any) {
-      set({ error: error.message, isVerifying: false });
-      throw error;
+      const message = toFriendlyErrorMessage(error, "We could not verify your payment. Please try again.");
+      set({ error: message, isVerifying: false });
+      throw new Error(message);
     }
   },
 }));

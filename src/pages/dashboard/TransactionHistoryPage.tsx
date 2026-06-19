@@ -18,6 +18,7 @@ import {
   withdrawalStatusBucket,
 } from '@/utils/withdrawalStatus';
 import { TableRowsSkeleton } from '@/components/ui/page-skeletons';
+import { toast } from 'sonner';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
@@ -240,7 +241,7 @@ const TransactionHistoryPage: React.FC = () => {
   }, [withdrawalsArray]);
 
   const handleWithdraw = async (collectionId: string) => {
-    alert(`Withdraw from collection ${collectionId} (dummy action)`);
+    toast.info('Withdrawal flow opens from collection details.');
   };
 
   return (

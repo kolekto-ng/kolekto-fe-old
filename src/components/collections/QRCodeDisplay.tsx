@@ -27,7 +27,7 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   
   const copyLink = () => {
     navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard!');
+    toast.success('Link copied');
   };
   
   const downloadQR = () => {
@@ -38,7 +38,7 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('QR code downloaded!');
+    toast.success('QR code downloaded');
   };
   
   return (

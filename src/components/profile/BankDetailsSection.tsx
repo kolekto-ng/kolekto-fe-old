@@ -103,7 +103,7 @@ const BankDetailsSection: React.FC = () => {
       setShowAddDialog(false);
       resetForm();
       await getPayoutAccounts();
-      toast.success('Bank account saved successfully.');
+      toast.success('Bank account saved');
     } catch (error) {
       console.error('Save account error:', error);
       const message = toFriendlyErrorMessage(error, 'Could not save bank account. Please try again.');

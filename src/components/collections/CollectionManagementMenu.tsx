@@ -58,12 +58,12 @@ const CollectionManagementMenu: React.FC<CollectionManagementMenuProps> = ({
       const { error } = await supabase.from('collections').delete().eq('id', collectionId);
       if (error) throw error;
 
-      toast.success('Collection deleted successfully');
+      toast.success('Collection deleted');
       if (onDeleteSuccess) onDeleteSuccess();
     } catch (error: any) {
       console.error('Error deleting collection:', error);
       if (error.message?.includes('violates foreign key constraint')) {
-        toast.success('Collection archived successfully');
+        toast.success('Collection archived');
         if (onDeleteSuccess) onDeleteSuccess();
         return;
       }

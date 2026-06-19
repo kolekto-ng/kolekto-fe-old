@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 import { Transaction, TransactionState } from '@/types';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
@@ -93,7 +94,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       
       return allTransactions;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -157,7 +158,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       
       return summary;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   }
