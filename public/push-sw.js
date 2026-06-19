@@ -23,6 +23,9 @@ self.addEventListener("push", (event) => {
       url: payload.url || "/dashboard",
       type: payload.type || "info",
       id: payload.id || null,
+      collectionId: payload.collectionId || null,
+      contributionId: payload.contributionId || null,
+      transactionReference: payload.transactionReference || null,
     },
   };
 

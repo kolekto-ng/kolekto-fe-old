@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CreateCollectionPage = lazy(() => import("./pages/CreateCollectionPage"));
@@ -106,6 +106,21 @@ const LegacyPwaRedirect = () => {
   );
 };
 
+const CollectionNotificationRedirect = () => {
+  const location = useLocation();
+  const { collectionId } = useParams();
+  const targetPath = collectionId
+    ? `/dashboard/collections/${collectionId}`
+    : "/dashboard/collections";
+
+  return (
+    <Navigate
+      to={`${targetPath}${location.search}${location.hash}`}
+      replace
+    />
+  );
+};
+
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
   return (
@@ -126,6 +141,7 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
       <Route path="/active-campaigns" element={<ActiveCampaignsPage />} />
+      <Route path="/collections/:collectionId" element={<CollectionNotificationRedirect />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
