@@ -6,6 +6,7 @@ import {
   enablePushNotifications,
   getExistingPushSubscription,
   getPushDismissed,
+  getPushServerConfig,
   getPushSupport,
   setPushDismissed,
 } from "@/utils/pushNotifications";
@@ -33,6 +34,13 @@ const PushNotificationPrompt: React.FC = () => {
       }
 
       if (Notification.permission === "denied" || getPushDismissed()) {
+        setState("hidden");
+        return;
+      }
+
+      const config = await getPushServerConfig().catch(() => ({ configured: false }));
+      if (!mounted) return;
+      if (!config.configured) {
         setState("hidden");
         return;
       }

@@ -6,6 +6,7 @@ import PersonalInfoSection from '@/components/profile/PersonalInfoSection';
 import LoginSecuritySection from '@/components/profile/LoginSecuritySection';
 import KYCSection from '@/components/profile/KYCSection';
 import BankDetailsSection from '@/components/profile/BankDetailsSection';
+import PushNotificationSettings from '@/components/profile/PushNotificationSettings';
 import {
   ArrowLeft,
   ChevronRight,
@@ -83,6 +84,7 @@ const ProfilePage: React.FC = () => {
       {isPersonalView ? (
         <div className="space-y-5">
           <PersonalInfoSection />
+          <PushNotificationSettings />
 
           <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm sm:p-4">
             <div className="space-y-2">

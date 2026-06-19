@@ -6,6 +6,11 @@ type PushSupport = {
   needsInstall?: boolean;
 };
 
+export type PushServerConfig = {
+  configured: boolean;
+  publicKey?: string;
+};
+
 export type PushSubscriptionMetadata = {
   userAgent?: string;
   platform?: string;
@@ -94,6 +99,22 @@ export async function getPushPermissionState() {
   };
 }
 
+export async function getPushServerConfig(): Promise<PushServerConfig> {
+  try {
+    const { data } = await axiosInstance.get("/push/vapid-public-key");
+    return {
+      configured: Boolean(data?.configured && data?.publicKey),
+      publicKey: data?.publicKey,
+    };
+  } catch (error: any) {
+    if (error?.response?.status === 503) {
+      return { configured: false };
+    }
+
+    throw error;
+  }
+}
+
 export async function enablePushNotifications(metadata: PushSubscriptionMetadata = {}) {
   const support = getPushSupport();
   if (!support.supported) {
@@ -104,10 +125,10 @@ export async function enablePushNotifications(metadata: PushSubscriptionMetadata
     throw new Error("Notifications are blocked. Enable them in your browser settings.");
   }
 
-  const { data } = await axiosInstance.get("/push/vapid-public-key");
-  const publicKey = data?.publicKey;
+  const config = await getPushServerConfig();
+  const publicKey = config.publicKey;
   if (!publicKey) {
-    throw new Error("Push notifications are not configured yet.");
+    throw new Error("Notifications are temporarily unavailable on this device.");
   }
 
   const permission =
