@@ -43,6 +43,19 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+function subscriptionUsesVapidKey(
+  subscription: PushSubscription,
+  expectedKey: Uint8Array,
+) {
+  const currentKey = subscription.options?.applicationServerKey;
+  if (!currentKey) return false;
+
+  const currentBytes = new Uint8Array(currentKey);
+
+  return currentBytes.length === expectedKey.length
+    && currentBytes.every((byte, index) => byte === expectedKey[index]);
+}
+
 export function getPushDismissed() {
   return localStorage.getItem(PUSH_DISMISSED_KEY) === "true";
 }
@@ -106,8 +119,9 @@ export async function getPushServerConfig(): Promise<PushServerConfig> {
       configured: Boolean(data?.configured && data?.publicKey),
       publicKey: data?.publicKey,
     };
-  } catch (error: any) {
-    if (error?.response?.status === 503) {
+  } catch (error: unknown) {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 503) {
       return { configured: false };
     }
 
@@ -140,13 +154,28 @@ export async function enablePushNotifications(metadata: PushSubscriptionMetadata
     throw new Error("Notifications were not enabled.");
   }
 
+  const applicationServerKey = urlBase64ToUint8Array(publicKey);
+  if (applicationServerKey.length !== 65) {
+    throw new Error("The notification server key is invalid.");
+  }
+
   const registration = await navigator.serviceWorker.ready;
-  const existing = await registration.pushManager.getSubscription();
+  let existing = await registration.pushManager.getSubscription();
+  if (existing && !subscriptionUsesVapidKey(existing, applicationServerKey)) {
+    // A VAPID rotation makes the browser's old subscription unusable by the
+    // server. Replace it instead of repeatedly saving a doomed endpoint.
+    await axiosInstance.delete("/push/subscriptions", {
+      data: { endpoint: existing.endpoint },
+    }).catch(() => undefined);
+    await existing.unsubscribe();
+    existing = null;
+  }
+
   const subscription =
     existing ||
     (await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey,
     }));
 
   await axiosInstance.post("/push/subscriptions", {
@@ -166,8 +195,13 @@ export async function disablePushNotifications() {
   const subscription = await getExistingPushSubscription().catch(() => null);
   if (!subscription) return;
 
-  await axiosInstance.delete("/push/subscriptions", {
-    data: { endpoint: subscription.endpoint },
-  });
-  await subscription.unsubscribe();
+  try {
+    await axiosInstance.delete("/push/subscriptions", {
+      data: { endpoint: subscription.endpoint },
+    });
+  } finally {
+    // Even if the API is temporarily unavailable, honour the local opt-out.
+    // A later send receives 404/410 and removes the stale server row.
+    await subscription.unsubscribe();
+  }
 }

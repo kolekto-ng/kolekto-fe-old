@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      registerType: "autoUpdate",
       includeAssets: ["kelekto_logo-removebg-preview.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
@@ -43,7 +43,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        cacheId: "kolekto-pwa-v3",
+        cacheId: "kolekto-pwa-v4",
         importScripts: ["sw-cleanup.js", "push-sw.js"],
         clientsClaim: true,
         skipWaiting: true,
@@ -73,7 +73,7 @@ export default defineConfig({
               request.mode === "navigate" && !url.pathname.startsWith("/api"),
             handler: "NetworkFirst",
             options: {
-              cacheName: "kolekto-pages-v3",
+              cacheName: "kolekto-pages-v4",
               networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 10,
@@ -86,7 +86,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "kolekto-google-fonts-v3",
+              cacheName: "kolekto-google-fonts-v4",
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -98,7 +98,7 @@ export default defineConfig({
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "kolekto-images-v3",
+              cacheName: "kolekto-images-v4",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,

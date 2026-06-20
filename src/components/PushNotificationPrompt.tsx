@@ -47,7 +47,17 @@ const PushNotificationPrompt: React.FC = () => {
 
       const subscription = await getExistingPushSubscription().catch(() => null);
       if (!mounted) return;
-      setState(subscription || Notification.permission === "granted" ? "enabled" : "visible");
+      if (subscription || Notification.permission === "granted") {
+        // Re-save the endpoint for the current authenticated user on every
+        // dashboard session. This repairs lost backend rows, account switches,
+        // and VAPID rotations without asking for permission a second time.
+        const synced = await enablePushNotifications().catch(() => null);
+        if (!mounted) return;
+        setState(synced ? "enabled" : "visible");
+        return;
+      }
+
+      setState("visible");
     }
 
     checkPromptState();
