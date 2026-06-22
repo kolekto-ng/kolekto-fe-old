@@ -38,6 +38,13 @@ const TECHNICAL_ERROR_PATTERNS = [
 
 const FRIENDLY_ERROR_MAPPINGS: Array<[RegExp, string]> = [
   [/network error|failed to fetch|load failed|timeout|econn|enotfound|etimedout/i, NETWORK_ERROR_MESSAGE],
+  // A saved bank account whose encrypted number can no longer be read. Keep the
+  // actionable "remove and re-add" guidance — it must come before the generic
+  // "bank account" / "withdrawal" mappings below so it is not swallowed.
+  [/older format|can no longer be decrypted|unrecoverable/i, "This saved bank account can't be used anymore. Please remove it in your bank settings and add it again, then try the withdrawal."],
+  // Server-side encryption key missing/misconfigured: never leak the raw
+  // technical message to the user.
+  [/encryption (is )?unavailable|account encryption|misconfiguration|encryption_unavailable/i, "Bank features are temporarily unavailable. Please try again shortly, and contact support if it continues."],
   [/invalid login credentials|invalid email or password|email not confirmed/i, "Please check your login details and try again."],
   [/unauthorized|not authenticated|invalid or expired token|no token/i, "Your session expired. Please sign in again."],
   [/too many/i, "Too many attempts. Please try again later."],
