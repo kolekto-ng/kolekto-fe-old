@@ -213,10 +213,14 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
     getPayoutAccounts();
   }, []);
 
-  // Set default account if available
+  // Auto-select a withdrawal account, preferring the default — but only if
+  // it's actually decryptable. A legacy account that was the default before
+  // the encryption fix can't be used for withdrawal even if a newer, valid
+  // account exists, so prefer any decryptable account over a broken default.
   React.useEffect(() => {
     if (payoutAccounts?.length > 0 && !selectedAccountId) {
-      const defaultAcc = payoutAccounts.find((acc: any) => acc.is_default) || payoutAccounts[0];
+      const usable = payoutAccounts.filter((acc: any) => acc.is_decryptable !== false);
+      const defaultAcc = usable.find((acc: any) => acc.is_default) || usable[0] || payoutAccounts[0];
       setSelectedAccountId(defaultAcc.id);
     }
   }, [payoutAccounts, selectedAccountId]);
@@ -245,6 +249,11 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
     // Account validation
     if (!selectedAccountId) {
       newErrors.account = 'Please select a withdrawal account';
+    } else {
+      const selected = payoutAccounts?.find((acc: any) => acc.id === selectedAccountId);
+      if (selected?.is_decryptable === false) {
+        newErrors.account = 'This account is from an older format and can no longer be used. Please remove it in settings and add it again.';
+      }
     }
 
     setErrors(newErrors);
@@ -338,13 +347,24 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {payoutAccounts.map((account: any) => (
-                  <SelectItem key={account.id} value={account.id} className="py-3">
+                  <SelectItem
+                    key={account.id}
+                    value={account.id}
+                    className="py-3"
+                    disabled={account.is_decryptable === false}
+                  >
                     <div className="flex flex-col">
                       <span className="font-semibold text-gray-900 leading-none mb-1">{account.account_name || account.accountName}</span>
                       <div className="flex items-center text-xs text-gray-500">
                         <span>{account.bank_name || account.bankName}</span>
                         <span className="mx-1.5">•</span>
                         <span>••••{account.account_last4}</span>
+                        {account.is_decryptable === false && (
+                          <>
+                            <span className="mx-1.5">•</span>
+                            <span className="text-amber-600">Needs re-adding</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </SelectItem>

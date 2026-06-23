@@ -52,4 +52,16 @@ export const useSettings = create((set, get) => ({
 
     return data.data;
   },
+
+  setDefaultPayoutAccount: async (accountId: string) => {
+    await axiosInstance.post("/settings/profile/set-default", {
+      account_id: accountId,
+    });
+    return (get() as any).getPayoutAccounts();
+  },
+
+  deletePayoutAccount: async (accountId: string) => {
+    await axiosInstance.delete(`/settings/profile/payout-accounts/${accountId}`);
+    return (get() as any).getPayoutAccounts();
+  },
 }));
