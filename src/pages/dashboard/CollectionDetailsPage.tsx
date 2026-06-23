@@ -33,6 +33,8 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import {
   getCollectionContributorFields,
   getContributorFieldValue,
+  getContributionTierName,
+  formatContributorValue,
   normalizeContributions,
 } from '@/utils/contributions';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
@@ -288,17 +290,14 @@ const CollectionDetailsPage: React.FC = () => {
   const deadline = col?.deadline || null;
   const remaining = daysLeft(deadline);
 
-  // Tier matching — prefer stored Tier name in contributor_information, fall back to amount
+  // Tier matching — prefer stored Tier name in contributor_information (covers
+  // Tier/tierName/tier_name shapes), fall back to amount-tolerance matching
+  // only for legacy rows that never had a tier name recorded.
   const getTierForContribution = (c: any): any => {
     if (!priceTiers.length) return null;
-    const tierName = (c.contributor_information?.[0] as any)?.Tier;
+    const tierName = getContributionTierName(c);
     if (tierName) return priceTiers.find(t => t.name === tierName) || null;
     return priceTiers.find(t => Math.abs(Number(t.price) - Number(c.amount)) < 1) || null;
-  };
-  // Legacy helper used in CSV export
-  const getTierForAmount = (amount: number): any => {
-    if (!priceTiers.length) return null;
-    return priceTiers.find(t => Math.abs(Number(t.price) - amount) < 1) || null;
   };
 
   // ── Tabs config ─────────────────────────────────────────────────────────────
@@ -359,11 +358,11 @@ const CollectionDetailsPage: React.FC = () => {
     ];
 
     const rows = filtered.map(c => {
-      const tierName = getTierForContribution(c)?.name || '';
+      const tierName = getTierForContribution(c)?.name || 'Not provided';
       return [
-        ...exportFields.map((field: any) => getContributorFieldValue(c, field) || ''),
+        ...exportFields.map((field: any) => formatContributorValue(getContributorFieldValue(c, field))),
         ...(tierCol ? [tierName] : []),
-        ...(exportHasUniqueCode ? [c.contributor_unique_code || ''] : []),
+        ...(exportHasUniqueCode ? [c.contributor_unique_code || 'Not provided'] : []),
       ];
     });
 
@@ -893,12 +892,12 @@ const CollectionDetailsPage: React.FC = () => {
                           <TableRow key={c.id}>
                             {visibleContributorFields.map((field: any) => (
                               <TableCell key={field.id || field.name}>
-                                {getContributorFieldValue(c, field) || '-'}
+                                {formatContributorValue(getContributorFieldValue(c, field))}
                               </TableCell>
                             ))}
                             {colType === 'tiered' && (
                               <TableCell>
-                                <Badge variant="outline">{tier?.name || '-'}</Badge>
+                                <Badge variant="outline">{tier?.name || 'Not provided'}</Badge>
                               </TableCell>
                             )}
                             {hasUniqueCode && (
@@ -1112,7 +1111,7 @@ const CollectionDetailsPage: React.FC = () => {
                     </TableRow>
                   ) : (
                     getFilteredTickets().map(c => {
-                      const tier = getTierForAmount(Number(c.amount));
+                      const tier = getTierForContribution(c);
                       const checkIn = c.check_in_status || 'not_checked_in';
                       return (
                         <TableRow key={c.id}>
@@ -1122,14 +1121,14 @@ const CollectionDetailsPage: React.FC = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <p className="text-sm font-medium">{c.name}</p>
-                            <p className="text-xs text-gray-500">{c.email}</p>
+                            <p className="text-sm font-medium">{formatContributorValue(c.name)}</p>
+                            <p className="text-xs text-gray-500">{formatContributorValue(c.email)}</p>
                           </TableCell>
                           <TableCell>
                             {tier ? (
                               <Badge variant="outline">{tier.name}</Badge>
                             ) : (
-                              <span className="text-gray-400 text-sm">—</span>
+                              <span className="text-gray-400 text-sm">Not provided</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -1192,9 +1191,9 @@ const CollectionDetailsPage: React.FC = () => {
           ) : (
             <div className="space-y-1">
               {paidContributions.map(c => {
-                const tier = getTierForAmount(Number(c.amount));
+                const tier = getTierForContribution(c);
                 const isAnon = colType === 'fundraising' && (!c.name || c.name.toLowerCase() === 'anonymous');
-                const displayName = isAnon ? 'Anonymous' : c.name;
+                const displayName = isAnon ? 'Anonymous' : formatContributorValue(c.name);
                 const verb = colType === 'fundraising' ? 'donated' : colType === 'ticket' ? 'purchased a ticket for' : 'paid';
                 // Activities show the full checkout amount (gross_amount = totalPayable incl. fees).
                 // Fall back to amount for legacy rows that pre-date gross_amount column.
@@ -1357,17 +1356,17 @@ const CollectionDetailsPage: React.FC = () => {
             {scannedTicket && (
               <div className="border border-gray-200 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-900">{scannedTicket.name}</p>
+                  <p className="font-semibold text-gray-900">{formatContributorValue(scannedTicket.name)}</p>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${CHECK_IN_COLORS[scannedTicket.check_in_status || 'not_checked_in']}`}>
                     {CHECK_IN_LABELS[scannedTicket.check_in_status || 'not_checked_in']}
                   </span>
                 </div>
                 <div className="space-y-1 text-sm text-gray-600">
-                  <p><span className="text-gray-400">Email:</span> {scannedTicket.email}</p>
+                  <p><span className="text-gray-400">Email:</span> {formatContributorValue(scannedTicket.email)}</p>
                   <p><span className="text-gray-400">Ticket ID:</span> <span className="font-mono">{scannedTicket.contributor_unique_code || '—'}</span></p>
                   <p><span className="text-gray-400">Amount:</span> {fmtCurrency(Number(scannedTicket.amount))}</p>
-                  {getTierForAmount(Number(scannedTicket.amount)) && (
-                    <p><span className="text-gray-400">Tier:</span> {getTierForAmount(Number(scannedTicket.amount))?.name}</p>
+                  {getTierForContribution(scannedTicket) && (
+                    <p><span className="text-gray-400">Tier:</span> {getTierForContribution(scannedTicket)?.name}</p>
                   )}
                   {scannedTicket.payment_id && (
                     <p><span className="text-gray-400">Ref:</span> {scannedTicket.payment_id}</p>

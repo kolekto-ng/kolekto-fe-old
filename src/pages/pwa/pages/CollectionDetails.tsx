@@ -35,6 +35,8 @@ import FundraisingShareDialog from '@/components/collections/FundraisingShareDia
 import {
     getCollectionContributorFields,
     getContributorFieldValue,
+    getContributionTierName,
+    formatContributorValue,
 } from '@/utils/contributions';
 import {
     DropdownMenu,
@@ -169,9 +171,21 @@ const PwaCollectionDetails: React.FC = () => {
     const availableTiers = currentCollection?.price_tiers || (currentCollection as any)?.pricing_tiers || [];
     const visibleContributorFields = getCollectionContributorFields(currentCollection as any);
 
-    const getTierNameFromAmount = (amount: number) => {
-        const tier = availableTiers.find(t => t.price === amount);
-        return tier ? tier.name : `₦${amount}`;
+    // Prefer the Tier name stored on the contribution itself (set at payment time).
+    // Falling back to a strict amount match is unreliable once fees are deducted
+    // from contribution.amount (fee_bearer = organizer), since the net amount no
+    // longer equals tier.price exactly.
+    const getTierForContribution = (contribution: any) => {
+        const storedTierName = getContributionTierName(contribution);
+        if (storedTierName) {
+            return availableTiers.find(t => t.name === storedTierName) || null;
+        }
+        return availableTiers.find(t => Math.abs(Number(t.price) - Number(contribution?.amount)) < 1) || null;
+    };
+
+    const getTierNameFromAmount = (contribution: any) => {
+        const tier = getTierForContribution(contribution);
+        return tier ? tier.name : `₦${contribution?.amount}`;
     };
 
     const handleTierFilterChange = (tierName: string, checked: boolean) => {
@@ -201,7 +215,7 @@ const PwaCollectionDetails: React.FC = () => {
 
         if (selectedTiers.size > 0) {
             filteredData = filteredData.filter(contribution => {
-                const tierName = getTierNameFromAmount(contribution.amount);
+                const tierName = getTierNameFromAmount(contribution);
                 return selectedTiers.has(tierName);
             });
         }
@@ -248,10 +262,10 @@ const PwaCollectionDetails: React.FC = () => {
 
         const rows = filteredData.map((contribution: any) => [
             ...exportFields.map((field: any) =>
-                getContributorFieldValue(contribution, field) || ''
+                formatContributorValue(getContributorFieldValue(contribution, field))
             ),
-            ...(tierColumnVisible ? [getTierNameFromAmount(contribution.amount)] : []),
-            ...(hasUniqueCode ? [contribution.contributor_unique_code || ''] : []),
+            ...(tierColumnVisible ? [getTierNameFromAmount(contribution)] : []),
+            ...(hasUniqueCode ? [contribution.contributor_unique_code || 'Not provided'] : []),
         ]);
 
         const exportDate = new Date().toLocaleDateString('en-NG', {
@@ -660,13 +674,13 @@ const PwaCollectionDetails: React.FC = () => {
                                                 <TableRow key={contributor.id}>
                                                     {visibleContributorFields.map((field: any) => (
                                                         <TableCell key={field.id || field.name}>
-                                                            {getContributorFieldValue(contributor, field) || '-'}
+                                                            {formatContributorValue(getContributorFieldValue(contributor, field))}
                                                         </TableCell>
                                                     ))}
                                                     {tierColumnVisible && (
                                                         <TableCell>
                                                             <span className="text-xs font-medium bg-gray-100 px-2 py-0.5 rounded">
-                                                                {getTierNameFromAmount(contributor.amount)}
+                                                                {getTierNameFromAmount(contributor)}
                                                             </span>
                                                         </TableCell>
                                                     )}
@@ -700,7 +714,7 @@ const PwaCollectionDetails: React.FC = () => {
                                     {filteredContributors.slice(0, 5).map((contributor) => (
                                         <div key={contributor.id} className="flex justify-between items-center border-b pb-3">
                                             <div>
-                                                <p className="font-medium">{contributor.name}</p>
+                                                <p className="font-medium">{formatContributorValue(contributor.name)}</p>
                                                 <p className="text-sm text-gray-500">
                                                     {new Date(contributor.created_at).toLocaleDateString('en-NG')}
                                                 </p>
