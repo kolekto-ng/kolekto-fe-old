@@ -336,7 +336,27 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
           </button>
         </div>
 
-        {payoutAccounts && payoutAccounts.length > 0 ? (
+        {payoutAccounts && payoutAccounts.length > 0 && payoutAccounts.every((acc: any) => acc.is_decryptable === false) ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Your saved bank account(s) need re-adding</p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                These accounts are from an older format and can no longer be used. Remove them in
+                bank settings and add your account again before withdrawing.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={handleNavigateToBankSettings}
+              className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white text-xs h-9"
+            >
+              Go to Account Settings
+            </Button>
+          </div>
+        ) : payoutAccounts && payoutAccounts.length > 0 ? (
           <div className="space-y-1">
             <Select
               value={selectedAccountId}
@@ -399,7 +419,12 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
         <Button
           type="submit"
           className="w-full bg-kolekto hover:bg-kolekto/90 h-11"
-          disabled={isLoading || !payoutAccounts || payoutAccounts.length === 0}
+          disabled={
+            isLoading ||
+            !payoutAccounts ||
+            payoutAccounts.length === 0 ||
+            payoutAccounts.every((acc: any) => acc.is_decryptable === false)
+          }
         >
           {isLoading ? (
             <>Processing Withdrawal...</>
