@@ -77,18 +77,28 @@ function getCollectionType(collection: Record<string, unknown>) {
 }
 
 /**
- * unique_id_enabled is the authoritative switch — but it didn't always
- * exist as a column. Rows created before it was added have it as
- * null/undefined rather than false, and for those legacy rows the only
- * signal that ever existed was "is code_prefix set". Treating null the
- * same as false would silently stop generation for older collections that
- * have been working correctly for a long time (and have real history to
- * preserve) — explicit false must still always mean "never generate".
+ * Round 4 correction (verified against real production data): a schema
+ * migration added `unique_id_enabled` with `NOT NULL DEFAULT false`, which
+ * backfilled EVERY pre-existing collection to `false` — including ones
+ * that already had a real `code_prefix` configured and had been
+ * generating codes successfully for months under the old (prefix-only)
+ * logic. In Kolekto's actual production database this affects 89
+ * collections (vs. only 12 with the column genuinely `true`) — treating
+ * `false` as a hard block, as an earlier pass here did, silently broke
+ * code generation for the large majority of collections that had it
+ * working before this column existed, with zero ill effect on the small
+ * number of new ones (because the current collection-creation UI always
+ * clears `code_prefix` whenever the toggle is off, so for any collection
+ * saved through it, "a prefix is configured" and "the toggle is on" are
+ * the same fact). So: a configured prefix — collection-level OR on the
+ * specific tier/ticket type being purchased — is what actually drives
+ * generation; `unique_id_enabled` is read for display only (e.g. whether
+ * a receipt shows a "your code" section), never as a gate.
  */
-function shouldGenerateUniqueCode(collection: Record<string, unknown>): boolean {
-  if (collection.unique_id_enabled === true) return true;
-  if (collection.unique_id_enabled === false) return false;
-  return Boolean(collection.code_prefix);
+function hasAnyConfiguredPrefix(collection: Record<string, unknown>): boolean {
+  if (collection.code_prefix) return true;
+  const tiers = getPriceTiers(collection);
+  return tiers.some((t) => Boolean((t as Record<string, unknown>)?.prefix));
 }
 
 function getPriceTiers(collection: Record<string, unknown>) {
@@ -437,12 +447,10 @@ function normalizePaymentRequest(input: {
     formData,
     contact,
     isAnonymous: metadata.isAnonymous === true || metadata.isAnonymous === 1 || metadata.isAnonymous === "1" || metadata.isAnonymous === "true",
-    // Regression fix: this field was read at the unique-code gate below but
-    // never set here, so `normalizedPayment.uniqueIdEnabled` was always
-    // `undefined` — silently disabling unique-code generation for every
-    // contribution, on every collection type, regardless of the organizer's
-    // setting. See CONTRIBUTOR_UNIQUE_ID_FIX_REPORT.md.
-    uniqueIdEnabled: shouldGenerateUniqueCode(collection),
+    // Display-only flag now (see hasAnyConfiguredPrefix above) — the
+    // actual generation decision is made per-unit, purely from whether a
+    // prefix resolves to something non-empty. See CONTRIBUTOR_UNIQUE_ID_FIX_REPORT.md.
+    uniqueIdEnabled: hasAnyConfiguredPrefix(collection),
     codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
     providedAmount: roundCurrency(asNumber(metadata.totalPayable || metadata.amount || 0)),
   };
@@ -657,18 +665,16 @@ serve(async (req: Request) => {
 
         for (let index = 0; index < contributionUnits.length; index++) {
           const unit = contributionUnits[index];
-          // Only generate unique codes when the host explicitly enabled unique IDs.
-          // If unique_id_enabled is false on the collection, no code is ever assigned,
-          // even if a code_prefix value happens to exist on the record.
-          // Strip internal whitespace too — organizers sometimes type a tier
-          // prefix like "VIP 1" (label-style) rather than a code-style
-          // "VIP1". A unique code is meant to be a short, clean token, so
-          // normalize it here regardless of what's stored on the tier —
-          // this never touches the stored prefix value, only the code built
-          // from it.
-          const prefix = normalizedPayment.uniqueIdEnabled
-            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase().replace(/\s+/g, "")
-            : "";
+          // A configured prefix — this unit's tier/ticket prefix, falling
+          // back to the collection-level code_prefix — is what drives
+          // generation; unique_id_enabled is NOT checked here (see
+          // hasAnyConfiguredPrefix above for why). Internal whitespace is
+          // stripped too — organizers sometimes type a tier prefix like
+          // "VIP 1" (label-style) rather than a code-style "VIP1"; a unique
+          // code should be a short, clean token. This never touches the
+          // stored prefix value, only the code built from it.
+          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "")
+            .trim().toUpperCase().replace(/\s+/g, "");
           let uniqueCode: string | null = null;
 
           if (prefix) {
@@ -1307,7 +1313,7 @@ function buildReceiptData(input: {
     campaignSummary: collection.campaign_summary ? String(collection.campaign_summary) : "",
     bannerUrl: String(collection.banner_url || collection.banner_image || ""),
     eventDate: collection.event_date ? String(collection.event_date) : "",
-    uniqueIdEnabled: Boolean(collection.unique_id_enabled),
+    uniqueIdEnabled: hasAnyConfiguredPrefix(collection),
     codePrefix: collection.code_prefix ? String(collection.code_prefix) : "",
     contributionAmount,  // Total Raised contribution — no fees
     platformFee,

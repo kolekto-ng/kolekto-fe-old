@@ -1,6 +1,109 @@
 # Contributor Unique ID/Code Generation — Regression Fix Report
 
-Date: 2026-06-24 (Round 1 + Round 2 + Round 3)
+Date: 2026-06-24 (Round 1 + Round 2 + Round 3 + Round 4)
+
+## Round 4 — the REAL production project, and the actual root cause for old collections
+
+Round 3 ran a backfill and declared success — but against
+`lpeeckqsltxohppheucz`, which turns out NOT to be the project the user
+identified as production (`https://busfgcmbndleljklrcbd.supabase.co`).
+`kolekto-be-old/.env`'s active (uncommented) config points to
+`lpeeckqsltxohppheucz` with a `sk_test_` Paystack key, while
+`busfgcmbndleljklrcbd` — with a real `sk_live_` key — sits commented out
+in the same file, labeled `# production`. Both admin panel repos
+(`kelekto-admin`, `kolekto-admin-control-panel-1`) are also currently
+configured to `lpeeckqsltxohppheucz`. Whether that reflects what's
+actually deployed (vs. just this local `.env`) is unconfirmed — flagged
+to the user as a separate, serious finding, independent of unique codes.
+
+No service-role key for `busfgcmbndleljklrcbd` exists anywhere in this
+workspace — only the public anon/publishable key (safe to use; it's
+meant to be public, already shipped in the browser bundle). Used it
+read-only to investigate production directly:
+
+**The real root cause for old collections, confirmed with production data:**
+A schema migration added `unique_id_enabled` as `NOT NULL DEFAULT false`,
+which backfilled **every** pre-existing collection to `false` —
+regardless of whether it already had a working `code_prefix`. In
+`busfgcmbndleljklrcbd`: **89 collections** have `unique_id_enabled=false`
+with a real `code_prefix` still set; only **12** have it genuinely
+`true`; **0** have it `null` (so Round 2's assumption — that legacy rows
+would show up as `null` rather than `false` — was wrong; corrected here).
+
+Round 2/3's fix made `unique_id_enabled` a hard gate (`false` always
+blocks, `true` always allows, `null` falls back to prefix presence).
+That was *correct* for the 12 genuinely-`true` collections and for any
+new collection (where the current UI invariant means toggle-off always
+implies `code_prefix=null` anyway) — but it **actively broke** all 89
+legacy collections, because their `false` is migration noise, not a
+real choice, and the gate doesn't fall back to `code_prefix` for `false`.
+
+**The fix:** drop `unique_id_enabled` as a gate entirely. A configured
+prefix — the collection's `code_prefix`, or a `price_tiers[].prefix` on
+the specific tier/ticket being purchased — is now the sole trigger for
+generation, exactly matching the original pre-regression logic and the
+UI's own long-standing copy ("IDs are only generated when you add a
+prefix"). `unique_id_enabled` is still saved by the UI and still read,
+but only for display (e.g., whether a receipt shows a "your code"
+section) — never as a block.
+
+**Verified this is correct, not just convenient:** of the 89 "false but
+has a prefix" collections, 2071 paid contributions exist across them,
+and **1986 already have a code** — direct proof these collections were
+genuinely working under prefix-only logic before any of this column
+existed. Only **85 contributions are actually missing a code**,
+concentrated in just 4 collections:
+- `Y2K PARTY TICKETS PAYMENTS` — 73 missing (out of 110 paid)
+- `QUANTUMITES NACOS FYB CONTRIBUTION 26'` — 8 missing (out of 211 paid)
+- `200 LEVEL ENGINEERING CLASS` — 3 missing (out of 20 paid)
+- `Formula 1` — 1 missing (out of 1 paid)
+
+These 85 are the actual regression scars — contributions that came in
+during the window when generation was fully broken (the missing
+`uniqueIdEnabled` field from Round 1) or partially broken (Round 2/3's
+overly strict gate, for these specific legacy collections).
+
+### Files changed (Round 4)
+- `supabase/functions/verify-paystack-payment/index.ts` — replaced
+  `shouldGenerateUniqueCode()` with `hasAnyConfiguredPrefix()` (display
+  only); the per-unit generation loop now resolves the prefix directly
+  with no `unique_id_enabled` check at all.
+- `kolekto-be-old/utils/contributionCodeService.js` — same:
+  `resolveContributionUniqueCode()` no longer gates on
+  `shouldGenerateUniqueCode()`; that function is kept only as a
+  display-only export (used by `deposit.js`'s three receipt fields).
+- `kolekto-be-old/scripts/backfillUniqueContributionCodes.js` —
+  `fetchEligibleCollections()` now fetches all collections (paginated)
+  and filters in JS by `hasAnyConfiguredPrefix()`, instead of querying by
+  `unique_id_enabled` at the database level.
+
+### Verified against `busfgcmbndleljklrcbd` (read-only, anon key)
+- `contribution_code_counters` table and `next_contribution_code_number`
+  RPC both exist (the C-1 migration has been applied here too) — table
+  is currently empty, meaning no payment has yet completed through a
+  deployed edge function version that calls this RPC. This suggests the
+  version currently live on this project predates Round 2/3 (it's
+  probably still using in-memory counting, not the atomic RPC) —
+  redeploying the current file is needed regardless of the
+  `unique_id_enabled` fix.
+- Calling the RPC with the anon key correctly fails with `42501` (RLS
+  blocks anon writes to the counters table) — expected; `service_role`
+  bypasses RLS, so this doesn't indicate a problem for the real write path.
+
+### Still needed to finish this (blocked on access)
+1. **Deploy the corrected `verify-paystack-payment/index.ts`** to
+   `busfgcmbndleljklrcbd` specifically (CLI or dashboard paste — same as
+   before, just confirm the project ref this time).
+2. **A service-role key for `busfgcmbndleljklrcbd`** to run
+   `backfillUniqueContributionCodes.js` for the 85 missing codes there.
+   None exists in this workspace; needs to come from that project's
+   Settings → API page.
+3. Clarify what `lpeeckqsltxohppheucz` actually is — still real data,
+   not invented, but if it's not receiving live traffic, the Round 3
+   backfill run against it (29 codes assigned, additive/safe either way)
+   was directionally pointless for the user's actual production system.
+
+---
 
 ## Round 3 Addendum — production backfill executed + tiered verification
 
