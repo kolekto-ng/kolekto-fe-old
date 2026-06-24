@@ -124,8 +124,25 @@ const validateStep = (stepId: StepId, data: WizardData): string | null => {
       return null;
     }
 
-    case 'unique-id':
+    case 'unique-id': {
+      if (!data.unique_id_enabled) return null;
+
+      const isTicketStep = data.collection_type === 'ticket';
+      const usesTierPrefixes =
+        data.collection_type === 'tiered' || (isTicketStep && data.ticket_mode === 'tiered');
+
+      if (usesTierPrefixes) {
+        const hasAnyTierPrefix = data.pricing_tiers.some((tier) => tier.prefix.trim());
+        if (!hasAnyTierPrefix) {
+          return 'Add a prefix to at least one tier, or turn off unique IDs for this collection.';
+        }
+      } else if (!data.unique_id_prefix.trim()) {
+        return isTicketStep
+          ? 'Add a prefix to generate ticket IDs, or turn off this toggle.'
+          : 'Add a prefix to generate unique IDs, or turn off this toggle.';
+      }
       return null;
+    }
 
     case 'fundraising-goal': {
       if (!data.fundraising_open_ended) {
@@ -179,11 +196,6 @@ const buildPayload = (
         prefix: tier.prefix || null,
       }))
     : null;
-  const hasConfiguredUniquePrefix =
-    Boolean(data.unique_id_prefix.trim()) ||
-    data.pricing_tiers.some((tier) => Boolean(tier.prefix.trim()));
-  const shouldAssignUniqueIds = data.unique_id_enabled && hasConfiguredUniquePrefix;
-
   const amount =
     data.collection_type === 'fixed'
       ? parseFloat(data.fixed_amount) || 0
@@ -216,8 +228,12 @@ const buildPayload = (
     deadline: deadlineIso,
     fee_bearer: isFundraising || isOpenPool ? 'contributor' : data.fee_bearer,
     contributions_fields: isFundraising || isTicket ? [] : data.form_fields,
-    code_prefix: shouldAssignUniqueIds && data.unique_id_prefix ? data.unique_id_prefix : null,
-    unique_id_enabled: shouldAssignUniqueIds,
+    // unique_id_enabled is saved exactly as the organizer set it — it must
+    // not be silently downgraded to false just because no prefix was typed
+    // yet (a prior regression conflated "feature enabled" with "prefix
+    // configured", which prevented the toggle from ever reaching the DB).
+    code_prefix: data.unique_id_enabled && data.unique_id_prefix ? data.unique_id_prefix : null,
+    unique_id_enabled: data.unique_id_enabled,
     ticket_mode: isTicket ? data.ticket_mode : null,
     allow_multiple_quantity: isTicket ? data.allow_multiple_quantity : null,
     event_date: isTicket && data.event_date ? new Date(data.event_date).toISOString() : null,

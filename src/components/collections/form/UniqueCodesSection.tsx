@@ -36,21 +36,22 @@ const UniqueCodesSection: React.FC<UniqueCodesSectionProps> = ({
 
       {generateUniqueCodes && (
         <div className="mt-4 space-y-2">
-          <Label htmlFor="codePrefix">Code Prefix (Optional)</Label>
+          <Label htmlFor="codePrefix">Code Prefix (Required)</Label>
           <div className="flex items-center space-x-2">
             <Input
               id="codePrefix"
-              placeholder="e.g. BIO301-"
+              placeholder="e.g. REG"
               value={codePrefix}
-              onChange={(e) => setCodePrefix(e.target.value)}
+              onChange={(e) => setCodePrefix(e.target.value.toUpperCase())}
               className="w-full"
             />
             <div className="bg-gray-100 px-3 py-2 rounded-md text-sm font-mono">
-              {codePrefix || 'PREFIX-'}XYZ123
+              {(codePrefix || 'PREFIX')}-001
             </div>
           </div>
           <p className="text-sm text-gray-500">
-            Unique codes will be generated for each person who pays. If someone pays for multiple people, each person will get their own code.
+            A prefix is required to generate codes — no prefix means no code is assigned, even with this
+            enabled. If someone pays for multiple people, each person will get their own code.
           </p>
         </div>
       )}

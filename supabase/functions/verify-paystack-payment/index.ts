@@ -76,6 +76,21 @@ function getCollectionType(collection: Record<string, unknown>) {
   return String(collection.collection_type || collection.type || "fixed").trim();
 }
 
+/**
+ * unique_id_enabled is the authoritative switch — but it didn't always
+ * exist as a column. Rows created before it was added have it as
+ * null/undefined rather than false, and for those legacy rows the only
+ * signal that ever existed was "is code_prefix set". Treating null the
+ * same as false would silently stop generation for older collections that
+ * have been working correctly for a long time (and have real history to
+ * preserve) — explicit false must still always mean "never generate".
+ */
+function shouldGenerateUniqueCode(collection: Record<string, unknown>): boolean {
+  if (collection.unique_id_enabled === true) return true;
+  if (collection.unique_id_enabled === false) return false;
+  return Boolean(collection.code_prefix);
+}
+
 function getPriceTiers(collection: Record<string, unknown>) {
   const tiers = collection.price_tiers || collection.pricing_tiers;
   return Array.isArray(tiers) ? tiers : [];
@@ -422,6 +437,12 @@ function normalizePaymentRequest(input: {
     formData,
     contact,
     isAnonymous: metadata.isAnonymous === true || metadata.isAnonymous === 1 || metadata.isAnonymous === "1" || metadata.isAnonymous === "true",
+    // Regression fix: this field was read at the unique-code gate below but
+    // never set here, so `normalizedPayment.uniqueIdEnabled` was always
+    // `undefined` — silently disabling unique-code generation for every
+    // contribution, on every collection type, regardless of the organizer's
+    // setting. See CONTRIBUTOR_UNIQUE_ID_FIX_REPORT.md.
+    uniqueIdEnabled: shouldGenerateUniqueCode(collection),
     codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
     providedAmount: roundCurrency(asNumber(metadata.totalPayable || metadata.amount || 0)),
   };
@@ -614,7 +635,10 @@ serve(async (req: Request) => {
         const existingCountByPrefix = new Map<string, number>();
         for (const row of (paidRows || [])) {
           const code = String((row as Record<string, unknown>).contributor_unique_code || "");
-          const match = code.match(/^([A-Za-z]+)\d+$/);
+          // Optional hyphen tolerates both the current "PREFIX-001" format
+          // and legacy "PREFIX001" codes minted before the separator was
+          // added, so counts stay accurate across the format change.
+          const match = code.match(/^([A-Za-z]+)-?\d+$/);
           if (match) {
             const p = match[1].toUpperCase();
             existingCountByPrefix.set(p, (existingCountByPrefix.get(p) || 0) + 1);
@@ -636,18 +660,61 @@ serve(async (req: Request) => {
           // Only generate unique codes when the host explicitly enabled unique IDs.
           // If unique_id_enabled is false on the collection, no code is ever assigned,
           // even if a code_prefix value happens to exist on the record.
+          // Strip internal whitespace too — organizers sometimes type a tier
+          // prefix like "VIP 1" (label-style) rather than a code-style
+          // "VIP1". A unique code is meant to be a short, clean token, so
+          // normalize it here regardless of what's stored on the tier —
+          // this never touches the stored prefix value, only the code built
+          // from it.
           const prefix = normalizedPayment.uniqueIdEnabled
-            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase()
+            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase().replace(/\s+/g, "")
             : "";
           let uniqueCode: string | null = null;
 
           if (prefix) {
-            // Per-prefix sequential code: count existing + count in this batch so far
-            const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
-            const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
-            const sequenceNumber = existingForPrefix + batchForPrefix + 1;
-            batchCountByPrefix.set(prefix, batchForPrefix + 1);
-            uniqueCode = `${prefix}${String(sequenceNumber).padStart(3, "0")}`;
+            // C-1: atomic per-(collection, prefix) counter via Postgres RPC.
+            // The previous approach derived the sequence number from a
+            // COUNT taken once at the start of the request — two payments
+            // to the same collection/prefix arriving concurrently could
+            // both read the same count and mint the identical code. The
+            // RPC is a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING,
+            // which Postgres serialises automatically per row.
+            let sequenceNumber: number | null = null;
+            try {
+              const { data: rpcData, error: rpcError } = await supabase.rpc(
+                "next_contribution_code_number",
+                { p_collection_id: collectionId, p_prefix: prefix }
+              );
+              if (!rpcError && rpcData != null) {
+                const num = typeof rpcData === "number" ? rpcData : Number(rpcData);
+                if (Number.isFinite(num) && num > 0) sequenceNumber = num;
+              }
+              if (rpcError) {
+                console.warn(
+                  `[verify ref=${reference}] next_contribution_code_number RPC unavailable — ` +
+                  "falling back to in-memory count (apply database/c1_per_prefix_code_counters.sql " +
+                  "to remove this fallback and its race-condition risk).",
+                  { code: rpcError.code, message: rpcError.message }
+                );
+              }
+            } catch (rpcErr) {
+              console.warn(
+                `[verify ref=${reference}] next_contribution_code_number RPC threw — falling back:`,
+                (rpcErr as Error)?.message
+              );
+            }
+
+            if (sequenceNumber == null) {
+              // Fallback: count existing + count in this batch so far. Still
+              // racy across concurrent requests — only used if the migration
+              // above hasn't been applied yet.
+              const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
+              const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
+              sequenceNumber = existingForPrefix + batchForPrefix + 1;
+              batchCountByPrefix.set(prefix, batchForPrefix + 1);
+            }
+
+            uniqueCode = `${prefix}-${String(sequenceNumber).padStart(3, "0")}`;
           }
 
           // Fix #1: When organizer absorbs fees, contributions.amount = net the host receives.

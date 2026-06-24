@@ -156,7 +156,7 @@ const CollectionDetailsPage: React.FC = () => {
     totalRaised: number;
     totalBalance: number;
     availableBalance: number;
-    pendingBalance: number;
+    pendingBalance: number; 
     withdrawn: number;
     pendingWithdrawalRequests: number;
   } | null>(null);
