@@ -1,6 +1,127 @@
 # Contributor Unique ID/Code Generation — Regression Fix Report
 
-Date: 2026-06-24 (Round 1 + Round 2 + Round 3 + Round 4)
+Date: 2026-06-24 → 2026-06-25 (Round 1 + Round 2 + Round 3 + Round 4 + Round 5)
+
+## Round 5 — "Missing collection ID in payment metadata" (verification itself failing)
+
+Separate from unique-code logic, but the actual prerequisite for it: if
+verification fails, no contribution row is ever created, so no code can
+ever be generated either. Production logs showed:
+
+```
+WEBHOOK_VERIFY_FAILED status=400 { error: 'Missing collection ID in payment metadata' }
+```
+
+### Traced the full chain
+
+1. **Frontend** (`src/components/contribute/ContributeFlow.tsx:539`) — builds
+   `pending.collectionId = collection.id` and sends it inside `metadata` to
+   `initiate-paystack-payment`. Confirmed correct: `collectionId` (camelCase)
+   is present at the point of payment initiation, always.
+2. **`initiate-paystack-payment` edge function** — reads
+   `metadata.collectionId || metadata.collection_id`, builds
+   `normalizedMetadata` with `collectionId` as the first key, sends it to
+   Paystack's `/transaction/initialize`. Confirmed correct.
+3. **Paystack** — stores the transaction with that metadata, keyed by our
+   generated `reference`.
+4. **Verification** (FE's `paymentCallback.tsx` calling
+   `verify-paystack-payment` directly, OR the backend webhook's
+   `invokeVerifyEdgeFunction` calling the same function as a recovery
+   path) — fetches `GET /transaction/verify/:reference` and reads
+   `transaction.metadata.collectionId`. **This is where it broke.**
+
+### Root cause
+
+```ts
+const metadata =
+  transaction.metadata && typeof transaction.metadata === "object"
+    ? transaction.metadata
+    : {};
+```
+This only accepted `transaction.metadata` if it was *already* a parsed
+JS object. Paystack's verify API does not always return `metadata` that
+way — for some transactions it comes back as a JSON-**encoded string**
+(a known Paystack API inconsistency) rather than a parsed object, and/or
+metadata can be truncated server-side if it exceeds an undocumented size
+limit (this integration's own `ticketSelectionsJson`/`formDataJson`
+fields are each capped at 1800 characters specifically because oversized
+metadata is known to misbehave — see the comment in
+`initiate-paystack-payment`). Either failure mode makes
+`typeof transaction.metadata === "object"` false, the code silently
+discarded it as `{}`, and `collectionId` came back "missing" — even
+though it was sent correctly at every step on our side.
+
+**Why this could look fine "locally" but fail in production**: this isn't
+a code-path difference between environments — the same function runs
+both places. The most likely explanation is that the failure is
+*conditional on Paystack's own behavior* for a given transaction (channel,
+metadata size for that specific checkout, or just inconsistency in their
+API), not on anything in this codebase that differs by environment. Local
+testing with small/simple metadata payloads simply may never have
+triggered whichever condition causes Paystack to mangle the round-trip.
+Without production-side visibility into Paystack's actual stored
+representation for a failing reference, the exact trigger inside
+Paystack's system can't be pinned down further from this codebase alone
+— which is exactly why the fix below doesn't try to guess the trigger and
+patch around it, but removes the dependency entirely.
+
+### The permanent fix: stop trusting Paystack to round-trip our own data
+
+Added `database/d1_pending_payment_context.sql` — a new
+`pending_payment_context (reference, collection_id, metadata, created_at)`
+table. `initiate-paystack-payment` now writes a row here (best-effort,
+non-blocking) right after generating the `reference`, containing the
+exact metadata object being sent to Paystack. `verify-paystack-payment`
+now reads this row back **first**, by `reference`, and uses it as the
+authoritative metadata — completely bypassing whatever Paystack does to
+the metadata on its end. It only falls back to (now defensively parsed,
+handling both object and string) Paystack metadata for references that
+predate this change, i.e. payments already in-flight at deploy time.
+
+This doesn't just patch the specific string-vs-object bug found — it
+makes verification correct regardless of *any* future Paystack metadata
+quirk, because we're no longer relying on Paystack as a faithful data
+store for our own business data.
+
+### Diagnostic logging added (temporary, no secrets)
+- `initiate-paystack-payment`: `METADATA_DIAGNOSTIC` — metadata key list,
+  total serialized size, whether `collectionId` is present; and
+  `PENDING_CONTEXT_WRITE_OK`/`_FAILED` for the new table write.
+- `verify-paystack-payment`: `METADATA_DIAGNOSTIC` — which source was used
+  (`pending_payment_context`, `paystack_object`, or
+  `paystack_string_parsed`), the raw type Paystack returned, resolved
+  keys, and both possible collectionId field values; plus a
+  `MISSING_COLLECTION_ID` error log with full context if it still
+  somehow comes back empty.
+- `kolekto-be-old/controllers/deposit.js` webhook handler:
+  `WEBHOOK_METADATA_DIAGNOSTIC` — logs the webhook payload's own
+  `event.data.metadata` type/keys, so a future investigation can compare
+  whether the webhook's copy and the verify-API's copy of metadata ever
+  disagree for the same reference.
+
+None of this logging prints metadata *values* beyond what the contributor's
+own browser already sent moments earlier (no card data, no secrets,
+nothing Paystack itself wouldn't already show in its own dashboard).
+
+### Files changed (Round 5)
+- `database/d1_pending_payment_context.sql` (new)
+- `supabase/functions/initiate-paystack-payment/index.ts` — writes
+  `pending_payment_context` row; added diagnostic log.
+- `supabase/functions/verify-paystack-payment/index.ts` — reads
+  `pending_payment_context` first; defensive object-or-string metadata
+  parsing as fallback; added diagnostic logs.
+- `kolekto-be-old/controllers/deposit.js` — added webhook-side metadata
+  diagnostic log.
+
+### Deployment note
+Both edge functions need redeploying to `busfgcmbndleljklrcbd` for this
+to take effect (same deployment gap as the unique-code fix — see Round 4).
+The SQL migration needs to run before or at the same time as the
+`initiate-paystack-payment` redeploy (it writes to the new table;
+`verify-paystack-payment` degrades gracefully via its fallback if the
+table doesn't exist yet, but won't get the benefit until it does).
+
+---
 
 ## Round 4 — the REAL production project, and the actual root cause for old collections
 

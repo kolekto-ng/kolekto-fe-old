@@ -524,13 +524,85 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const metadata =
-      transaction.metadata && typeof transaction.metadata === "object"
-        ? transaction.metadata
-        : {};
+    // D-1: root-cause fix for "Missing collection ID in payment metadata".
+    //
+    // This used to trust `transaction.metadata` from Paystack's verify
+    // response unconditionally, only guarding against it being absent
+    // (`typeof transaction.metadata === "object"`). That guard silently
+    // discards metadata that comes back as a JSON-ENCODED STRING instead
+    // of an already-parsed object — a real Paystack API inconsistency —
+    // and offered no protection against metadata being truncated by
+    // Paystack for exceeding an undocumented size limit. Either failure
+    // mode produces exactly this symptom: collectionId present at
+    // initiate time, missing at verify time, with nothing wrong on our
+    // side that the logs could show — because we never logged what
+    // Paystack actually sent back.
+    //
+    // Fix: don't depend on Paystack to round-trip our own data at all.
+    // We wrote this exact metadata into `pending_payment_context` at
+    // initiate time, keyed by this same reference — read it back from
+    // there FIRST. Only fall back to (defensively parsed) Paystack
+    // metadata for references that predate this change.
+    let metadata: Record<string, unknown> = {};
+    let metadataSource = "none";
+
+    const { data: pendingContext, error: pendingContextError } = await supabase
+      .from("pending_payment_context")
+      .select("collection_id, metadata")
+      .eq("reference", reference)
+      .maybeSingle();
+
+    if (pendingContextError) {
+      console.warn(
+        `[verify ref=${reference}] PENDING_CONTEXT_LOOKUP_FAILED (falling back to Paystack metadata):`,
+        pendingContextError.message
+      );
+    }
+
+    if (pendingContext?.metadata && typeof pendingContext.metadata === "object") {
+      metadata = pendingContext.metadata as Record<string, unknown>;
+      metadataSource = "pending_payment_context";
+    } else {
+      // Fallback: parse whatever Paystack actually returned, tolerating
+      // both an already-parsed object AND a JSON-encoded string.
+      const rawMetadata = transaction.metadata;
+      if (rawMetadata && typeof rawMetadata === "object") {
+        metadata = rawMetadata as Record<string, unknown>;
+        metadataSource = "paystack_object";
+      } else if (typeof rawMetadata === "string" && rawMetadata.trim()) {
+        try {
+          const parsed = JSON.parse(rawMetadata);
+          if (parsed && typeof parsed === "object") {
+            metadata = parsed as Record<string, unknown>;
+            metadataSource = "paystack_string_parsed";
+          }
+        } catch (parseErr) {
+          console.error(
+            `[verify ref=${reference}] METADATA_PARSE_FAILED raw_snippet="${rawMetadata.slice(0, 300)}"`,
+            (parseErr as Error)?.message
+          );
+        }
+      }
+    }
+
+    // F4/D-1 diagnostic: exactly what we received and decided, without
+    // exposing secrets (this transaction's own metadata is not secret —
+    // it's the same data the contributor's own browser sent moments ago).
+    console.log(`[verify ref=${reference}] METADATA_DIAGNOSTIC`, {
+      metadataSource,
+      rawMetadataType: typeof transaction.metadata,
+      pendingContextFound: Boolean(pendingContext),
+      resolvedKeys: Object.keys(metadata),
+      collectionIdFromCollectionId: metadata.collectionId ?? null,
+      collectionIdFromSnakeCase: metadata.collection_id ?? null,
+    });
 
     const collectionId = String(metadata.collectionId || metadata.collection_id || "").trim();
     if (!collectionId) {
+      console.error(
+        `[verify ref=${reference}] MISSING_COLLECTION_ID metadataSource=${metadataSource} ` +
+        `rawMetadataType=${typeof transaction.metadata} resolvedKeys=${Object.keys(metadata).join(",")}`
+      );
       return new Response(JSON.stringify({ error: "Missing collection ID in payment metadata" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
