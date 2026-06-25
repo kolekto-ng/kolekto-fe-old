@@ -280,7 +280,11 @@ const CollectionDetailsPage: React.FC = () => {
     if (params.get('share') === 'true') setIsShareOpen(true);
   }, [id]);
 
-  // ── Real-time: refresh contributions + wallet on any change ─────────────────
+  // ── Real-time: refresh contributions + wallet + the collection row itself ────
+  // The collection listener is what makes a status change (active→closed/paused),
+  // target/limit edit, or deadline update reflect here instantly — without it,
+  // enabling `collections` in the realtime publication has nothing on the client
+  // listening for it.
   useEffect(() => {
     if (!id) return;
     const channel = supabase
@@ -292,6 +296,10 @@ const CollectionDetailsPage: React.FC = () => {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'wallets', filter: `collection_id=eq.${id}` },
         () => { loadWallet(); loadBalanceStats(); }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'collections', filter: `id=eq.${id}` },
+        () => { loadCollection(); }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };

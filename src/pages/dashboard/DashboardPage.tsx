@@ -228,6 +228,14 @@ const DashboardPage: React.FC = () => {
           void loadDashboardHome(userId, { force: true, silent: true });
         },
       )
+      .on(
+        // Collection status/target/limit changes refresh the dashboard cards.
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "collections" },
+        () => {
+          void loadDashboardHome(userId, { force: true, silent: true });
+        },
+      )
       .subscribe();
 
     return () => {

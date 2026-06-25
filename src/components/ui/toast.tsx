@@ -76,7 +76,9 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-3 top-3 rounded-full p-1 text-white/45 opacity-0 transition-opacity hover:bg-white/10 hover:text-white focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-white/30 group-hover:opacity-100",
+      // Always visible and tappable — on touch devices there is no hover, so a
+      // hover-only reveal left the close control invisible/unusable on mobile.
+      "absolute right-3 top-3 rounded-full p-1 text-white/60 opacity-100 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/30",
       className
     )}
     toast-close=""

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useAuthStore } from '@/store';
 import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
+import { supabase } from '@/integrations/supabase/client';
 
 const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,26 @@ const CollectionsPage: React.FC = () => {
       });
     }
   }, [user?.id, collections?.length, fetchCollections]);
+
+  // Live-update the list when any of the user's collections changes (status
+  // flips to closed/paused, a new collection is created, target/limit edited).
+  // One channel per user, torn down on unmount — no duplicate subscriptions.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`collections-list-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${user.id}` },
+        () => {
+          void fetchCollections(user.id, { silent: true }).catch(() => undefined);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchCollections]);
 
   const handleShare = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

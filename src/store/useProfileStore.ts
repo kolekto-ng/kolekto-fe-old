@@ -12,6 +12,30 @@ const supabase = createClient(
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 
+// KYC realtime subscription is a singleton keyed by user. Without this guard,
+// fetchKYCStatus() created a brand-new channel on every call — and its own
+// realtime callback re-invokes fetchKYCStatus(), so each kyc_verifications
+// change doubled the number of live channels (a runaway subscription leak).
+let kycChannel: ReturnType<typeof supabase.channel> | null = null;
+let kycSubscribedFor: string | null = null;
+
+function ensureKycSubscription(userId: string, onChange: () => void) {
+  if (kycSubscribedFor === userId && kycChannel) return; // already live
+  if (kycChannel) {
+    supabase.removeChannel(kycChannel);
+    kycChannel = null;
+  }
+  kycChannel = supabase
+    .channel(`kyc-status-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "kyc_verifications", filter: `user_id=eq.${userId}` },
+      onChange,
+    )
+    .subscribe();
+  kycSubscribedFor = userId;
+}
+
 interface ProfileState {
   profile: any;
   kycData: any;
@@ -124,23 +148,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
     // Subscribe to real-time changes on this user's kyc_verifications row so
     // the KYC section updates automatically when an admin approves a document
-    // — without requiring a manual refresh.
-    supabase
-      .channel(`kyc-status-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "kyc_verifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          // Re-fetch silently (no loading spinner) when any KYC row changes
-          get().fetchKYCStatus(userId);
-        }
-      )
-      .subscribe();
+    // — without requiring a manual refresh. Idempotent: only one channel per
+    // user ever exists, so the re-fetch in the callback can never spawn more.
+    ensureKycSubscription(userId, () => {
+      get().fetchKYCStatus(userId);
+    });
 
     try {
       const [res, kycVerificationRes] = await Promise.all([
