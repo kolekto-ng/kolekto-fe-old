@@ -5,6 +5,7 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { getCollectionStatusMeta } from '@/utils/collectionStatus';
 import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -70,16 +71,6 @@ function daysLeft(deadline?: string | null): number | null {
   const diff = new Date(deadline).getTime() - Date.now();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-100 text-green-800',
-  paused: 'bg-yellow-100 text-yellow-800',
-  expired: 'bg-red-100 text-red-800',
-  completed: 'bg-blue-100 text-blue-800',
-  closed: 'bg-gray-200 text-gray-700',
-  deleted: 'bg-gray-300 text-gray-800',
-  pending_review: 'bg-amber-100 text-amber-800',
-};
 
 const CHECK_IN_COLORS: Record<string, string> = {
   not_checked_in: 'bg-gray-100 text-gray-600',
@@ -534,8 +525,20 @@ const CollectionDetailsPage: React.FC = () => {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const statusLabel = col?.status === 'pending_review' ? 'Pending Review'
-    : col?.status ? col.status.charAt(0).toUpperCase() + col.status.slice(1) : 'Active';
+  // Canonical display tag (folds in full/expired). Action buttons below still
+  // key off the raw col.status lifecycle value — you can close/pause a
+  // collection that is merely "full" or "expired".
+  const statusMeta = getCollectionStatusMeta({
+    status: col?.status,
+    deadline,
+    collection_type: colType,
+    max_participants: col?.max_participants,
+    max_contributions: col?.max_contributions,
+    participants_count: paidContributions.length,
+    target_amount: col?.target_amount,
+    total_raised: totalRaised,
+  });
+  const statusLabel = statusMeta.label;
   const collectionTypeLabel =
     colType === 'open_pool' ? 'Open Pool'
       : colType === 'fundraising' ? 'Fundraising'
@@ -576,7 +579,7 @@ const CollectionDetailsPage: React.FC = () => {
         <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="min-w-0 break-words text-xl font-semibold leading-snug text-gray-950 sm:text-2xl">{col.title}</h2>
-              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${STATUS_COLORS[col.status] || 'bg-gray-100 text-gray-700'}`}>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${statusMeta.className}`}>
                 <span className="h-2 w-2 rounded-full bg-current" />
                 {statusLabel}
               </span>
@@ -844,7 +847,7 @@ const CollectionDetailsPage: React.FC = () => {
               <Flag className="h-4 w-4" />
             </span>
             <p className="min-w-0 flex-1 text-sm font-medium text-gray-500">Status</p>
-            <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${STATUS_COLORS[col.status] || 'bg-gray-100 text-gray-700'}`}>
+            <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
               {statusLabel}
             </span>
           </div>

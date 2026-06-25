@@ -163,8 +163,9 @@ button, a, [role="button"] {
    default), so only the toast card is interactive — the rest of the app stays
    usable and is never blocked. */
 .kolekto-sonner-toaster[data-sonner-toaster] {
-  --width: min(400px, calc(100vw - 24px));
-  --border-radius: 14px;
+  /* Compact card, not a wide rectangle. */
+  --width: min(300px, calc(100vw - 56px));
+  --border-radius: 20px;
   top: 50% !important;
   bottom: auto !important;
   left: 50% !important;
@@ -174,91 +175,105 @@ button, a, [role="button"] {
   transform: translate(-50%, -50%) !important;
 }
 
+/* Native-app status card: icon-in-circle on top, title, then message, all
+   centered, with the close control in the top-right corner. */
 .kolekto-sonner-toast[data-sonner-toast] {
   --kolekto-toast-accent: #38bdf8;
   --kolekto-toast-accent-dark: #0369a1;
   position: relative !important;
   display: flex !important;
-  flex-direction: row !important;
-  align-items: flex-start !important;
-  gap: 12px !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
   width: var(--width) !important;
   overflow: hidden !important;
-  padding: 14px 40px 14px 16px !important;
+  padding: 24px 20px 20px !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 14px !important;
-  background: linear-gradient(150deg, #0f172a, #0b1220) !important;
+  border-radius: var(--border-radius) !important;
+  background: linear-gradient(155deg, #111c30, #0b1220) !important;
   color: #f8fafc !important;
-  text-align: left !important;
+  text-align: center !important;
   box-shadow:
-    0 12px 30px rgba(15, 23, 42, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+    0 18px 44px rgba(8, 12, 22, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
-/* Colored accent bar pinned to the leading edge. */
+/* Soft accent glow behind the icon instead of an edge bar — reads as a card. */
 .kolekto-sonner-toast[data-sonner-toast]::before {
   content: "";
   position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 4px;
-  background: linear-gradient(180deg, var(--kolekto-toast-accent), var(--kolekto-toast-accent-dark));
+  top: -36px;
+  left: 50%;
+  width: 150px;
+  height: 110px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--kolekto-toast-accent), transparent 70%);
+  opacity: 0.22;
+  pointer-events: none;
 }
 
+/* Icon in a 52px accent-tinted circle, centered at the top. */
 .kolekto-sonner-toast [data-icon],
 .kolekto-sonner-icon {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   flex-shrink: 0 !important;
-  width: 22px !important;
-  height: 22px !important;
-  margin: 1px 0 0 0 !important;
+  width: 52px !important;
+  height: 52px !important;
+  margin: 0 auto !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--kolekto-toast-accent) 16%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kolekto-toast-accent) 35%, transparent) !important;
   color: var(--kolekto-toast-accent) !important;
 }
 
 .kolekto-sonner-toast [data-icon] svg {
-  width: 20px !important;
-  height: 20px !important;
-  stroke-width: 2.4 !important;
+  width: 26px !important;
+  height: 26px !important;
+  stroke-width: 2.2 !important;
 }
 
 .kolekto-sonner-toast [data-content] {
   display: flex !important;
   flex-direction: column !important;
-  gap: 2px !important;
+  gap: 4px !important;
   min-width: 0 !important;
-  text-align: left !important;
+  width: 100% !important;
+  text-align: center !important;
 }
 
 .kolekto-sonner-toast [data-title] {
   color: #f8fafc !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
-  line-height: 1.4 !important;
+  line-height: 1.35 !important;
 }
 
 .kolekto-sonner-toast [data-description] {
   color: #cbd5e1 !important;
-  font-size: 12.5px !important;
+  font-size: 13px !important;
   font-weight: 450 !important;
   line-height: 1.5 !important;
+  max-width: 240px !important;
+  margin: 0 auto !important;
 }
 
-/* Close button: vertically centered on the trailing edge. Always visible so
-   it is tappable on touch devices, which have no hover to reveal it. */
+/* Close button: top-right corner of the card. Always visible so it is tappable
+   on touch devices, which have no hover to reveal it. */
 .kolekto-sonner-toast [data-close-button] {
   position: absolute !important;
-  top: 50% !important;
+  top: 10px !important;
   right: 10px !important;
   left: auto !important;
-  width: 22px !important;
-  height: 22px !important;
+  width: 26px !important;
+  height: 26px !important;
   border: 0 !important;
-  border-radius: 7px !important;
+  border-radius: 999px !important;
   background: rgba(255, 255, 255, 0.07) !important;
   color: rgba(255, 255, 255, 0.6) !important;
-  transform: translateY(-50%) !important;
+  transform: none !important;
   opacity: 1;
   transition: background 0.15s ease, color 0.15s ease;
 }

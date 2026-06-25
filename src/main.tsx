@@ -8,6 +8,8 @@ import './index.css';
 // Register Service Worker for PWA
 import { registerSW } from 'virtual:pwa-register';
 import { registerPwaUpdater, setPwaUpdateState } from '@/lib/pwaUpdates';
+// Attaches window.kolektoPushDiagnostics() for on-device push troubleshooting.
+import '@/utils/pushDiagnostics';
 
 // Create a custom window property for debugging drag and drop
 if (process.env.NODE_ENV === 'development') {

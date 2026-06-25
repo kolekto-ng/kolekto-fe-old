@@ -12,6 +12,7 @@ import {
   Waves,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 
 type Status = "active" | "paused" | "expired" | "completed" | "closed" | "deleted" | "pending_review" | string;
 type CollectionType = "fixed" | "tiered" | "open_pool" | "ticket" | "fundraising" | "flat" | string;
@@ -53,16 +54,6 @@ const TYPE_ICON: Record<string, { label: string; description: string; icon: Reac
 
 const DEFAULT_TYPE = { label: "Collection", description: "Track contributions and payout activity", icon: Target };
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700",
-  paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-700",
-  completed: "bg-blue-100 text-blue-700",
-  closed: "bg-slate-200 text-slate-700",
-  deleted: "bg-slate-300 text-slate-600",
-  pending_review: "bg-amber-100 text-amber-700",
-};
-
 const CollectionCard: React.FC<CollectionCardProps> = ({
   title,
   amount,
@@ -80,8 +71,18 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
 }) => {
   const cfg = TYPE_ICON[type] ?? DEFAULT_TYPE;
   const Icon = cfg.icon;
-  const sCls = STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700";
-  const sLabel = status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "-";
+  // Canonical status: folds full (limit/target reached) and expired (past
+  // deadline) into the raw lifecycle status so the tag is never a misleading
+  // "Active". Single source of truth in utils/collectionStatus.
+  const { label: sLabel, className: sCls } = getCollectionStatusMeta({
+    status,
+    deadline,
+    collection_type: type,
+    maxParticipants: maxParticipants ?? null,
+    participantsCount,
+    goalAmount: goalAmount ?? null,
+    totalRaised,
+  });
   const progress = goalAmount && goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0;
   const lowestTier = tiers?.length ? Math.min(...tiers.map(t => t.amount)) : 0;
   const isFundraising = type === "fundraising";
