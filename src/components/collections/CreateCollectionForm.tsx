@@ -366,6 +366,15 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         return;
       }
 
+      // Unique codes are only ever generated when BOTH the toggle is on AND
+      // a prefix is configured — enforce that here so the organizer can't
+      // end up with the toggle on and no codes ever appearing, silently.
+      if (generateUniqueCodes && !codePrefix.trim()) {
+        toast.error('Add a code prefix to generate unique codes, or turn off that toggle.');
+        setIsLoading(false);
+        return;
+      }
+
       const deadlineDate = deadline ? new Date(deadline) : null;
       const maxContributorsValue = isMaxContributorsEnabled ? parseInt(maxContributors) : null;
 
@@ -396,7 +405,22 @@ const CreateCollectionForm: React.FC<CreateCollectionFormProps> = ({ onPreview }
         collection_type: useFundraising ? 'fundraising' : (usePriceTiers ? 'tiered' : 'fixed'),
         status: "active" as const,
         support: support || null,
-        code_prefix: codePrefix || null,
+        // The "Generate unique ID" toggle (generateUniqueCodes) was being
+        // collected from the UI but never sent to the backend — only
+        // code_prefix was. That left unique_id_enabled unset/false in the DB
+        // even when the organizer turned the toggle on, so no unique code
+        // was ever generated for contributions to this collection.
+        //
+        // Strip any trailing hyphen/whitespace the organizer might type
+        // (this field's placeholder used to suggest "BIO301-" with a
+        // trailing hyphen baked in) — the backend always joins prefix and
+        // number with its own "-", so a stored trailing hyphen would
+        // produce codes like "BIO301--001".
+        unique_id_enabled: generateUniqueCodes,
+        code_prefix:
+          generateUniqueCodes && codePrefix.trim()
+            ? codePrefix.trim().replace(/-+$/, '').replace(/\s+/g, '').toUpperCase()
+            : null,
       };
 
       console.log(collectionData, 'collection data');

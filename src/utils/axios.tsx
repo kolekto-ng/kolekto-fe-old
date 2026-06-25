@@ -2,13 +2,22 @@ import { useAuthStore } from "@/store";
 import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
 import axios from "axios";
 
-// API configuration following the backend pattern
+// API configuration following the backend pattern.
+//
+// Which URL wins depends on Vite's env-file precedence
+// (.env.[mode].local > .env.[mode] > .env.local > .env). In production mode
+// this always resolves to the deployed backend unless VITE_API_URL is
+// explicitly overridden. In dev mode, add a `.env.development.local` with
+// VITE_API_URL=http://localhost:<PORT>/api to point at a local backend —
+// see kolekto-fe-old/.env.development.local. The bare fallback below matches
+// the backend's own default port (see kolekto-be-old/app.js: `PORT || 3000`)
+// so a fresh checkout with no env file still points somewhere that exists.
 const API_BASE_URL =
   import.meta.env.MODE === "production"
     ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
     : import.meta.env.VITE_API_BASE_URL ||
       import.meta.env.VITE_API_URL ||
-      "http://localhost:5050/api";
+      "http://localhost:3000/api";
 
 // const { session } = useAuthStore()
 

@@ -53,8 +53,9 @@ const BankDetailsSection: React.FC = () => {
   const [verified, setVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts } =
+  const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts, deletePayoutAccount } =
     useSettings() as any;
 
   useEffect(() => {
@@ -126,6 +127,25 @@ const BankDetailsSection: React.FC = () => {
     setShowAddDialog(true);
   };
 
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      await deletePayoutAccount(deleteConfirm);
+      toast.success('Bank account removed.');
+      setDeleteConfirm(null);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to remove bank account.';
+      toast.error(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Card */}
@@ -176,10 +196,17 @@ const BankDetailsSection: React.FC = () => {
 
                   {/* Right: Status & Actions */}
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Verified
-                    </span>
+                    {account.is_decryptable === false ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        <AlertCircle className="w-3 h-3" />
+                        Needs re-adding
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Verified
+                      </span>
+                    )}
                     {account.is_default && (
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#E8F5E9] text-[#1B5E20]">
                         Default
@@ -338,6 +365,41 @@ const BankDetailsSection: React.FC = () => {
                 )}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove bank account?</DialogTitle>
+            <DialogDescription>
+              This account will no longer be available for withdrawals. You can add it again later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteConfirm(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                'Remove'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

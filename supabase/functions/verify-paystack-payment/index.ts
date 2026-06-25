@@ -76,6 +76,31 @@ function getCollectionType(collection: Record<string, unknown>) {
   return String(collection.collection_type || collection.type || "fixed").trim();
 }
 
+/**
+ * Round 4 correction (verified against real production data): a schema
+ * migration added `unique_id_enabled` with `NOT NULL DEFAULT false`, which
+ * backfilled EVERY pre-existing collection to `false` — including ones
+ * that already had a real `code_prefix` configured and had been
+ * generating codes successfully for months under the old (prefix-only)
+ * logic. In Kolekto's actual production database this affects 89
+ * collections (vs. only 12 with the column genuinely `true`) — treating
+ * `false` as a hard block, as an earlier pass here did, silently broke
+ * code generation for the large majority of collections that had it
+ * working before this column existed, with zero ill effect on the small
+ * number of new ones (because the current collection-creation UI always
+ * clears `code_prefix` whenever the toggle is off, so for any collection
+ * saved through it, "a prefix is configured" and "the toggle is on" are
+ * the same fact). So: a configured prefix — collection-level OR on the
+ * specific tier/ticket type being purchased — is what actually drives
+ * generation; `unique_id_enabled` is read for display only (e.g. whether
+ * a receipt shows a "your code" section), never as a gate.
+ */
+function hasAnyConfiguredPrefix(collection: Record<string, unknown>): boolean {
+  if (collection.code_prefix) return true;
+  const tiers = getPriceTiers(collection);
+  return tiers.some((t) => Boolean((t as Record<string, unknown>)?.prefix));
+}
+
 function getPriceTiers(collection: Record<string, unknown>) {
   const tiers = collection.price_tiers || collection.pricing_tiers;
   return Array.isArray(tiers) ? tiers : [];
@@ -422,6 +447,10 @@ function normalizePaymentRequest(input: {
     formData,
     contact,
     isAnonymous: metadata.isAnonymous === true || metadata.isAnonymous === 1 || metadata.isAnonymous === "1" || metadata.isAnonymous === "true",
+    // Display-only flag now (see hasAnyConfiguredPrefix above) — the
+    // actual generation decision is made per-unit, purely from whether a
+    // prefix resolves to something non-empty. See CONTRIBUTOR_UNIQUE_ID_FIX_REPORT.md.
+    uniqueIdEnabled: hasAnyConfiguredPrefix(collection),
     codePrefix: String(metadata.codePrefix || collection.code_prefix || "").trim(),
     providedAmount: roundCurrency(asNumber(metadata.totalPayable || metadata.amount || 0)),
   };
@@ -495,13 +524,85 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const metadata =
-      transaction.metadata && typeof transaction.metadata === "object"
-        ? transaction.metadata
-        : {};
+    // D-1: root-cause fix for "Missing collection ID in payment metadata".
+    //
+    // This used to trust `transaction.metadata` from Paystack's verify
+    // response unconditionally, only guarding against it being absent
+    // (`typeof transaction.metadata === "object"`). That guard silently
+    // discards metadata that comes back as a JSON-ENCODED STRING instead
+    // of an already-parsed object — a real Paystack API inconsistency —
+    // and offered no protection against metadata being truncated by
+    // Paystack for exceeding an undocumented size limit. Either failure
+    // mode produces exactly this symptom: collectionId present at
+    // initiate time, missing at verify time, with nothing wrong on our
+    // side that the logs could show — because we never logged what
+    // Paystack actually sent back.
+    //
+    // Fix: don't depend on Paystack to round-trip our own data at all.
+    // We wrote this exact metadata into `pending_payment_context` at
+    // initiate time, keyed by this same reference — read it back from
+    // there FIRST. Only fall back to (defensively parsed) Paystack
+    // metadata for references that predate this change.
+    let metadata: Record<string, unknown> = {};
+    let metadataSource = "none";
+
+    const { data: pendingContext, error: pendingContextError } = await supabase
+      .from("pending_payment_context")
+      .select("collection_id, metadata")
+      .eq("reference", reference)
+      .maybeSingle();
+
+    if (pendingContextError) {
+      console.warn(
+        `[verify ref=${reference}] PENDING_CONTEXT_LOOKUP_FAILED (falling back to Paystack metadata):`,
+        pendingContextError.message
+      );
+    }
+
+    if (pendingContext?.metadata && typeof pendingContext.metadata === "object") {
+      metadata = pendingContext.metadata as Record<string, unknown>;
+      metadataSource = "pending_payment_context";
+    } else {
+      // Fallback: parse whatever Paystack actually returned, tolerating
+      // both an already-parsed object AND a JSON-encoded string.
+      const rawMetadata = transaction.metadata;
+      if (rawMetadata && typeof rawMetadata === "object") {
+        metadata = rawMetadata as Record<string, unknown>;
+        metadataSource = "paystack_object";
+      } else if (typeof rawMetadata === "string" && rawMetadata.trim()) {
+        try {
+          const parsed = JSON.parse(rawMetadata);
+          if (parsed && typeof parsed === "object") {
+            metadata = parsed as Record<string, unknown>;
+            metadataSource = "paystack_string_parsed";
+          }
+        } catch (parseErr) {
+          console.error(
+            `[verify ref=${reference}] METADATA_PARSE_FAILED raw_snippet="${rawMetadata.slice(0, 300)}"`,
+            (parseErr as Error)?.message
+          );
+        }
+      }
+    }
+
+    // F4/D-1 diagnostic: exactly what we received and decided, without
+    // exposing secrets (this transaction's own metadata is not secret —
+    // it's the same data the contributor's own browser sent moments ago).
+    console.log(`[verify ref=${reference}] METADATA_DIAGNOSTIC`, {
+      metadataSource,
+      rawMetadataType: typeof transaction.metadata,
+      pendingContextFound: Boolean(pendingContext),
+      resolvedKeys: Object.keys(metadata),
+      collectionIdFromCollectionId: metadata.collectionId ?? null,
+      collectionIdFromSnakeCase: metadata.collection_id ?? null,
+    });
 
     const collectionId = String(metadata.collectionId || metadata.collection_id || "").trim();
     if (!collectionId) {
+      console.error(
+        `[verify ref=${reference}] MISSING_COLLECTION_ID metadataSource=${metadataSource} ` +
+        `rawMetadataType=${typeof transaction.metadata} resolvedKeys=${Object.keys(metadata).join(",")}`
+      );
       return new Response(JSON.stringify({ error: "Missing collection ID in payment metadata" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -614,7 +715,10 @@ serve(async (req: Request) => {
         const existingCountByPrefix = new Map<string, number>();
         for (const row of (paidRows || [])) {
           const code = String((row as Record<string, unknown>).contributor_unique_code || "");
-          const match = code.match(/^([A-Za-z]+)\d+$/);
+          // Optional hyphen tolerates both the current "PREFIX-001" format
+          // and legacy "PREFIX001" codes minted before the separator was
+          // added, so counts stay accurate across the format change.
+          const match = code.match(/^([A-Za-z]+)-?\d+$/);
           if (match) {
             const p = match[1].toUpperCase();
             existingCountByPrefix.set(p, (existingCountByPrefix.get(p) || 0) + 1);
@@ -633,21 +737,62 @@ serve(async (req: Request) => {
 
         for (let index = 0; index < contributionUnits.length; index++) {
           const unit = contributionUnits[index];
-          // Only generate unique codes when the host explicitly enabled unique IDs.
-          // If unique_id_enabled is false on the collection, no code is ever assigned,
-          // even if a code_prefix value happens to exist on the record.
-          const prefix = normalizedPayment.uniqueIdEnabled
-            ? String(unit.prefix || normalizedPayment.codePrefix || "").trim().toUpperCase()
-            : "";
+          // A configured prefix — this unit's tier/ticket prefix, falling
+          // back to the collection-level code_prefix — is what drives
+          // generation; unique_id_enabled is NOT checked here (see
+          // hasAnyConfiguredPrefix above for why). Internal whitespace is
+          // stripped too — organizers sometimes type a tier prefix like
+          // "VIP 1" (label-style) rather than a code-style "VIP1"; a unique
+          // code should be a short, clean token. This never touches the
+          // stored prefix value, only the code built from it.
+          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "")
+            .trim().toUpperCase().replace(/\s+/g, "");
           let uniqueCode: string | null = null;
 
           if (prefix) {
-            // Per-prefix sequential code: count existing + count in this batch so far
-            const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
-            const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
-            const sequenceNumber = existingForPrefix + batchForPrefix + 1;
-            batchCountByPrefix.set(prefix, batchForPrefix + 1);
-            uniqueCode = `${prefix}${String(sequenceNumber).padStart(3, "0")}`;
+            // C-1: atomic per-(collection, prefix) counter via Postgres RPC.
+            // The previous approach derived the sequence number from a
+            // COUNT taken once at the start of the request — two payments
+            // to the same collection/prefix arriving concurrently could
+            // both read the same count and mint the identical code. The
+            // RPC is a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING,
+            // which Postgres serialises automatically per row.
+            let sequenceNumber: number | null = null;
+            try {
+              const { data: rpcData, error: rpcError } = await supabase.rpc(
+                "next_contribution_code_number",
+                { p_collection_id: collectionId, p_prefix: prefix }
+              );
+              if (!rpcError && rpcData != null) {
+                const num = typeof rpcData === "number" ? rpcData : Number(rpcData);
+                if (Number.isFinite(num) && num > 0) sequenceNumber = num;
+              }
+              if (rpcError) {
+                console.warn(
+                  `[verify ref=${reference}] next_contribution_code_number RPC unavailable — ` +
+                  "falling back to in-memory count (apply database/c1_per_prefix_code_counters.sql " +
+                  "to remove this fallback and its race-condition risk).",
+                  { code: rpcError.code, message: rpcError.message }
+                );
+              }
+            } catch (rpcErr) {
+              console.warn(
+                `[verify ref=${reference}] next_contribution_code_number RPC threw — falling back:`,
+                (rpcErr as Error)?.message
+              );
+            }
+
+            if (sequenceNumber == null) {
+              // Fallback: count existing + count in this batch so far. Still
+              // racy across concurrent requests — only used if the migration
+              // above hasn't been applied yet.
+              const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
+              const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
+              sequenceNumber = existingForPrefix + batchForPrefix + 1;
+              batchCountByPrefix.set(prefix, batchForPrefix + 1);
+            }
+
+            uniqueCode = `${prefix}-${String(sequenceNumber).padStart(3, "0")}`;
           }
 
           // Fix #1: When organizer absorbs fees, contributions.amount = net the host receives.
@@ -1240,7 +1385,7 @@ function buildReceiptData(input: {
     campaignSummary: collection.campaign_summary ? String(collection.campaign_summary) : "",
     bannerUrl: String(collection.banner_url || collection.banner_image || ""),
     eventDate: collection.event_date ? String(collection.event_date) : "",
-    uniqueIdEnabled: Boolean(collection.unique_id_enabled),
+    uniqueIdEnabled: hasAnyConfiguredPrefix(collection),
     codePrefix: collection.code_prefix ? String(collection.code_prefix) : "",
     contributionAmount,  // Total Raised contribution — no fees
     platformFee,

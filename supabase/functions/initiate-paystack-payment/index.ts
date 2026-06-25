@@ -642,6 +642,45 @@ serve(async (req: Request) => {
       ],
     };
 
+    // D-1: persist the payment context ourselves, keyed by reference, so
+    // verification never has to depend solely on Paystack faithfully
+    // echoing back the exact metadata object we sent. Best-effort — if
+    // this insert fails for any reason, we log it and continue; the
+    // verify step still falls back to parsing Paystack's own metadata for
+    // any reference that has no row here.
+    try {
+      const { error: contextError } = await supabase
+        .from("pending_payment_context")
+        .insert({
+          reference,
+          collection_id: normalized.collectionId,
+          metadata: normalizedMetadata,
+        });
+      if (contextError) {
+        console.warn(
+          `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_FAILED (non-fatal, verify will fall back to Paystack metadata):`,
+          contextError.message
+        );
+      } else {
+        console.log(`[initiate ref=${reference}] PENDING_CONTEXT_WRITE_OK`);
+      }
+    } catch (contextErr) {
+      console.warn(
+        `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_THREW (non-fatal):`,
+        (contextErr as Error)?.message
+      );
+    }
+
+    // F4 diagnostic: metadata size/shape going to Paystack — helps catch
+    // truncation-related issues (Paystack has an undocumented practical
+    // size limit; oversized metadata can come back malformed) without
+    // logging any secret/PII beyond what's already in metadata itself.
+    console.log(`[initiate ref=${reference}] METADATA_DIAGNOSTIC`, {
+      keys: Object.keys(normalizedMetadata),
+      totalSize: JSON.stringify(normalizedMetadata).length,
+      collectionIdPresent: Boolean(normalizedMetadata.collectionId),
+    });
+
     console.log("Initiating Paystack payment:", {
       collectionId: normalized.collectionId,
       collectionType: normalized.collectionType,
