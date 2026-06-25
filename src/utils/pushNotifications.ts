@@ -171,21 +171,47 @@ export async function enablePushNotifications(metadata: PushSubscriptionMetadata
     existing = null;
   }
 
-  const subscription =
+  const saveToBackend = (sub: PushSubscription) =>
+    axiosInstance.post("/push/subscriptions", {
+      subscription: sub.toJSON(),
+      metadata: {
+        userAgent: metadata.userAgent || navigator.userAgent,
+        platform: metadata.platform || navigator.platform,
+        deviceLabel: metadata.deviceLabel || "This device",
+      },
+    });
+
+  let subscription =
     existing ||
     (await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey,
     }));
 
-  await axiosInstance.post("/push/subscriptions", {
-    subscription: subscription.toJSON(),
-    metadata: {
-      userAgent: metadata.userAgent || navigator.userAgent,
-      platform: metadata.platform || navigator.platform,
-      deviceLabel: metadata.deviceLabel || "This device",
-    },
-  });
+  try {
+    await saveToBackend(subscription);
+  } catch (saveError) {
+    // Account-switch / stale-endpoint self-heal. When a different account
+    // previously enabled push on this device, we reuse that browser
+    // subscription and rely on the backend upsert to reassign the endpoint to
+    // the now-authenticated user. If that save is rejected (corrupt or stale
+    // endpoint), drop the old subscription, create a fresh one for the current
+    // user, and retry once — so enabling never fails just because another
+    // account used the device first.
+    if (existing) {
+      await axiosInstance
+        .delete("/push/subscriptions", { data: { endpoint: existing.endpoint } })
+        .catch(() => undefined);
+      await existing.unsubscribe().catch(() => undefined);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+      await saveToBackend(subscription);
+    } else {
+      throw saveError;
+    }
+  }
 
   setPushDismissed(false);
   return subscription;

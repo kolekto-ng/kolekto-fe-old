@@ -5,6 +5,31 @@ import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 import { axiosInstance } from "@/utils/axios";
 
+// `supabase.functions.invoke` surfaces a generic FunctionsHttpError
+// ("Edge Function returned a non-2xx status code") and hides the real reason
+// inside `error.context` (the raw Response). Without reading that body, a real
+// failure (e.g. a DB column/type error on the fundraising insert) looks like a
+// silent "nothing happened". This pulls the actual `{ error }` message out.
+async function extractFunctionError(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: unknown })?.context;
+  if (ctx && typeof (ctx as Response).clone === "function") {
+    try {
+      const body = await (ctx as Response).clone().json();
+      if (body?.error) return String(body.error);
+      if (body?.message) return String(body.message);
+    } catch {
+      try {
+        const text = await (ctx as Response).clone().text();
+        if (text) return text;
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  const message = (error as { message?: string })?.message;
+  return message && !/non-2xx status code/i.test(message) ? message : fallback;
+}
+
 // ─── Auth token helper ────────────────────────────────────────────────────────
 // The app uses a custom JWT stored in localStorage. We pass it to Edge Functions
 // so they can identify the caller without needing a Supabase session.
@@ -193,8 +218,13 @@ export const useCollectionStore = create((set, get: any) => ({
         }
       );
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw new Error(await extractFunctionError(error, "Could not create collection. Please try again."));
+      }
       if (data?.error) throw new Error(data.error);
+      if (!data?.data?.id) {
+        throw new Error("Collection was not created. Please try again.");
+      }
 
       const newCollection = formatCollection(data.data);
 
@@ -233,7 +263,9 @@ export const useCollectionStore = create((set, get: any) => ({
         }
       );
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw new Error(await extractFunctionError(error, "Could not update collection. Please try again."));
+      }
       if (data?.error) throw new Error(data.error);
 
       const updated = formatCollection(data.data);

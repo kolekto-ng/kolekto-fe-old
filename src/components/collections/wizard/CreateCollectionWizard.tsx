@@ -437,12 +437,21 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     clearPublishIntent();
     setIsSubmitting(true);
 
+    const isFundraising = data.collection_type === 'fundraising';
+    // A single stable toast id: the loading toast is replaced in-place by the
+    // success or error toast, so a submit can never stack duplicate popups and
+    // the user always gets exactly one piece of feedback (no silent failure).
+    const toastId = 'collection-publish';
+    toast.loading(
+      isFundraising ? 'Submitting your campaign for review…' : 'Creating your collection…',
+      { id: toastId }
+    );
+
     try {
       const newCollection = await publishCollection();
       toast.success(
-        data.collection_type === 'fundraising'
-          ? 'Campaign submitted for review'
-          : 'Collection created successfully'
+        isFundraising ? 'Campaign submitted for review' : 'Collection created successfully',
+        { id: toastId }
       );
       resetDraft();
       autoPublishTriggeredRef.current = false;
@@ -452,7 +461,7 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
       if (isAutoTriggered) {
         autoPublishTriggeredRef.current = false;
       }
-      toast.error(message);
+      toast.error(message, { id: toastId });
     } finally {
       setIsSubmitting(false);
     }
