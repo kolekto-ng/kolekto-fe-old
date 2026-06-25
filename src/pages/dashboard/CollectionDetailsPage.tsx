@@ -1430,7 +1430,8 @@ const CollectionDetailsPage: React.FC = () => {
         onSuccess={() => {
           setIsEditOpen(false);
           loadCollection();
-          toast.success('Collection updated');
+          // The dialog already shows the "Collection updated" success toast on
+          // save — don't fire a second one here (one action = one toast).
         }}
       />
 

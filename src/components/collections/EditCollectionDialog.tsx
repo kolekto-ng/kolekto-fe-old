@@ -395,7 +395,9 @@ const EditCollectionDialog: React.FC<EditCollectionDialogProps> = ({
       }
 
       await updateCollection(collectionId, updateData);
-      toast.success('Collection updated');
+      toast.success('Collection updated', {
+        description: 'Your collection details have been updated successfully.',
+      });
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {

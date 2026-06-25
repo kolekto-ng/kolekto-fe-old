@@ -188,29 +188,68 @@ button, a, [role="button"] {
   gap: 10px !important;
   width: var(--width) !important;
   overflow: hidden !important;
-  padding: 24px 20px 20px !important;
+  padding: 26px 22px 26px !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: var(--border-radius) !important;
   background: linear-gradient(155deg, #111c30, #0b1220) !important;
   color: #f8fafc !important;
   text-align: center !important;
   box-shadow:
-    0 18px 44px rgba(8, 12, 22, 0.45),
+    0 24px 60px rgba(8, 12, 22, 0.55),
+    0 2px 10px rgba(8, 12, 22, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  /* Smooth fade + scale entrance (premium mobile-app feel). */
+  animation: kolekto-toast-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
 
-/* Soft accent glow behind the icon instead of an edge bar — reads as a card. */
+/* Graceful exit when sonner removes the toast. */
+.kolekto-sonner-toast[data-sonner-toast][data-removed="true"] {
+  animation: kolekto-toast-out 0.22s ease forwards !important;
+}
+
+/* Bottom progress TRACK (the faint full-width rail the countdown fill rides on),
+   matching the reference design. The moving fill is the ::after below. */
 .kolekto-sonner-toast[data-sonner-toast]::before {
   content: "";
   position: absolute;
-  top: -36px;
-  left: 50%;
-  width: 150px;
-  height: 110px;
-  transform: translateX(-50%);
-  background: radial-gradient(circle, var(--kolekto-toast-accent), transparent 70%);
-  opacity: 0.22;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
   pointer-events: none;
+}
+
+/* Bottom progress FILL — depletes over the toast's lifetime (auto-dismiss
+   countdown). Accent-coloured per type with a soft glow. Replaced by an
+   indeterminate animation for loading toasts (see below). */
+.kolekto-sonner-toast[data-sonner-toast]::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--kolekto-toast-accent),
+    color-mix(in srgb, var(--kolekto-toast-accent) 55%, #ffffff)
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--kolekto-toast-accent) 60%, transparent);
+  transform-origin: left center;
+  animation: kolekto-toast-progress 4s linear forwards;
+  pointer-events: none;
+}
+
+/* Loading: no countdown (it stays until replaced) — show a smooth indeterminate
+   sweep instead so the card feels alive while the action runs. */
+.kolekto-sonner-toast[data-type="loading"][data-sonner-toast]::after {
+  width: 38%;
+  right: auto;
+  animation: kolekto-toast-indeterminate 1.15s ease-in-out infinite;
+  transform-origin: center;
 }
 
 /* Icon in a 52px accent-tinted circle, centered at the top. */
@@ -225,7 +264,11 @@ button, a, [role="button"] {
   margin: 0 auto !important;
   border-radius: 999px !important;
   background: color-mix(in srgb, var(--kolekto-toast-accent) 16%, transparent) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kolekto-toast-accent) 35%, transparent) !important;
+  /* Inner ring + outer halo glow — gives the icon the "pop" the reference has. */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--kolekto-toast-accent) 40%, transparent),
+    0 0 0 6px color-mix(in srgb, var(--kolekto-toast-accent) 12%, transparent),
+    0 8px 24px color-mix(in srgb, var(--kolekto-toast-accent) 45%, transparent) !important;
   color: var(--kolekto-toast-accent) !important;
 }
 
@@ -358,6 +401,21 @@ button, a, [role="button"] {
   }
   to {
     transform: scaleX(0);
+  }
+}
+
+/* Indeterminate sweep for loading toasts — a fill that glides across the track. */
+@keyframes kolekto-toast-indeterminate {
+  0% {
+    left: 18px;
+    transform: translateX(-10%);
+  }
+  50% {
+    transform: translateX(170%);
+  }
+  100% {
+    left: 18px;
+    transform: translateX(-10%);
   }
 }
 
