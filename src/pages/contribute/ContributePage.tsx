@@ -136,33 +136,89 @@ const ContributePage: React.FC = () => {
 
   useEffect(() => {
     if (!collection?.id) return;
+    const collectionId = collection.id;
 
-    const channel = supabase
-      .channel(`collection-live-${collection.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${collection.id}` },
-        async () => {
-          const [{ data: paidContributions }, { data: walletData }] = await Promise.all([
-            supabase
-              .from('contributions')
-              .select('id, contributor_information')
-              .eq('collection_id', collection.id)
-              .eq('status', 'paid'),
-            supabase
-              .from('wallets')
-              .select('net_payment')
-              .eq('collection_id', collection.id)
-              .maybeSingle(),
-          ]);
+    // New paid contribution / tier sold → refresh counts, tier availability and
+    // the Open Pool total. Status is unchanged here, so we keep the prev row.
+    const refreshContributions = async () => {
+      const [{ data: paidContributions }, { data: walletData }] = await Promise.all([
+        supabase
+          .from('contributions')
+          .select('id, contributor_information')
+          .eq('collection_id', collectionId)
+          .eq('status', 'paid'),
+        supabase
+          .from('wallets')
+          .select('net_payment')
+          .eq('collection_id', collectionId)
+          .maybeSingle(),
+      ]);
 
-          setCollection((prev: any) =>
-            annotateTierAvailability(
+      setCollection((prev: any) =>
+        prev
+          ? annotateTierAvailability(
               { ...prev, total_amount: walletData?.net_payment ?? prev.total_amount ?? 0 },
               paidContributions || []
             )
-          );
-        }
+          : prev
+      );
+    };
+
+    // Host changed the collection (status → closed/paused, deadline, target or
+    // contributor-limit edit). Pull the fresh row so the status gate below
+    // re-renders immediately and ContributeFlow (with its payment button) is
+    // replaced by the "no longer accepting payments" message. The edge function
+    // re-validates payability server-side too, so this is defense-in-depth, not
+    // the only guard — a contributor can never pay into a closed/paused/full row.
+    const refreshCollectionRow = async () => {
+      const [{ data: fresh }, { data: paidContributions }, { data: walletData }] = await Promise.all([
+        supabase.from('collections').select('*').eq('id', collectionId).single(),
+        supabase
+          .from('contributions')
+          .select('id, contributor_information')
+          .eq('collection_id', collectionId)
+          .eq('status', 'paid'),
+        supabase
+          .from('wallets')
+          .select('net_payment')
+          .eq('collection_id', collectionId)
+          .maybeSingle(),
+      ]);
+      if (!fresh) return;
+
+      setCollection((prev: any) =>
+        annotateTierAvailability(
+          {
+            ...prev,
+            ...fresh,
+            // Preserve the field-name normalization used on initial load so
+            // ContributeFlow keeps reading the same shape.
+            form_fields: Array.isArray(fresh.contributions_fields)
+              ? fresh.contributions_fields
+              : prev?.form_fields ?? [],
+            pricing_tiers: fresh.price_tiers ?? fresh.pricing_tiers ?? prev?.pricing_tiers ?? [],
+            total_amount: walletData?.net_payment ?? prev?.total_amount ?? 0,
+            goal_amount: fresh.target_amount ?? fresh.goal_amount ?? prev?.goal_amount ?? 0,
+          },
+          paidContributions || []
+        )
+      );
+    };
+
+    // Single channel per collection id, torn down on unmount. The effect is
+    // keyed on collection?.id (which never changes for a loaded page), so
+    // re-renders cannot create a second subscription.
+    const channel = supabase
+      .channel(`collection-live-${collectionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'contributions', filter: `collection_id=eq.${collectionId}` },
+        () => { void refreshContributions(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'collections', filter: `id=eq.${collectionId}` },
+        () => { void refreshCollectionRow(); }
       )
       .subscribe();
 
