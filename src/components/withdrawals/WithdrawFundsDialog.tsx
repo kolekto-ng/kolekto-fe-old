@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import WithdrawForm from './WithdrawForm';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { useWithdrawalStore } from '@/store';
 import { useAuthStore } from '@/store';
 import { useActivities } from '@/store/useDashboard';

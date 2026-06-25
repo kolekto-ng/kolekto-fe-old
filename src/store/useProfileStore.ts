@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
 import { createClient } from "@supabase/supabase-js";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";

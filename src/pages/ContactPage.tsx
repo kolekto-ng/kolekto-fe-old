@@ -3,7 +3,7 @@ import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer/Footer";
 import { Mail, MessageSquare, MapPin, Clock, ArrowRight, Send } from "lucide-react";
 import { FaWhatsapp, FaInstagram, FaTwitter, FaLinkedin, FaFacebook } from "react-icons/fa";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const ContactPage: React.FC = () => {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });

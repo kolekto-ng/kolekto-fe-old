@@ -1,5 +1,5 @@
 import { axiosInstance } from "@/utils/axios";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface Collection {

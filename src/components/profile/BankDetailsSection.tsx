@@ -29,7 +29,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { useSettings } from '@/store/useSettings';
 import { axiosInstance } from '@/utils/axios';
 

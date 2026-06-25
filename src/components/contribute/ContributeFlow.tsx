@@ -15,7 +15,7 @@ import {
   ArrowLeft, ArrowRight, Check, Loader2, CreditCard, User, Tag, Ticket, Heart,
   Phone, Info, ChevronLeft, ChevronRight, Trophy, Users, MessageCircle, ShieldCheck,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { formatCurrency } from '@/utils/formatters';
 import { normalizeContributions } from '@/utils/contributions';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';

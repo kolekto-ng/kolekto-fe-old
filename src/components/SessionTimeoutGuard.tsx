@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
   clearAuthSessionStorage,

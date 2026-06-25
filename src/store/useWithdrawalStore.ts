@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { Withdrawal, WithdrawalState } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 

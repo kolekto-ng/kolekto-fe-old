@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Bell, BellOff, CheckCircle2, Loader2, Smartphone } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import {
   enablePushNotifications,

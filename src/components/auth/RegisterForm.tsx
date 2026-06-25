@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/store";
 import { useRecaptcher } from "@/hooks/useRecaptcher";
 import ReCAPTCHA from "react-google-recaptcha";

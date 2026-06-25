@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Banknote, CheckCircle2, Plus, Trash2, AlertCircle } from "lucide-react";
 import { useSettings } from "@/store/useSettings";
 import { axiosInstance } from "@/utils/axios";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export default function PaymentAccounts() {

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { PaystackState } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 

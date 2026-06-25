@@ -7,7 +7,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import Footer from "@/components/Footer/Footer";
 import NavBar from "@/components/NavBar";

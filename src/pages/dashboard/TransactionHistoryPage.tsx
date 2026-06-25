@@ -19,7 +19,7 @@ import {
   withdrawalStatusBucket,
 } from '@/utils/withdrawalStatus';
 import { TableRowsSkeleton } from '@/components/ui/page-skeletons';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>

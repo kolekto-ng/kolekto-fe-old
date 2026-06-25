@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { MoreVertical, Edit, Trash2, Pause, Play, Lock } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { supabase } from '@/integrations/supabase/client';
 import { useCollectionStore } from '@/store';
 import { cn } from '@/lib/utils';

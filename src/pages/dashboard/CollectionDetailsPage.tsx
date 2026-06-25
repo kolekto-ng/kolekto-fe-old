@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import {
   Wallet, Share2, Edit, ScanLine, Download, Search, ChevronDown,
   ArrowLeft, Users, Calendar, Clock, TrendingUp,

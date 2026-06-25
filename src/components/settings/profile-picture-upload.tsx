@@ -3,7 +3,7 @@ import { Camera } from 'lucide-react';
 import { useAuthStore } from '@/store';
 import { axiosInstance } from '@/utils/axios';
 import { useSettings } from '@/store/useSettings';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 // Avatar Components

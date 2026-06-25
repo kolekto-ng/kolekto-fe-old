@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import CollectionCard from '@/components/collections/CollectionCard';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useAuthStore } from '@/store';

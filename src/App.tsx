@@ -1,4 +1,3 @@
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
@@ -229,7 +228,6 @@ const App = () => {
 
   return (
     <TooltipProvider>
-      <Toaster />
       <Sonner />
       <PwaUpdatePrompt />
       <ScrollToTop />

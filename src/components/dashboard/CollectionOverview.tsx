@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useCollectionStore } from '@/store/useCollectionStore';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { Lock, Layers, Waves, Ticket, Heart, Users } from 'lucide-react';
 
 const TYPE_ICON: Record<string, { label: string; icon: React.ElementType }> = {

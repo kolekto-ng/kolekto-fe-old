@@ -46,4 +46,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
 }
 
 export { Toaster }
-export { toast } from "sonner"
+// Re-export the deduped, single-system toast so importing from here or from
+// "@/lib/toast" yields identical behaviour.
+export { toast } from "@/lib/toast"

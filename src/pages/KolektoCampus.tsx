@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { axiosInstance } from "@/utils/axios";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export default function KolektoCampusSignup() {

@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowRight, Check, Loader2, CreditCard, User, DollarSign } from "lucide-react";
 import { usePaystackStore } from "@/store/usePaystackStore";
 import { useContributionStore } from "@/store/useContributionStore";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
 import { formatCurrency } from "@/utils/formatters";

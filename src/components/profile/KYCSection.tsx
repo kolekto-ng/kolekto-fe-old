@@ -22,7 +22,7 @@ import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 import { DocumentUploadForm } from './forms/DocumentUploadForm';
 import { axiosInstance } from '@/utils/axios';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { Skeleton } from '@/components/ui/skeleton';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {

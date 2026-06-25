@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { authAPI, axiosInstance } from "../utils/axios";
 import { supabase } from "@/integrations/supabase/client";
 import {

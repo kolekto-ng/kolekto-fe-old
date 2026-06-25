@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { useNavigate } from 'react-router-dom';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import BasicInfoSection from './form/BasicInfoSection';
