@@ -1,6 +1,80 @@
 # Contributor Unique ID/Code Generation — Regression Fix Report
 
-Date: 2026-06-24 → 2026-06-25 (Round 1 + Round 2 + Round 3 + Round 4 + Round 5)
+Date: 2026-06-24 → 2026-06-25 (Round 1 + Round 2 + Round 3 + Round 4 + Round 5 + Round 6)
+
+## Round 6 — backfill script re-verified; D-1 (Round 5) only half-deployed
+
+### Backfill script: re-audited against the 8-point checklist, no changes needed
+Re-read `scripts/backfillUniqueContributionCodes.js` end-to-end against
+every requirement (eligibility not gated on `unique_id_enabled`; covers
+old AND new collections; covers fixed/tiered/ticket types via the same
+`getUnitPrefix` tier-matching the live path uses; atomic RPC for
+sequencing; idempotent via the `.is("contributor_unique_code", null)`
+guard and pre-mint re-check). All already correct from Round 4 — no
+changes were needed.
+
+### Fresh production re-scan (read-only, anon key)
+Numbers have grown since Round 4 (more time has passed, more
+collections/payments exist):
+- **101** collections now have a configured prefix somewhere (was 89).
+- **95** paid contributions are missing a code (was 85), across **9**
+  collections (was 4): `Y2K PARTY TICKETS PAYMENTS` (73),
+  `QUANTUMITES NACOS FYB CONTRIBUTION 26'` (8),
+  `Final Year Physical Project and Yearbook` (4),
+  `200 LEVEL ENGINEERING CLASS` (3), `FAHESSA MOVIE TICKET` (3),
+  `Formula 1` (1), `QUANTUM FYB PAYMET🎓💚` (1), `Test fix` (1),
+  `This is PROD test` (1).
+
+### Confirmed: the Round 4 unique-code fix is live and working, exact
+### deployment cutover identified
+The "Test fix" collection has two paid contributions: one from
+2026-06-24T13:57:51 with `contributor_unique_code = null`, and one from
+**2026-06-25T09:07:40 with `contributor_unique_code = "BTX-001"`** — same
+collection, same prefix, same logic, different outcome purely by
+timestamp. This pins the deployment of the corrected
+`verify-paystack-payment` to somewhere between those two timestamps.
+Checked every paid contribution today (2026-06-25) across all 101
+eligible collections — both are correctly coded (`TAB2026-003`,
+`BTX-001`). Zero failures today. **The unique-code fix is confirmed live
+and stable; the 95 missing codes are 100% pre-deployment regression
+scars, not an ongoing bug.**
+
+### Separate finding: Round 5 (metadata round-trip fix) is only half-deployed
+Checked `pending_payment_context` directly: **the table exists (the SQL
+migration ran) but contains zero rows.** `verify-paystack-payment` reads
+from this table; `initiate-paystack-payment` is what writes to it. Since
+it's empty, `initiate-paystack-payment` has not been redeployed with the
+Round 5 changes — only `verify-paystack-payment` has (which also
+carried the Round 4 unique-code fix, bundled in the same file, which is
+why that part is confirmed working).
+
+**This matters for the AWS log question.** If only `verify-paystack-payment`'s
+side is live, its defensive object-or-string metadata parsing IS active
+(better than before), but the table-based fix that makes verification
+fully independent of whatever Paystack does to metadata is NOT yet
+protecting new payments. I cannot inspect AWS logs directly, but here is
+how to tell old retries from a live ongoing bug without me needing access:
+
+**Every reference is self-timestamped**: `kolekto-<unix_ms>-<random>`.
+For any reference in a `WEBHOOK_VERIFY_FAILED` log line, extract the
+timestamp:
+```js
+const ts = Number(reference.split("-")[1]);
+console.log(new Date(ts).toISOString());
+```
+- If that timestamp is **before** the `initiate-paystack-payment`
+  redeploy moment → expected old retry (Paystack retries failed webhooks
+  for up to ~72 hours); it will stop on its own.
+- If it's **after** the redeploy → a real, currently-live bug that needs
+  fresh investigation (and would mean the defensive parsing alone isn't
+  sufficient — worth knowing, but only diagnosable once the table-write
+  side is actually live to compare against).
+
+**Recommended immediate action**: redeploy `initiate-paystack-payment`
+(the table-write side of D-1) — it's the missing half of an already-written
+fix, not new work.
+
+---
 
 ## Round 5 — "Missing collection ID in payment metadata" (verification itself failing)
 
