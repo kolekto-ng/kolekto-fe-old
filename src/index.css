@@ -170,9 +170,17 @@ button, a, [role="button"] {
   bottom: auto !important;
   left: 50% !important;
   right: auto !important;
+  /* Sonner's own mobile media query (<=600px) re-sets the container to
+     left/right offsets + width:100%, which cancels our centering math and
+     pins the card flush left. Force the real width back down and re-center
+     unconditionally so this holds at every breakpoint. */
+  width: var(--width) !important;
   /* Pin both axes ourselves so this works regardless of how sonner centers
      the container for the *-center positions (it uses translateX internally). */
   transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
 }
 
 /* Native-app status card: icon-in-circle on top, title, then message, all
@@ -186,7 +194,14 @@ button, a, [role="button"] {
   align-items: center !important;
   justify-content: center !important;
   gap: 10px !important;
+  /* Sonner's mobile media query (<=600px) sets left:0; right:0; width:calc(...)
+     on the toast itself to span the viewport. Pin width/margins back to our
+     compact card so it stays centered instead of stretching flush left. */
   width: var(--width) !important;
+  max-width: var(--width) !important;
+  left: auto !important;
+  right: auto !important;
+  margin: 0 auto !important;
   overflow: hidden !important;
   padding: 26px 22px 26px !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;

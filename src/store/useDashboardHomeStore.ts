@@ -34,6 +34,8 @@ export interface CollectionPreview {
   participants: number;
   deadline?: string;
   created_at: string;
+  goalAmount?: number;
+  maxParticipants?: number;
 }
 
 interface DashboardHomeState {
@@ -129,7 +131,9 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
       try {
         const { data: collectionsRaw, error: colErr } = await supabase
           .from("collections")
-          .select("id, title, status, collection_type, deadline, created_at")
+          .select(
+            "id, title, status, collection_type, deadline, created_at, target_amount, amount, max_contributions",
+          )
           .eq("user_id", userId)
           .eq("status", "active")
           .order("created_at", { ascending: false })
@@ -209,6 +213,8 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
             participants: cList.length,
             deadline: collection.deadline,
             created_at: collection.created_at,
+            goalAmount: Number(collection.target_amount || collection.amount || 0) || undefined,
+            maxParticipants: Number(collection.max_contributions || 0) || undefined,
           };
         });
 

@@ -219,12 +219,33 @@ function matchTier(
   }) || null;
 }
 
+/**
+ * Root-cause fix: this function only ever runs from the `transaction.status
+ * === "success"` branch — i.e. AFTER Paystack has already captured the
+ * contributor's money. It used to also reject paused/closed/completed/
+ * pending_review collections here, which made sense for `initiate-paystack-
+ * payment` (blocking a NEW charge attempt) but is wrong here: a collection's
+ * CURRENT lifecycle status (which can change between charge-time and
+ * verify-time — e.g. an auto-close cron firing on `deadline`, or an admin
+ * pausing/closing it) must not retroactively un-confirm a payment Paystack
+ * already settled. Doing so silently dropped the contribution (no row, no
+ * wallet update, no notification) and was UNRECOVERABLE via Admin Reconcile,
+ * because reconcile calls this exact same function/code path and hit the
+ * identical rejection every time.
+ *
+ * Only `deleted_at` remains a hard block — a hard-deleted collection has no
+ * wallet/host to credit, so there's nothing safe to do with the money here
+ * (requires manual support intervention, not auto-recovery).
+ */
 function ensureCollectionIsPayable(collection: Record<string, unknown>, collectionId: string) {
   const status = String(collection.status || "active");
   if (collection.deleted_at) throw new PaymentValidationError("This collection is no longer available.", 404, "collection_deleted", { collectionId, status });
-  if (status === "paused") throw new PaymentValidationError("This collection is currently paused and cannot accept payments.", 400, "collection_paused", { collectionId, status });
-  if (status === "closed" || status === "completed") throw new PaymentValidationError("This collection is no longer accepting payments.", 400, "collection_closed", { collectionId, status });
-  if (status === "pending_review" || status === "pending_verification") throw new PaymentValidationError("This collection is not available for payment yet.", 400, "collection_unavailable", { collectionId, status });
+  if (status === "paused" || status === "closed" || status === "completed" || status === "pending_review" || status === "pending_verification") {
+    console.warn(
+      `[verify] LEGACY_PAYABLE_GATE_BYPASSED collectionId=${collectionId} status=${status} — ` +
+      `recording an already-captured Paystack payment despite non-active collection status.`
+    );
+  }
 }
 
 function normalizePaymentRequest(input: {
@@ -468,6 +489,45 @@ function getSettlementCutoff(): Date {
   return now >= todayCutoff ? todayCutoff : new Date(todayCutoff.getTime() - 86_400_000);
 }
 
+/**
+ * Best-effort, never-throwing diagnostic log into `payment_recovery_log`.
+ * Covers requirement: durable visibility into every post-success verify /
+ * admin-reconcile outcome (not just ephemeral console logs that vanish once
+ * the edge function instance recycles). Failures to write this row must
+ * never affect the actual payment outcome.
+ */
+async function logRecoveryAttempt(
+  supabase: ReturnType<typeof createClient>,
+  entry: {
+    reference: string;
+    collectionId: string | null;
+    success: boolean;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    metadataSource?: string | null;
+    note?: string | null;
+    context?: Record<string, unknown> | null;
+  }
+) {
+  try {
+    await supabase.from("payment_recovery_log").insert({
+      reference: entry.reference,
+      collection_id: entry.collectionId,
+      success: entry.success,
+      error_code: entry.errorCode ?? null,
+      error_message: entry.errorMessage ?? null,
+      metadata_source: entry.metadataSource ?? null,
+      note: entry.note ?? null,
+      context: entry.context ?? null,
+    });
+  } catch (logErr) {
+    console.warn(
+      `[verify ref=${entry.reference}] RECOVERY_LOG_WRITE_FAILED (non-fatal):`,
+      (logErr as Error)?.message
+    );
+  }
+}
+
 // ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -477,6 +537,12 @@ serve(async (req: Request) => {
   try {
     const reqData = await req.json();
     const { reference } = reqData;
+    // Manual recovery hint: only used when automatic metadata resolution
+    // (pending_payment_context + Paystack metadata) both fail to produce a
+    // collectionId. Supplied by Admin Reconcile when a human has confirmed,
+    // out-of-band (e.g. by searching Paystack dashboard for the contributor's
+    // email/amount), which collection a stranded payment belongs to.
+    const overrideCollectionId = String(reqData.overrideCollectionId || "").trim() || null;
 
     if (!reference) {
       return new Response(JSON.stringify({ error: "Missing payment reference" }), {
@@ -597,12 +663,27 @@ serve(async (req: Request) => {
       collectionIdFromSnakeCase: metadata.collection_id ?? null,
     });
 
-    const collectionId = String(metadata.collectionId || metadata.collection_id || "").trim();
+    let collectionId = String(metadata.collectionId || metadata.collection_id || "").trim();
+    if (!collectionId && overrideCollectionId) {
+      // Manual recovery: automatic resolution failed, but an admin supplied
+      // a collectionId via Admin Reconcile (confirmed out-of-band). Use it,
+      // and log loudly since this bypasses the normal metadata trail.
+      collectionId = overrideCollectionId;
+      metadataSource = "manual_override";
+      console.warn(
+        `[verify ref=${reference}] MANUAL_OVERRIDE_COLLECTION_ID collectionId=${collectionId}`
+      );
+    }
     if (!collectionId) {
       console.error(
         `[verify ref=${reference}] MISSING_COLLECTION_ID metadataSource=${metadataSource} ` +
         `rawMetadataType=${typeof transaction.metadata} resolvedKeys=${Object.keys(metadata).join(",")}`
       );
+      await logRecoveryAttempt(supabase, {
+        reference, collectionId: null, success: false,
+        errorCode: "missing_collection_id", errorMessage: "Missing collection ID in payment metadata",
+        metadataSource, context: { resolvedKeys: Object.keys(metadata) },
+      });
       return new Response(JSON.stringify({ error: "Missing collection ID in payment metadata" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -613,11 +694,19 @@ serve(async (req: Request) => {
       .from("collections").select("*").eq("id", collectionId).maybeSingle();
 
     if (collectionError) {
+      await logRecoveryAttempt(supabase, {
+        reference, collectionId, success: false,
+        errorCode: "collection_fetch_failed", errorMessage: collectionError.message, metadataSource,
+      });
       return new Response(JSON.stringify({ error: "Error fetching collection details" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (!collection) {
+      await logRecoveryAttempt(supabase, {
+        reference, collectionId, success: false,
+        errorCode: "collection_not_found", errorMessage: "Collection not found.", metadataSource,
+      });
       return new Response(JSON.stringify({ error: "Collection not found." }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -643,6 +732,10 @@ serve(async (req: Request) => {
         console.log(
           `[verify ref=${reference}] VERIFY_IDEMPOTENT_HIT existing=${processedContributions.length}`
         );
+        await logRecoveryAttempt(supabase, {
+          reference, collectionId, success: true, metadataSource,
+          note: `idempotent_hit existing=${processedContributions.length}`,
+        });
       } else {
         const { data: paidRows, error: paidRowsError } = await supabase
           .from("contributions").select("id, amount, contributor_information, contributor_unique_code").eq("collection_id", collectionId).eq("status", "paid");
@@ -664,6 +757,11 @@ serve(async (req: Request) => {
           });
         } catch (error: unknown) {
           if (error instanceof PaymentValidationError) {
+            await logRecoveryAttempt(supabase, {
+              reference, collectionId, success: false,
+              errorCode: error.code, errorMessage: error.message, metadataSource,
+              context: error.logContext ?? null,
+            });
             return new Response(JSON.stringify({ error: error.message, code: error.code }), {
               status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
@@ -684,6 +782,11 @@ serve(async (req: Request) => {
         const mismatchTolerance = isOpenAmount && !metadataHadAmount ? 1.0 : 0.01;
         if (Math.abs(verifiedTotal - normalizedPayment.totalPayable) > mismatchTolerance) {
           console.error("Amount mismatch:", { reference, collectionId, verifiedTotal, expectedTotal: normalizedPayment.totalPayable });
+          await logRecoveryAttempt(supabase, {
+            reference, collectionId, success: false,
+            errorCode: "amount_mismatch", errorMessage: "Payment amount validation failed.", metadataSource,
+            context: { verifiedTotal, expectedTotal: normalizedPayment.totalPayable },
+          });
           return new Response(JSON.stringify({ error: "Payment amount validation failed. Contact support with your reference." }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -967,6 +1070,12 @@ serve(async (req: Request) => {
           console.error(
             `[verify ref=${reference}] VERIFY_FAILED_AFTER_ROLLBACK code=${String(firstErr.code || "")}`
           );
+          await logRecoveryAttempt(supabase, {
+            reference, collectionId, success: false,
+            errorCode: String(firstErr.code || "contribution_insert_failed"),
+            errorMessage: String(firstErr.message || firstErr), metadataSource,
+            note: "rolled_back_partial_inserts",
+          });
           return new Response(
             JSON.stringify({
               error:
@@ -987,6 +1096,10 @@ serve(async (req: Request) => {
         console.log(
           `[verify ref=${reference}] VERIFY_CONTRIBS_INSERTED count=${processedContributions.length}`
         );
+        await logRecoveryAttempt(supabase, {
+          reference, collectionId, success: true, metadataSource,
+          note: `new_contribution_recorded count=${processedContributions.length}`,
+        });
       }
 
       await refreshCollectionAndWallets(supabase, collectionId, collection);

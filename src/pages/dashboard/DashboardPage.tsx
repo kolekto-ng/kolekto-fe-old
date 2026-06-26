@@ -26,6 +26,7 @@ import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialo
 import { useAuthStore } from "@/store/useAuthStore";
 import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
 import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
+import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -139,15 +140,6 @@ const TYPE_META: Record<
   },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-700",
-  completed: "bg-blue-100 text-blue-700",
-  closed: "bg-gray-200 text-gray-600",
-  deleted: "bg-gray-300 text-gray-600",
-  pending_review: "bg-amber-100 text-amber-700",
-};
 const RECENT_COLLECTION_LIMIT = 3;
 const RECENT_ACTIVITY_LIMIT = 5;
 
@@ -169,17 +161,6 @@ interface Activity {
   created_at: string;
   collection_title: string;
   relative_time: string;
-}
-
-interface CollectionPreview {
-  id: string;
-  title: string;
-  status: string;
-  collection_type: string;
-  totalRaised: number;
-  participants: number;
-  deadline?: string;
-  created_at: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -416,13 +397,18 @@ const DashboardPage: React.FC = () => {
             {recentCollections.map((col) => {
               const m = TYPE_META[col.collection_type] ?? TYPE_META.fixed;
               const Icon = m.IconEl;
-              const sCls =
-                STATUS_COLORS[col.status] ?? "bg-gray-100 text-gray-700";
-              const sLabel = col.status
-                ? col.status
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())
-                : "—";
+              // Canonical status (folds full/expired into the raw lifecycle
+              // status) — never print collections.status directly, see
+              // src/utils/collectionStatus.ts.
+              const { label: sLabel, className: sCls } = getCollectionStatusMeta({
+                status: col.status,
+                deadline: col.deadline,
+                collection_type: col.collection_type,
+                maxParticipants: col.maxParticipants ?? null,
+                participantsCount: col.participants,
+                goalAmount: col.goalAmount ?? null,
+                totalRaised: col.totalRaised,
+              });
 
               return (
                 <div
