@@ -629,13 +629,29 @@ serve(async (req: Request) => {
 
   try {
     const reqData = await req.json();
-    const { reference } = reqData;
+    // Two callers hit this endpoint with different payload shapes:
+    //   - the FE's verifyPayment() call (usePaystack.ts): { reference }
+    //   - Paystack's own webhook: { event: "charge.success", data: { reference, ... } }
+    // Accept both so this function can serve as the webhook target too —
+    // it's the idempotent, currently-used verify logic; the only thing
+    // missing to use it as the webhook was reading the nested shape.
+    const reference = reqData.reference || reqData?.data?.reference;
     // Manual recovery hint: only used when automatic metadata resolution
     // (pending_payment_context + Paystack metadata) both fail to produce a
     // collectionId. Supplied by Admin Reconcile when a human has confirmed,
     // out-of-band (e.g. by searching Paystack dashboard for the contributor's
     // email/amount), which collection a stranded payment belongs to.
     const overrideCollectionId = String(reqData.overrideCollectionId || "").trim() || null;
+
+    // Paystack sends webhooks for many event types once a webhook URL is
+    // configured (charge.success, transfer.success, refund.processed, ...).
+    // Only charge.success is relevant here; acknowledge anything else with
+    // 200 so Paystack doesn't retry, without spending a verify-API call on it.
+    if (reqData.event && reqData.event !== "charge.success") {
+      return new Response(JSON.stringify({ status: true, message: "Event ignored" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!reference) {
       return new Response(JSON.stringify({ error: "Missing payment reference" }), {
