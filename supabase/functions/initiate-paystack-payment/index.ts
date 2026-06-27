@@ -661,6 +661,23 @@ serve(async (req: Request) => {
           `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_FAILED (non-fatal, verify will fall back to Paystack metadata):`,
           contextError.message
         );
+        // Durable record of the failure — console.warn alone vanishes once
+        // this edge function instance recycles, and was the reason a prior
+        // double-failure (this write AND Paystack's own metadata echo both
+        // failing for the same reference) was invisible until a contributor
+        // reported a missing contribution days later. Same table verify
+        // writes to; best-effort, never blocks returning the checkout URL.
+        try {
+          await supabase.from("payment_recovery_log").insert({
+            reference,
+            collection_id: normalized.collectionId,
+            success: false,
+            error_code: "pending_context_write_failed",
+            error_message: contextError.message,
+            metadata_source: "initiate",
+            note: "pending_payment_context insert failed at initiate-time",
+          });
+        } catch { /* best-effort, never block checkout */ }
       } else {
         console.log(`[initiate ref=${reference}] PENDING_CONTEXT_WRITE_OK`);
       }
@@ -669,6 +686,17 @@ serve(async (req: Request) => {
         `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_THREW (non-fatal):`,
         (contextErr as Error)?.message
       );
+      try {
+        await supabase.from("payment_recovery_log").insert({
+          reference,
+          collection_id: normalized.collectionId,
+          success: false,
+          error_code: "pending_context_write_threw",
+          error_message: (contextErr as Error)?.message || String(contextErr),
+          metadata_source: "initiate",
+          note: "pending_payment_context insert threw at initiate-time",
+        });
+      } catch { /* best-effort, never block checkout */ }
     }
 
     // F4 diagnostic: metadata size/shape going to Paystack — helps catch

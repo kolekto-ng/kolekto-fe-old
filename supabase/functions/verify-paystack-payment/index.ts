@@ -490,11 +490,104 @@ function getSettlementCutoff(): Date {
 }
 
 /**
+ * Last-resort collectionId recovery when BOTH `pending_payment_context` AND
+ * Paystack's own returned metadata come back empty for a reference (seen in
+ * production for payments where neither safety net fired — our own insert
+ * failed for an unknown transient reason AND Paystack's metadata echo was
+ * also empty for the same transaction).
+ *
+ * Strategy C: another flow may already have tagged this exact
+ * payment_reference with a collection_id (e.g. the legacy backend
+ * `/payments/initialize-payment` path writes `deposits` rows with
+ * collection_id before ever touching Paystack). Reading the SAME reference
+ * back is exact-match, zero ambiguity — always safe to trust.
+ *
+ * Strategy E: ONLY if Strategy C also finds nothing, look for an
+ * UNAMBIGUOUS pending checkout — by contributor email + amount + recency —
+ * that nothing else has since claimed. This never guesses: any ambiguity
+ * (zero or more than one distinct collection) means we return null and the
+ * caller falls through to the normal missing-collection-id failure. Wrongly
+ * attributing a payment to the wrong organizer's wallet is worse than
+ * leaving it for manual admin reconciliation.
+ */
+async function attemptDeterministicCollectionRecovery(
+  supabase: ReturnType<typeof createClient>,
+  params: { reference: string; customerEmail: string; grossAmountPaid: number }
+): Promise<{ collectionId: string; strategy: string } | null> {
+  const { reference, customerEmail, grossAmountPaid } = params;
+
+  // ── Strategy C: exact payment_reference match in a sibling table ──────────
+  const [{ data: depositRow }, { data: contributionRow }] = await Promise.all([
+    supabase
+      .from("deposits")
+      .select("collection_id")
+      .eq("payment_reference", reference)
+      .not("collection_id", "is", null)
+      .maybeSingle(),
+    supabase
+      .from("contributions")
+      .select("collection_id")
+      .eq("payment_reference", reference)
+      .not("collection_id", "is", null)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const strategyCMatch =
+    (depositRow as Record<string, unknown> | null)?.collection_id ||
+    (contributionRow as Record<string, unknown> | null)?.collection_id;
+  if (strategyCMatch) {
+    return { collectionId: String(strategyCMatch), strategy: "strategy_c_reference_match" };
+  }
+
+  // ── Strategy E: unambiguous pending-checkout inference ─────────────────────
+  if (!customerEmail) return null;
+  const cutoffIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const amountTolerance = Math.max(1, grossAmountPaid * 0.02); // ±2%, min ₦1
+
+  const [{ data: pendingDeposits }, { data: pendingContributions }] = await Promise.all([
+    supabase
+      .from("deposits")
+      .select("collection_id, amount, created_at")
+      .ilike("email", customerEmail)
+      .eq("status", "pending")
+      .gte("created_at", cutoffIso),
+    supabase
+      .from("contributions")
+      .select("collection_id, amount, gross_amount, created_at")
+      .ilike("email", customerEmail)
+      .eq("status", "pending")
+      .is("payment_reference", null)
+      .gte("created_at", cutoffIso),
+  ]);
+
+  const candidateCollectionIds = new Set<string>();
+  for (const row of (pendingDeposits || []) as Array<Record<string, unknown>>) {
+    if (Math.abs(Number(row.amount || 0) - grossAmountPaid) <= amountTolerance && row.collection_id) {
+      candidateCollectionIds.add(String(row.collection_id));
+    }
+  }
+  for (const row of (pendingContributions || []) as Array<Record<string, unknown>>) {
+    const rowAmount = Number(row.gross_amount || row.amount || 0);
+    if (Math.abs(rowAmount - grossAmountPaid) <= amountTolerance && row.collection_id) {
+      candidateCollectionIds.add(String(row.collection_id));
+    }
+  }
+
+  if (candidateCollectionIds.size === 1) {
+    return { collectionId: [...candidateCollectionIds][0], strategy: "strategy_e_inferred" };
+  }
+  if (candidateCollectionIds.size > 1) {
+    console.warn(
+      `[verify ref=${reference}] STRATEGY_E_AMBIGUOUS candidates=${candidateCollectionIds.size} — refusing to guess`
+    );
+  }
+  return null;
+}
+
+/**
  * Best-effort, never-throwing diagnostic log into `payment_recovery_log`.
- * Covers requirement: durable visibility into every post-success verify /
- * admin-reconcile outcome (not just ephemeral console logs that vanish once
- * the edge function instance recycles). Failures to write this row must
- * never affect the actual payment outcome.
+ * Durable visibility into every post-success verify/admin-reconcile outcome
+ * — ephemeral console logs vanish once the edge function instance recycles.
  */
 async function logRecoveryAttempt(
   supabase: ReturnType<typeof createClient>,
@@ -673,6 +766,28 @@ serve(async (req: Request) => {
       console.warn(
         `[verify ref=${reference}] MANUAL_OVERRIDE_COLLECTION_ID collectionId=${collectionId}`
       );
+    }
+    if (!collectionId) {
+      // Both primary safety nets (pending_payment_context + Paystack's own
+      // metadata) came back empty. Before failing, try the deterministic
+      // recovery strategies — exact payment_reference match in a sibling
+      // table, then (only if unambiguous) email+amount+recency inference.
+      const recovered = await attemptDeterministicCollectionRecovery(supabase, {
+        reference,
+        customerEmail: String(customer.email || "").trim(),
+        grossAmountPaid: roundCurrency(Number(transaction.amount || 0) / 100),
+      });
+      if (recovered) {
+        collectionId = recovered.collectionId;
+        metadataSource = recovered.strategy;
+        console.warn(
+          `[verify ref=${reference}] DETERMINISTIC_RECOVERY strategy=${recovered.strategy} collectionId=${collectionId}`
+        );
+        await logRecoveryAttempt(supabase, {
+          reference, collectionId, success: true, metadataSource,
+          note: `recovered_via_${recovered.strategy}`,
+        });
+      }
     }
     if (!collectionId) {
       console.error(
@@ -1025,6 +1140,18 @@ serve(async (req: Request) => {
               console.log(
                 `[verify ref=${reference}] VERIFY_INSERT_RACE_RECOVERED rows=${processedContributions.length}`
               );
+              // Durable record of every duplicate-insert race the DB unique
+              // constraint (uq_contributions_collection_ref_line) catches —
+              // console.log alone is how a prior production double-credit
+              // incident went undetected until contributors/hosts reported
+              // mismatched totals. This is a caught-and-handled race, not a
+              // failure, so success=true; the note/context make it visible
+              // in payment_recovery_log for monitoring.
+              await logRecoveryAttempt(supabase, {
+                reference, collectionId, success: true, metadataSource,
+                note: `duplicate_insert_race_recovered index=${index} existing_rows=${processedContributions.length}`,
+                context: { lineIndex: index, errorCode: contribError.code },
+              });
               break;
             }
 
