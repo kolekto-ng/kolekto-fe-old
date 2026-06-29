@@ -22,14 +22,8 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ variant = 'banner' 
 
     const handleInstall = async () => {
         setIsInstalling(true)
-        const accepted = await promptInstall()
+        await promptInstall()
         setIsInstalling(false)
-
-        if (accepted) {
-            console.log('PWA installed successfully')
-        } else {
-            console.log('PWA installation cancelled')
-        }
     }
 
     const handleDismiss = () => {

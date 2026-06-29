@@ -96,6 +96,13 @@ const ContributePage: React.FC = () => {
           };
         }
 
+        // A deleted collection is archived, not gone from the DB (preserves
+        // payment/withdrawal records for the host) — but contributors must
+        // never be able to view or pay into it. Treat it as not found.
+        if (collectionData.status === 'deleted') {
+          throw new Error('Collection not found.');
+        }
+
         const [
           { data: paidContributions, error: contributionsError },
           { data: walletData },

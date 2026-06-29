@@ -132,9 +132,14 @@ export const useCollectionStore = create((set, get: any) => ({
       });
       try {
 
-      let query = supabase
-        .from("collections")
+      // Cast through `any`: the generated Database types are stale for this
+      // embedded `wallets(*)` join (pre-existing — same "wallets" mismatch
+      // shows up anywhere this select string is used), which otherwise blows
+      // up the filter-chain type instantiation once enough .eq/.neq/.order
+      // calls stack on top of it.
+      let query: any = (supabase.from("collections") as any)
         .select("*, contributions(id, amount, status), wallets(*)")
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (uid) query = query.eq("user_id", uid);
@@ -288,6 +293,45 @@ export const useCollectionStore = create((set, get: any) => ({
       set({ error: toFriendlyErrorMessage(err), isLoading: false });
       throw err;
     }
+  },
+
+  // ── Remove a collection from the in-memory cache ────────────────────────────
+  // Called right after a successful delete so it disappears from any open list
+  // immediately, instead of waiting on the 30s fetchCollections cache TTL.
+  removeCollection: (id: string) => {
+    set((state: any) => ({
+      collections: (state.collections || []).filter((c: Collection) => c.id !== id),
+      currentCollection:
+        state.currentCollection?.id === id ? null : state.currentCollection,
+    }));
+  },
+
+  // ── Delete (soft) a collection via the delete-collection Edge Function ──────
+  // Always archives (collections.status = 'deleted') — never a destructive
+  // hard delete — and cleans up the orphaned in-app notification feed
+  // server-side. See supabase/functions/delete-collection/index.ts.
+  deleteCollection: async (id: string) => {
+    let userId: string | undefined;
+    try {
+      const raw = localStorage.getItem("kolekto-auth-token");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        userId = parsed?.user?.id || parsed?.id || undefined;
+      }
+    } catch {}
+
+    const { data, error } = await supabase.functions.invoke("delete-collection", {
+      body: { id, user_id: userId },
+      headers: authHeaders(),
+    });
+
+    if (error) {
+      throw new Error(await extractFunctionError(error, "Could not delete collection. Please try again."));
+    }
+    if (data?.error) throw new Error(data.error);
+
+    get().removeCollection(id);
+    return data?.data;
   },
 
   // ── Update collection status ────────────────────────────────────────────────

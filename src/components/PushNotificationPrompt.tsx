@@ -61,8 +61,18 @@ const PushNotificationPrompt: React.FC = () => {
     }
 
     checkPromptState();
+
+    // Android/desktop installs fire `appinstalled` in the same already-open
+    // tab (no reload), so the one-time mount check above never re-runs on its
+    // own. Re-check right when install completes instead of waiting for the
+    // user to happen to reload the dashboard. (iOS has no such event — adding
+    // to the Home Screen there relaunches as a fresh standalone process, where
+    // getPushSupport() already re-evaluates correctly on that fresh mount.)
+    window.addEventListener("appinstalled", checkPromptState);
+
     return () => {
       mounted = false;
+      window.removeEventListener("appinstalled", checkPromptState);
     };
   }, [support.needsInstall, support.supported]);
 

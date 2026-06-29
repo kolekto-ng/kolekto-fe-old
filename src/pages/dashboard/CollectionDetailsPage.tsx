@@ -132,7 +132,8 @@ const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { updateCollectionStatus, collections } = useCollectionStore() as any;
+  const { updateCollectionStatus, deleteCollection, collections } = useCollectionStore() as any;
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [col, setCol] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
@@ -324,7 +325,10 @@ const CollectionDetailsPage: React.FC = () => {
   const getTierForContribution = (c: any): any => {
     if (!priceTiers.length) return null;
     const tierName = getContributionTierName(c);
-    if (tierName) return priceTiers.find(t => t.name === tierName) || null;
+    if (tierName) {
+      const byName = priceTiers.find(t => String(t.name ?? '').trim() === tierName);
+      if (byName) return byName;
+    }
     return priceTiers.find(t => Math.abs(Number(t.price) - Number(c.amount)) < 1) || null;
   };
 
@@ -653,13 +657,7 @@ const CollectionDetailsPage: React.FC = () => {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600"
-                onClick={() => {
-                  if (paidContributions.length > 0) {
-                    toast.error('Cannot delete a collection with existing payments. Close it instead.');
-                  } else {
-                    setDeleteConfirmOpen(true);
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
               >
                 Delete Collection
               </DropdownMenuItem>
@@ -1534,19 +1532,31 @@ const CollectionDetailsPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this collection?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The collection and all its data will be permanently deleted.
+              This will archive the collection — it will no longer be visible to you or contributors,
+              and cannot accept new payments. Any existing payment, withdrawal, and wallet records are
+              preserved for your records and cannot be recovered into an active collection.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
+              disabled={isDeleting}
               onClick={async () => {
-                await handleStatusChange('deleted');
-                navigate('/dashboard/collections');
+                setIsDeleting(true);
+                try {
+                  await deleteCollection(id!);
+                  toast.success('Collection deleted');
+                  navigate('/dashboard/collections');
+                } catch (err: any) {
+                  toast.error(err?.message || 'Failed to delete collection');
+                } finally {
+                  setIsDeleting(false);
+                  setDeleteConfirmOpen(false);
+                }
               }}
             >
-              Delete
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
