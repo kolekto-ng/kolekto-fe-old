@@ -15,7 +15,7 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Kolekto update";
   const options = {
     body: payload.body || "You have a new update.",
-    icon: payload.icon || "/kelekto_logo-removebg-preview.png",
+    icon: payload.icon || "/icons/icon-512.png",
     badge: payload.badge || "/favicon.ico",
     tag: payload.tag || payload.type || "kolekto-update",
     renotify: Boolean(payload.renotify),

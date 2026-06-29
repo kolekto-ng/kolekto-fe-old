@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["kelekto_logo-removebg-preview.png", "favicon.ico"],
+      includeAssets: ["icons/*.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
@@ -21,21 +21,31 @@ export default defineConfig({
         background_color: "#1B5E20",
         theme_color: "#1B5E20",
         categories: ["finance", "business"],
+        // Icon-only assets (no wordmark) — Android requires this distinction
+        // from the marketing logo, and the `maskable` entries fill their
+        // canvas edge-to-edge with the brand color so OS launchers that clip
+        // icons to a circle/squircle don't crop or letterbox the glyph.
         icons: [
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-192.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-192-maskable.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/icons/icon-512-maskable.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

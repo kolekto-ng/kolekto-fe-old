@@ -39,22 +39,27 @@ const PwaInstallManager: React.FC = () => {
   const { platform, isInstalled, canInstall, promptInstall } =
     usePWAInstall();
 
-  // iOS has no install event — Safari can always be guided through "Add to
-  // Home Screen", so it's eligible as soon as it isn't already standalone.
-  // Android only becomes eligible once Chrome actually offers the native
-  // beforeinstallprompt event; without it there is nothing for our UI to
-  // trigger. Desktop is never eligible.
-  const isEligible =
-    !isInstalled &&
-    (platform === "ios" || (platform === "android" && canInstall));
+  // Whether this platform gets any install UI at all. The floating button
+  // lives under this condition alone — per spec it stays available
+  // (Android: "not installed", iOS: "not standalone") regardless of the
+  // dismissal cooldown or whether Chrome has offered beforeinstallprompt yet.
+  const isPlatformSupported = platform === "ios" || platform === "android";
+  const canShowAnything = isPlatformSupported && !isInstalled;
+
+  // Whether the install card/modal itself has something to do. iOS can
+  // always be guided through "Add to Home Screen". Android needs the actual
+  // beforeinstallprompt event — without it there is no native flow for the
+  // card's primary button to trigger.
+  const canOfferInstallFlow =
+    canShowAnything && (platform === "ios" || canInstall);
 
   const [isOpen, setIsOpen] = useState(
-    () => isEligible && !isDismissalActive()
+    () => canOfferInstallFlow && !isDismissalActive()
   );
   const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
-    if (!isEligible) {
+    if (!canOfferInstallFlow) {
       setIsOpen(false);
       return;
     }
@@ -65,7 +70,7 @@ const PwaInstallManager: React.FC = () => {
     // competes with the landing page's own first paint.
     const handle = scheduleIdle(() => setIsOpen(true));
     return () => cancelIdle(handle);
-  }, [isEligible, isOpen]);
+  }, [canOfferInstallFlow, isOpen]);
 
   const handleDismiss = useCallback(() => {
     recordDismissal();
@@ -90,11 +95,11 @@ const PwaInstallManager: React.FC = () => {
     }
   }, [platform, promptInstall]);
 
-  if (!isEligible) return null;
+  if (!canShowAnything) return null;
 
   return (
     <>
-      {platform === "android" && (
+      {platform === "android" && canOfferInstallFlow && (
         <AndroidInstallCard
           open={isOpen}
           isInstalling={isInstalling}

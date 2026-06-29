@@ -34,7 +34,7 @@ const AndroidInstallCard: React.FC<AndroidInstallCardProps> = ({
     <div className="bg-gradient-to-br from-[#1B5E20] via-[#1C5C23] to-[#2E7D32] px-6 pb-6 pt-9 text-center text-white">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 p-2 shadow-inner">
         <img
-          src="/kelekto_logo-removebg-preview.png"
+          src="/icons/icon-512.png"
           alt=""
           className="h-full w-full object-contain"
         />
