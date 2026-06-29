@@ -292,7 +292,12 @@ const CollectionDetailsPage: React.FC = () => {
         { event: '*', schema: 'public', table: 'collections', filter: `id=eq.${id}` },
         () => { loadCollection(); }
       )
-      .subscribe();
+      // Realtime does not backfill events missed during a socket drop (sleep/network
+      // blip/backgrounded tab). Refetching on every (re)SUBSCRIBE — not just on row
+      // events — closes that gap so a reconnect always re-syncs current state.
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') { loadContributions(); loadBalanceStats(); loadWallet(); }
+      });
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
