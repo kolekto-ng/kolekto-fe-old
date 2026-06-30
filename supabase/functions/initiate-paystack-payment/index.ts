@@ -611,7 +611,9 @@ serve(async (req: Request) => {
       }
     };
 
-    const normalizedMetadata: Record<string, unknown> = {
+    // This object is what actually gets sent to Paystack — it MUST stay flat
+    // and capped, per the constraint above. It is never written to our own DB.
+    const paystackMetadata: Record<string, unknown> = {
       collectionId: normalized.collectionId,
       collectionType: normalized.collectionType,
       collectionTitle: String(normalized.collectionTitle || "").slice(0, 200),
@@ -642,61 +644,92 @@ serve(async (req: Request) => {
       ],
     };
 
+    // This object is what we persist in OUR OWN database (pending_payment_context,
+    // a `jsonb` column with no size limit). It carries the SAME fields as
+    // paystackMetadata but with contact/formData/ticketSelections as their real
+    // (untruncated) object/array values instead of the JSON-string fields above —
+    // reusing paystackMetadata's truncated strings here was a latent bug: a
+    // contributor's own answers could be silently cut off in our source-of-truth
+    // table, not just in what Paystack receives. verify-paystack-payment's
+    // normalizePaymentRequest already prefers these object-shaped fields over the
+    // *Json string fallback (see its contactSource/formData handling), so this is
+    // a pure upgrade — no verify-side change needed, and every existing row in
+    // the old flat shape still parses exactly as before.
+    const fullPaymentContext: Record<string, unknown> = {
+      ...paystackMetadata,
+      contact: normalized.contact,
+      formData: normalized.formData,
+      ticketSelections: normalized.ticketSelections,
+    };
+
     // D-1: persist the payment context ourselves, keyed by reference, so
     // verification never has to depend solely on Paystack faithfully
-    // echoing back the exact metadata object we sent. Best-effort — if
-    // this insert fails for any reason, we log it and continue; the
-    // verify step still falls back to parsing Paystack's own metadata for
-    // any reference that has no row here.
-    try {
-      const { error: contextError } = await supabase
+    // echoing back the exact metadata object we sent.
+    //
+    // Persistence is required, not best-effort: a checkout whose context never
+    // made it into our DB is exactly the failure mode that left a contributor's
+    // submitted answers unrecoverable days later. Retry once to absorb a single
+    // transient blip; if it still fails, refuse to start the checkout rather
+    // than charge the contributor into a context-less transaction.
+    const persistPendingContext = async () =>
+      await supabase
         .from("pending_payment_context")
         .insert({
           reference,
           collection_id: normalized.collectionId,
-          metadata: normalizedMetadata,
+          metadata: fullPaymentContext,
         });
-      if (contextError) {
+
+    let contextPersisted = false;
+    let lastContextError: string | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { error: contextError } = await persistPendingContext();
+        if (!contextError) {
+          contextPersisted = true;
+          console.log(`[initiate ref=${reference}] PENDING_CONTEXT_WRITE_OK attempt=${attempt}`);
+          break;
+        }
+        lastContextError = contextError.message;
         console.warn(
-          `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_FAILED (non-fatal, verify will fall back to Paystack metadata):`,
+          `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_FAILED attempt=${attempt}:`,
           contextError.message
         );
-        // Durable record of the failure — console.warn alone vanishes once
-        // this edge function instance recycles, and was the reason a prior
-        // double-failure (this write AND Paystack's own metadata echo both
-        // failing for the same reference) was invisible until a contributor
-        // reported a missing contribution days later. Same table verify
-        // writes to; best-effort, never blocks returning the checkout URL.
-        try {
-          await supabase.from("payment_recovery_log").insert({
-            reference,
-            collection_id: normalized.collectionId,
-            success: false,
-            error_code: "pending_context_write_failed",
-            error_message: contextError.message,
-            metadata_source: "initiate",
-            note: "pending_payment_context insert failed at initiate-time",
-          });
-        } catch { /* best-effort, never block checkout */ }
-      } else {
-        console.log(`[initiate ref=${reference}] PENDING_CONTEXT_WRITE_OK`);
+      } catch (contextErr) {
+        lastContextError = (contextErr as Error)?.message || String(contextErr);
+        console.warn(
+          `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_THREW attempt=${attempt}:`,
+          lastContextError
+        );
       }
-    } catch (contextErr) {
-      console.warn(
-        `[initiate ref=${reference}] PENDING_CONTEXT_WRITE_THREW (non-fatal):`,
-        (contextErr as Error)?.message
-      );
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 300));
+    }
+
+    if (!contextPersisted) {
+      // Durable record of the failure — console.warn alone vanishes once this
+      // edge function instance recycles, and was the reason a prior
+      // double-failure (this write AND Paystack's own metadata echo both
+      // failing for the same reference) was invisible until a contributor
+      // reported a missing contribution days later.
       try {
         await supabase.from("payment_recovery_log").insert({
           reference,
           collection_id: normalized.collectionId,
           success: false,
-          error_code: "pending_context_write_threw",
-          error_message: (contextErr as Error)?.message || String(contextErr),
+          error_code: "pending_context_persist_failed",
+          error_message: lastContextError,
           metadata_source: "initiate",
-          note: "pending_payment_context insert threw at initiate-time",
+          note: "pending_payment_context insert failed after retry — checkout blocked",
         });
-      } catch { /* best-effort, never block checkout */ }
+      } catch { /* best-effort logging only; the block below still applies */ }
+
+      return new Response(
+        JSON.stringify({
+          error: "Unable to initialize payment: failed to persist payment context.",
+          code: "payment_context_persist_failed",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // F4 diagnostic: metadata size/shape going to Paystack — helps catch
@@ -704,9 +737,9 @@ serve(async (req: Request) => {
     // size limit; oversized metadata can come back malformed) without
     // logging any secret/PII beyond what's already in metadata itself.
     console.log(`[initiate ref=${reference}] METADATA_DIAGNOSTIC`, {
-      keys: Object.keys(normalizedMetadata),
-      totalSize: JSON.stringify(normalizedMetadata).length,
-      collectionIdPresent: Boolean(normalizedMetadata.collectionId),
+      keys: Object.keys(paystackMetadata),
+      totalSize: JSON.stringify(paystackMetadata).length,
+      collectionIdPresent: Boolean(paystackMetadata.collectionId),
     });
 
     console.log("Initiating Paystack payment:", {
@@ -727,7 +760,7 @@ serve(async (req: Request) => {
       callback_url:
         callback_url ||
         `${Deno.env.get("PUBLIC_CALLBACK_URL") || "https://kolekto.vercel.app"}/payment-callback`,
-      metadata: normalizedMetadata,
+      metadata: paystackMetadata,
     };
 
     const MAX_RETRIES = 2;
@@ -792,8 +825,8 @@ serve(async (req: Request) => {
               body: paystackResult,
               sentAmount: paystackBody.amount,
               sentEmail: paystackBody.email,
-              metadataKeys: Object.keys(normalizedMetadata),
-              metadataSize: JSON.stringify(normalizedMetadata).length,
+              metadataKeys: Object.keys(paystackMetadata),
+              metadataSize: JSON.stringify(paystackMetadata).length,
             }
           );
 

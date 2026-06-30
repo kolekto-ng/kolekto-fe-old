@@ -419,12 +419,46 @@ function normalizePaymentRequest(input: {
     }
 
   } else if (collectionType === "tiered") {
-    const tier = matchTier(allTiers, {
+    let tier = matchTier(allTiers, {
       tierId: metadata.selectedTierId,
       tierName: metadata.selectedTier,
       name: metadata.selectedTier,
     });
-    if (!tier) throw new PaymentValidationError("Select a valid pricing tier before checkout.", 400, "invalid_selected_tier", { collectionId, selectedTier: metadata.selectedTier });
+    // Recovery fallback: metadata didn't carry an exact tier (e.g. an Admin
+    // Reconcile manual override only ever supplies collectionId, never the
+    // contributor's original tier choice — that field simply doesn't exist
+    // once both pending_payment_context and Paystack's own metadata echo
+    // have failed). Infer deterministically from the amount Paystack
+    // actually verified: compute every tier's totalPayable the same way
+    // initiate did, and auto-select ONLY if exactly one tier matches within
+    // a rounding tolerance. Never guess on a tie — same philosophy as
+    // attemptDeterministicCollectionRecovery's Strategy E below.
+    let tierInferenceAmbiguous = false;
+    if (!tier && paystackVerifiedTotal > 0) {
+      const amountMatches = allTiers.filter((t) => {
+        const tierTotalPayable = calculateFees(asNumber(t.price), collectionType, feeBearer).totalPayable;
+        return Math.abs(tierTotalPayable - paystackVerifiedTotal) < 0.5;
+      });
+      if (amountMatches.length === 1) {
+        tier = amountMatches[0];
+        console.warn(
+          `[verify] TIER_INFERRED_FROM_AMOUNT collectionId=${collectionId} tierId=${tier.tierId} verifiedTotal=${paystackVerifiedTotal}`
+        );
+      } else if (amountMatches.length > 1) {
+        tierInferenceAmbiguous = true;
+        console.warn(
+          `[verify] TIER_INFERENCE_AMBIGUOUS collectionId=${collectionId} candidates=${amountMatches.length} verifiedTotal=${paystackVerifiedTotal} — refusing to guess`
+        );
+      }
+    }
+    if (!tier) {
+      throw new PaymentValidationError(
+        tierInferenceAmbiguous
+          ? "More than one pricing tier matches this payment's amount — supply the tier ID via Admin Reconcile's \"Pricing tier ID\" field."
+          : "Select a valid pricing tier before checkout.",
+        400, "invalid_selected_tier", { collectionId, selectedTier: metadata.selectedTier }
+      );
+    }
     if (tier.remainingCapacity !== null && Number(tier.remainingCapacity) < 1) {
       throw new PaymentValidationError(`${tier.tierName} is sold out.`, 400, "tier_sold_out", { collectionId, tierId: tier.tierId, tierName: tier.tierName });
     }
@@ -584,6 +618,88 @@ async function attemptDeterministicCollectionRecovery(
   return null;
 }
 
+// Keys that exist on every contribution regardless of what the host's form
+// actually asked — present even when no real answers were ever submitted.
+const STANDARD_INFO_KEYS = new Set([
+  "Tier", "TierId", "TierAmount", "Quantity", "_receipt",
+  "collectionType", "channel", "paidAt",
+]);
+
+function hasRealAnswers(info: Record<string, unknown> | undefined): boolean {
+  if (!info) return false;
+  return Object.keys(info).some((k) => !STANDARD_INFO_KEYS.has(k));
+}
+
+/**
+ * Contributor-info backfill: runs only when a recovered payment's metadata
+ * carried NO submitted answers at all (pending_payment_context had no row AND
+ * Paystack's own metadata echo was empty) — the exact gap that, in a real
+ * incident, left a contribution with only {Tier, TierId, Quantity} on file
+ * even though the same contributor's host-form answers (name, phone, custom
+ * fields) existed elsewhere in our own database.
+ *
+ * Looks for an unambiguous prior PAID contribution by the same email in the
+ * SAME collection that does carry real answers, and reuses them. Same
+ * "never guess" discipline as attemptDeterministicCollectionRecovery's
+ * Strategy E: zero or multiple qualifying candidates ⇒ do nothing. Same
+ * collection + same email keeps this far less ambiguous than Strategy E's
+ * cross-collection amount inference.
+ */
+async function attemptContributorInfoBackfill(
+  supabase: ReturnType<typeof createClient>,
+  params: { reference: string; collectionId: string; email: string }
+): Promise<{ contributionId: string; fields: Record<string, unknown>; name: string | null; phone: string | null } | null> {
+  const { reference, collectionId, email } = params;
+  if (!email) return null;
+
+  const { data: rows, error } = await supabase
+    .from("contributions")
+    .select("id, name, phone, contributor_information, payment_reference, created_at")
+    .eq("collection_id", collectionId)
+    .eq("status", "paid")
+    .ilike("email", email)
+    .neq("payment_reference", reference)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error || !rows) return null;
+
+  const candidates = (rows as Array<Record<string, unknown>>).filter((row) => {
+    const infoRows = Array.isArray(row.contributor_information)
+      ? (row.contributor_information as Array<Record<string, unknown>>)
+      : [];
+    return hasRealAnswers(infoRows[0]);
+  });
+
+  if (candidates.length !== 1) {
+    if (candidates.length > 1) {
+      console.warn(
+        `[verify ref=${reference}] CONTRIBUTOR_BACKFILL_AMBIGUOUS candidates=${candidates.length} — refusing to guess`
+      );
+    }
+    return null;
+  }
+
+  const match = candidates[0];
+  const infoRows = Array.isArray(match.contributor_information)
+    ? (match.contributor_information as Array<Record<string, unknown>>)
+    : [];
+  const sourceInfo = infoRows[0] || {};
+  const fields = Object.keys(sourceInfo).reduce<Record<string, unknown>>((acc, k) => {
+    if (!STANDARD_INFO_KEYS.has(k)) acc[k] = sourceInfo[k];
+    return acc;
+  }, {});
+
+  if (Object.keys(fields).length === 0) return null;
+
+  return {
+    contributionId: String(match.id),
+    fields,
+    name: match.name ? String(match.name) : null,
+    phone: match.phone ? String(match.phone) : null,
+  };
+}
+
 /**
  * Best-effort, never-throwing diagnostic log into `payment_recovery_log`.
  * Durable visibility into every post-success verify/admin-reconcile outcome
@@ -642,6 +758,11 @@ serve(async (req: Request) => {
     // out-of-band (e.g. by searching Paystack dashboard for the contributor's
     // email/amount), which collection a stranded payment belongs to.
     const overrideCollectionId = String(reqData.overrideCollectionId || "").trim() || null;
+    // Same idea as overrideCollectionId, for the rarer case where amount-based
+    // tier inference (see the "tiered" branch of normalizePaymentRequest) is
+    // ambiguous — two or more tiers happen to cost the same totalPayable.
+    // Admin Reconcile confirms the right tier out-of-band and supplies it here.
+    const overrideSelectedTierId = String(reqData.overrideSelectedTierId || "").trim() || null;
 
     // Paystack sends webhooks for many event types once a webhook URL is
     // configured (charge.success, transfer.success, refund.processed, ...).
@@ -820,6 +941,16 @@ serve(async (req: Request) => {
       });
     }
 
+    // Manual tier override only ever applies on top of whatever metadata we
+    // resolved — never clobbers a real selectedTierId that came from
+    // pending_payment_context or Paystack's own metadata.
+    if (overrideSelectedTierId && !metadata.selectedTierId) {
+      metadata = { ...metadata, selectedTierId: overrideSelectedTierId };
+      console.warn(
+        `[verify ref=${reference}] MANUAL_OVERRIDE_SELECTED_TIER_ID tierId=${overrideSelectedTierId}`
+      );
+    }
+
     // Do not filter on deleted_at — column may not exist in prod schema.
     const { data: collection, error: collectionError } = await supabase
       .from("collections").select("*").eq("id", collectionId).maybeSingle();
@@ -923,8 +1054,37 @@ serve(async (req: Request) => {
           });
         }
 
+        // Recovery backfill: only when metadata gave us literally nothing beyond
+        // the tier/amount (both pending_payment_context and Paystack's own
+        // metadata echo were empty) — the exact gap that, in a real incident,
+        // left a contribution with only {Tier, TierId, Quantity} on file. See
+        // attemptContributorInfoBackfill above for the matching discipline.
+        const payerEmailForBackfill = normalizedPayment.contact.email || String(customer.email || "");
+        const metadataHadNoAnswers =
+          Object.keys(normalizedPayment.formData || {}).length === 0 &&
+          !normalizedPayment.contact.name &&
+          !normalizedPayment.contact.phone;
+        const backfill = metadataHadNoAnswers
+          ? await attemptContributorInfoBackfill(supabase, {
+              reference,
+              collectionId,
+              email: payerEmailForBackfill,
+            })
+          : null;
+        if (backfill) {
+          console.warn(
+            `[verify ref=${reference}] CONTRIBUTOR_BACKFILL_APPLIED fromContributionId=${backfill.contributionId} fields=${Object.keys(backfill.fields).join(",")}`
+          );
+          await logRecoveryAttempt(supabase, {
+            reference, collectionId, success: true, metadataSource,
+            note: `contributor_info_backfilled fromContributionId=${backfill.contributionId}`,
+            context: { fields: Object.keys(backfill.fields) },
+          });
+        }
+
         const contactName =
           normalizedPayment.contact.name ||
+          backfill?.name ||
           String(customer.email || "").split("@")[0] ||
           "Anonymous";
         const payerName =
@@ -936,6 +1096,7 @@ serve(async (req: Request) => {
         // Contact info (name/email/phone) is stored on top-level columns only.
         const baseFields = {
           ...(normalizedPayment.formData || {}),
+          ...(backfill?.fields || {}),
         };
 
         const contributionUnits = buildContributionUnits(normalizedPayment, collection);
@@ -1093,8 +1254,14 @@ serve(async (req: Request) => {
               _payer: {
                 name: payerName,
                 email: normalizedPayment.contact.email || String(customer.email || ""),
-                phone: normalizedPayment.contact.phone || null,
+                phone: normalizedPayment.contact.phone || backfill?.phone || null,
               },
+              // Provenance for the auto-backfill above (see
+              // attemptContributorInfoBackfill) — present only when this
+              // contribution's custom-field answers were recovered from an
+              // earlier paid contribution by the same email, not submitted
+              // directly with this payment.
+              ...(backfill ? { recoveredFromContributionId: backfill.contributionId } : {}),
             },
           };
 
@@ -1103,7 +1270,7 @@ serve(async (req: Request) => {
             // ─── CORRECT column names (matching actual schema) ───────────────
             name: payerName,
             email: normalizedPayment.contact.email || String(customer.email || ""),
-            phone: normalizedPayment.contact.phone || null,
+            phone: normalizedPayment.contact.phone || backfill?.phone || null,
             // amount = net to host (deducts fees when organizer-borne)
             amount: netAmount,
             // gross_amount = what contributor actually paid
