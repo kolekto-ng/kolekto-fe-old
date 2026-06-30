@@ -716,6 +716,16 @@ async function logRecoveryAttempt(
     metadataSource?: string | null;
     note?: string | null;
     context?: Record<string, unknown> | null;
+    // Additive (nullable columns) — populated by the wrapper closure each
+    // handler invocation creates (see `logAttempt` near VERIFY_CALLED).
+    // Lets the admin dashboard distinguish a frontend-callback verify from
+    // a webhook-triggered one from a scheduled-recovery one from a manual
+    // admin reconcile, and measure recovery latency, without changing any
+    // matching/recovery logic here.
+    invocationSource?: string | null;
+    attemptNumber?: number | null;
+    durationMs?: number | null;
+    selectedTierId?: string | null;
   }
 ) {
   try {
@@ -728,6 +738,10 @@ async function logRecoveryAttempt(
       metadata_source: entry.metadataSource ?? null,
       note: entry.note ?? null,
       context: entry.context ?? null,
+      invocation_source: entry.invocationSource ?? null,
+      attempt_number: entry.attemptNumber ?? null,
+      duration_ms: entry.durationMs ?? null,
+      selected_tier_id: entry.selectedTierId ?? null,
     });
   } catch (logErr) {
     console.warn(
@@ -819,6 +833,39 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Diagnostic: which project this invocation is actually running
+    // against — a misrouted webhook (backend pointed at the wrong
+    // Supabase project) becomes visible in logs instead of silently
+    // failing to find a collection.
+    const projectRef = supabaseUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "unknown";
+    console.log(`[verify ref=${reference}] ENV_CHECK projectRef=${projectRef}`);
+
+    // Invocation-source tracking (additive, never changes matching/recovery
+    // behavior): every existing caller keeps working unchanged because this
+    // is inferred from the SAME request shapes already branched on above —
+    // an explicit `invocationSource` in the body (used by the scheduled
+    // recovery sweep) always wins; otherwise infer from shape.
+    const requestStartedAt = Date.now();
+    const invocationSource: string =
+      String(reqData.invocationSource || "").trim() ||
+      (reqData.event ? "webhook" : (overrideCollectionId || overrideSelectedTierId) ? "admin_reconcile" : "frontend_callback");
+    const { count: priorAttemptCount } = await supabase
+      .from("payment_recovery_log")
+      .select("id", { count: "exact", head: true })
+      .eq("reference", reference);
+    const attemptNumber = (priorAttemptCount || 0) + 1;
+    // Thin wrapper so the 11 existing logRecoveryAttempt call sites below
+    // don't each need to be taught about invocationSource/attemptNumber/
+    // durationMs individually — they already pass everything else.
+    const logAttempt = (entry: Parameters<typeof logRecoveryAttempt>[1]) =>
+      logRecoveryAttempt(supabase, {
+        ...entry,
+        invocationSource,
+        attemptNumber,
+        durationMs: Date.now() - requestStartedAt,
+        selectedTierId: entry.selectedTierId ?? (overrideSelectedTierId || null),
+      });
 
     // D-1: root-cause fix for "Missing collection ID in payment metadata".
     //
@@ -920,7 +967,7 @@ serve(async (req: Request) => {
         console.warn(
           `[verify ref=${reference}] DETERMINISTIC_RECOVERY strategy=${recovered.strategy} collectionId=${collectionId}`
         );
-        await logRecoveryAttempt(supabase, {
+        await logAttempt({
           reference, collectionId, success: true, metadataSource,
           note: `recovered_via_${recovered.strategy}`,
         });
@@ -931,7 +978,7 @@ serve(async (req: Request) => {
         `[verify ref=${reference}] MISSING_COLLECTION_ID metadataSource=${metadataSource} ` +
         `rawMetadataType=${typeof transaction.metadata} resolvedKeys=${Object.keys(metadata).join(",")}`
       );
-      await logRecoveryAttempt(supabase, {
+      await logAttempt({
         reference, collectionId: null, success: false,
         errorCode: "missing_collection_id", errorMessage: "Missing collection ID in payment metadata",
         metadataSource, context: { resolvedKeys: Object.keys(metadata) },
@@ -956,7 +1003,7 @@ serve(async (req: Request) => {
       .from("collections").select("*").eq("id", collectionId).maybeSingle();
 
     if (collectionError) {
-      await logRecoveryAttempt(supabase, {
+      await logAttempt({
         reference, collectionId, success: false,
         errorCode: "collection_fetch_failed", errorMessage: collectionError.message, metadataSource,
       });
@@ -965,7 +1012,7 @@ serve(async (req: Request) => {
       });
     }
     if (!collection) {
-      await logRecoveryAttempt(supabase, {
+      await logAttempt({
         reference, collectionId, success: false,
         errorCode: "collection_not_found", errorMessage: "Collection not found.", metadataSource,
       });
@@ -994,7 +1041,7 @@ serve(async (req: Request) => {
         console.log(
           `[verify ref=${reference}] VERIFY_IDEMPOTENT_HIT existing=${processedContributions.length}`
         );
-        await logRecoveryAttempt(supabase, {
+        await logAttempt({
           reference, collectionId, success: true, metadataSource,
           note: `idempotent_hit existing=${processedContributions.length}`,
         });
@@ -1019,7 +1066,7 @@ serve(async (req: Request) => {
           });
         } catch (error: unknown) {
           if (error instanceof PaymentValidationError) {
-            await logRecoveryAttempt(supabase, {
+            await logAttempt({
               reference, collectionId, success: false,
               errorCode: error.code, errorMessage: error.message, metadataSource,
               context: error.logContext ?? null,
@@ -1044,7 +1091,7 @@ serve(async (req: Request) => {
         const mismatchTolerance = isOpenAmount && !metadataHadAmount ? 1.0 : 0.01;
         if (Math.abs(verifiedTotal - normalizedPayment.totalPayable) > mismatchTolerance) {
           console.error("Amount mismatch:", { reference, collectionId, verifiedTotal, expectedTotal: normalizedPayment.totalPayable });
-          await logRecoveryAttempt(supabase, {
+          await logAttempt({
             reference, collectionId, success: false,
             errorCode: "amount_mismatch", errorMessage: "Payment amount validation failed.", metadataSource,
             context: { verifiedTotal, expectedTotal: normalizedPayment.totalPayable },
@@ -1075,7 +1122,7 @@ serve(async (req: Request) => {
           console.warn(
             `[verify ref=${reference}] CONTRIBUTOR_BACKFILL_APPLIED fromContributionId=${backfill.contributionId} fields=${Object.keys(backfill.fields).join(",")}`
           );
-          await logRecoveryAttempt(supabase, {
+          await logAttempt({
             reference, collectionId, success: true, metadataSource,
             note: `contributor_info_backfilled fromContributionId=${backfill.contributionId}`,
             context: { fields: Object.keys(backfill.fields) },
@@ -1330,7 +1377,7 @@ serve(async (req: Request) => {
               // mismatched totals. This is a caught-and-handled race, not a
               // failure, so success=true; the note/context make it visible
               // in payment_recovery_log for monitoring.
-              await logRecoveryAttempt(supabase, {
+              await logAttempt({
                 reference, collectionId, success: true, metadataSource,
                 note: `duplicate_insert_race_recovered index=${index} existing_rows=${processedContributions.length}`,
                 context: { lineIndex: index, errorCode: contribError.code },
@@ -1380,7 +1427,7 @@ serve(async (req: Request) => {
           console.error(
             `[verify ref=${reference}] VERIFY_FAILED_AFTER_ROLLBACK code=${String(firstErr.code || "")}`
           );
-          await logRecoveryAttempt(supabase, {
+          await logAttempt({
             reference, collectionId, success: false,
             errorCode: String(firstErr.code || "contribution_insert_failed"),
             errorMessage: String(firstErr.message || firstErr), metadataSource,
@@ -1406,7 +1453,7 @@ serve(async (req: Request) => {
         console.log(
           `[verify ref=${reference}] VERIFY_CONTRIBS_INSERTED count=${processedContributions.length}`
         );
-        await logRecoveryAttempt(supabase, {
+        await logAttempt({
           reference, collectionId, success: true, metadataSource,
           note: `new_contribution_recorded count=${processedContributions.length}`,
         });
