@@ -1,43 +1,57 @@
-import React, { useEffect } from 'react';
-import { useAuthStore } from '@/store';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useProfileStore } from '@/store/useProfileStore';
 import PersonalInfoSection from '@/components/profile/PersonalInfoSection';
 import LoginSecuritySection from '@/components/profile/LoginSecuritySection';
 import KYCSection from '@/components/profile/KYCSection';
 import BankDetailsSection from '@/components/profile/BankDetailsSection';
+import PushNotificationSettings from '@/components/profile/PushNotificationSettings';
 import {
-  User,
+  ArrowLeft,
+  ChevronRight,
   Lock,
   Shield,
   Building2,
-  CheckCircle2,
-  AlertCircle,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 
 const sections = [
-  { id: 'personal', label: 'Personal Info', icon: User, mobileLabel: 'Personal' },
-  { id: 'security', label: 'Login & Security', icon: Lock, mobileLabel: 'Security' },
-  { id: 'kyc', label: 'KYC Verification', icon: Shield, mobileLabel: 'KYC' },
-  { id: 'bank', label: 'Bank Details', icon: Building2, mobileLabel: 'Bank' },
+  {
+    id: 'security',
+    label: 'Login & Security',
+    description: 'Password, access, and account protection',
+    icon: Lock,
+  },
+  {
+    id: 'kyc',
+    label: 'KYC Verification',
+    description: 'Identity verification and compliance status',
+    icon: Shield,
+  },
+  {
+    id: 'bank',
+    label: 'Bank Details',
+    description: 'Withdrawal bank account information',
+    icon: Building2,
+  },
 ];
 
 const ProfilePage: React.FC = () => {
-  const { user } = useAuthStore() as any;
-  const { activeSection, setActiveSection, kycData, fetchKYCStatus } = useProfileStore();
-
-  const kycStatus = kycData?.overallStatus || user?.verification_status || 'not_started';
-  const isVerified = kycStatus === 'verified';
+  const navigate = useNavigate();
+  const { user, signOut } = useAuthStore() as any;
+  const { activeSection, setActiveSection, fetchKYCStatus } = useProfileStore();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       fetchKYCStatus(user.id);
     }
-  }, [user?.id]);
+  }, [user?.id, fetchKYCStatus]);
 
   const renderSection = () => {
     switch (activeSection) {
-      case 'personal':
-        return <PersonalInfoSection />;
       case 'security':
         return <LoginSecuritySection />;
       case 'kyc':
@@ -49,107 +63,115 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const currentSection = sections.find((section) => section.id === activeSection);
+  const isPersonalView = !currentSection;
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      setActiveSection('personal');
+      navigate('/login', { replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto pb-24">
-      {/* Page Header with Verification Status */}
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Manage your profile, security, and verification settings
+      {isPersonalView ? (
+        <div className="space-y-5">
+          <PersonalInfoSection />
+          <PushNotificationSettings />
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm sm:p-4">
+            <div className="space-y-2">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-all hover:bg-gray-50 active:scale-[0.99]"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#E8F5E9] text-[#1B5E20]">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-gray-900">{section.label}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{section.description}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="md:hidden rounded-2xl border border-red-100 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="flex min-h-12 w-full items-center gap-3 rounded-xl p-3 text-left text-red-600 transition-all hover:bg-red-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Log out of Kolekto"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                {isSigningOut ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="h-4 w-4" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">
+                  {isSigningOut ? 'Logging out...' : 'Log out'}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-red-500/80">
+                  Sign out of this device
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs leading-relaxed text-gray-500">
+              Need help with your account? Contact our{' '}
+              <a
+                href="https://wa.me/2348012345678"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#1B5E20] hover:underline"
+              >
+                support team
+              </a>
             </p>
           </div>
-          {/* Global Verification Badge */}
-          <div
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
-              isVerified
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}
-          >
-            {isVerified ? (
-              <CheckCircle2 className="w-4 h-4" />
-            ) : (
-              <AlertCircle className="w-4 h-4" />
-            )}
-            {isVerified ? 'Verified Account' : 'Unverified Account'}
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveSection('personal')}
+              aria-label="Back to profile"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-sm transition-all hover:border-green-200 hover:bg-green-50 hover:text-green-800 active:scale-[0.96]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h1 className="min-w-0 text-xl font-bold leading-tight text-gray-900">
+              {currentSection?.label}
+            </h1>
+          </div>
+
+          <div className="min-w-0 flex-1 transition-opacity duration-200">
+            {renderSection()}
           </div>
         </div>
-      </div>
-
-      {/* Mobile Tab Bar */}
-      <div className="md:hidden mb-6">
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto no-scrollbar">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            const isActive = activeSection === section.id;
-            return (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-1 justify-center ${
-                  isActive
-                    ? 'bg-white text-[#1B5E20] shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {section.mobileLabel}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Desktop Layout: Sidebar + Content */}
-      <div className="flex gap-6">
-        {/* Desktop Sidebar Navigation */}
-        <div className="hidden md:block w-56 flex-shrink-0">
-          <nav className="sticky top-6 space-y-1">
-            {sections.map((section) => {
-              const Icon = section.icon;
-              const isActive = activeSection === section.id;
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
-                    isActive
-                      ? 'bg-[#E8F5E9] text-[#1B5E20] shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#1B5E20]' : 'text-gray-400'}`} />
-                  {section.label}
-                </button>
-              );
-            })}
-
-            {/* Sidebar footer card */}
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <div className="p-3 rounded-xl bg-gray-50">
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Need help with your account? Contact our{' '}
-                  <a
-                    href="https://wa.me/2348012345678"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#1B5E20] font-medium hover:underline"
-                  >
-                    support team
-                  </a>
-                </p>
-              </div>
-            </div>
-          </nav>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 min-w-0">
-          {renderSection()}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

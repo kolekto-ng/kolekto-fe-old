@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Wallet,
   BarChart3,
-  Loader2,
   ChevronRight,
   Plus,
   Share2,
@@ -23,10 +22,11 @@ import {
   Banknote,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { axiosInstance } from "@/utils/axios";
-import { formatDistanceToNow } from "date-fns";
 import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialog";
 import { useAuthStore } from "@/store/useAuthStore";
+import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
+import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
+import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -140,16 +140,7 @@ const TYPE_META: Record<
   },
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-700",
-  completed: "bg-blue-100 text-blue-700",
-  closed: "bg-gray-200 text-gray-600",
-  deleted: "bg-gray-300 text-gray-600",
-  pending_review: "bg-amber-100 text-amber-700",
-};
-const RECENT_COLLECTION_LIMIT = 6;
+const RECENT_COLLECTION_LIMIT = 3;
 const RECENT_ACTIVITY_LIMIT = 5;
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
@@ -172,17 +163,6 @@ interface Activity {
   relative_time: string;
 }
 
-interface CollectionPreview {
-  id: string;
-  title: string;
-  status: string;
-  collection_type: string;
-  totalRaised: number;
-  participants: number;
-  deadline?: string;
-  created_at: string;
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
@@ -193,276 +173,60 @@ const DashboardPage: React.FC = () => {
     user?.user_metadata?.firstName ||
     user?.email?.split("@")[0] ||
     "there";
-  const [stats, setStats] = useState<DashStats>({
-    totalCollections: 0,
-    activeCollections: 0,
-    totalBalance: 0,
-    availableBalance: 0,
-    pendingBalance: 0,
-  });
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [recentCollections, setRecentCollections] = useState<
-    CollectionPreview[]
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    stats,
+    activities,
+    recentCollections,
+    isLoading: loading,
+    loadDashboardHome,
+  } = useDashboardHomeStore();
   const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
-  const isLoadingRef = useRef(false);
-  const queuedReloadRef = useRef(false);
-  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    isMountedRef.current = true;
     const userId = user?.id || getStoredUserId();
+    void loadDashboardHome(userId);
 
-    const loadOnce = async () => {
-      try {
-        if (!userId) {
-          if (isMountedRef.current) setLoading(false);
-          return;
-        }
-
-        /* ── 1. Fetch user collections (light query) ─────────────────────── */
-        const { data: collectionsRaw, error: colErr } = await supabase
-          .from("collections")
-          .select("id, title, status, collection_type, deadline, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(RECENT_COLLECTION_LIMIT);
-
-        if (colErr) console.error("Collections fetch error:", colErr.message);
-
-        const cols: any[] = collectionsRaw || [];
-        const [
-          { count: totalCollectionsCount },
-          { count: activeCollectionsCount },
-        ] = await Promise.all([
-          supabase
-            .from("collections")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId),
-          supabase
-            .from("collections")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .eq("status", "active"),
-        ]);
-        const totalCollections = Number(totalCollectionsCount || 0);
-        const activeCollections = Number(activeCollectionsCount || 0);
-        const collectionIds: string[] = cols.map((c: any) => c.id);
-        const recentCollectionIds: string[] = cols
-          .slice(0, RECENT_COLLECTION_LIMIT)
-          .map((c: any) => c.id);
-        const titleMap: Record<string, string> = {};
-        for (const c of cols) titleMap[c.id] = c.title;
-
-        /* ── 2. Authoritative balance stats from backend ───────────────────
-           The backend applies the 5AM WAT settlement cutoff consistently
-           across home and collection pages, so we consume those figures
-           directly instead of re-deriving them from wallet rows. ───────── */
-        const statsPromise = axiosInstance
-          .get("/dashboard/stats")
-          .then((res) => res?.data?.data || res?.data || res || {})
-          .catch(() => ({}));
-
-        const paidContribsPromise =
-          recentCollectionIds.length > 0
-            ? supabase
-                .from("contributions")
-                .select("amount, collection_id")
-                .in("collection_id", recentCollectionIds)
-                .eq("status", "paid")
-                .then((res) => res.data || [])
-                .catch(() => [])
-            : Promise.resolve([]);
-
-        const activitiesPromise = axiosInstance
-          .get(`/dashboard/activities?limit=${RECENT_ACTIVITY_LIMIT}`)
-          .then((res) => res?.data?.data || res?.data || res || [])
-          .catch(() => null);
-
-        const [statsData, paidContribs, activitiesData] = await Promise.all([
-          statsPromise,
-          paidContribsPromise,
-          activitiesPromise,
-        ]);
-
-        const totalBalance = Number(statsData.totalBalance || 0);
-        const availableBalance = Number(statsData.availableBalance || 0);
-        const pendingBalance = Number(statsData.pendingBalance || 0);
-
-        /* ── 4. Build per-collection preview data ─────────────────────── */
-        const contribsByCol: Record<string, any[]> = {};
-        for (const c of paidContribs || []) {
-          if (!contribsByCol[c.collection_id])
-            contribsByCol[c.collection_id] = [];
-          contribsByCol[c.collection_id].push(c);
-        }
-
-        setRecentCollections(
-          cols.slice(0, RECENT_COLLECTION_LIMIT).map((c: any) => {
-            const cList = contribsByCol[c.id] || [];
-            // totalRaised: sum contributions.amount (authoritative net figure, no fees).
-            // Do NOT use wallet.net_payment — wallet may be zero if upsert failed.
-            const totalRaised = cList.reduce(
-              (s: number, contrib: any) => s + Number(contrib.amount || 0),
-              0,
-            );
-            return {
-              id: c.id,
-              title: c.title,
-              status: c.status,
-              collection_type: c.collection_type || "fixed",
-              totalRaised,
-              participants: cList.length,
-              deadline: c.deadline,
-              created_at: c.created_at,
-            };
-          }),
-        );
-
-        /* ── 5. Recent activity feed ──────────────────────────────────── */
-        if (activitiesData) {
-          setActivities(
-            (activitiesData || []).map((cn: any) => {
-              const createdAt = cn.created_at;
-              let relativeTime = fmtDateTime(createdAt);
-              try {
-                relativeTime = formatDistanceToNow(new Date(createdAt), {
-                  addSuffix: true,
-                });
-              } catch {
-                // Keep fallback text from fmtDateTime above.
-              }
-              return {
-                id: cn.id,
-                name: cn.name || "",
-                email: cn.email || "",
-                // Activity section shows full checkout amount (including fees) per spec.
-                // gross_amount = totalPayable; fallback to amount for legacy rows.
-                amount: Number(cn.gross_amount || cn.amount) || 0,
-                created_at: createdAt,
-                collection_title:
-                  titleMap[cn.collection_id] || cn.collection_title || "Unknown",
-                relative_time: relativeTime,
-              };
-            }),
-          );
-        } else {
-          const { data: contribs } = await supabase
-            .from("contributions")
-            .select(
-              "id, name, email, amount, gross_amount, created_at, collection_id",
-            )
-            .in("collection_id", collectionIds)
-            .eq("status", "paid")
-            .order("created_at", { ascending: false })
-            .limit(RECENT_ACTIVITY_LIMIT);
-
-          setActivities(
-            (contribs || []).map((cn: any) => {
-              const createdAt = cn.created_at;
-              let relativeTime = fmtDateTime(createdAt);
-              try {
-                relativeTime = formatDistanceToNow(new Date(createdAt), {
-                  addSuffix: true,
-                });
-              } catch {
-                // Keep fallback text from fmtDateTime above.
-              }
-              return {
-                id: cn.id,
-                name: cn.name || "",
-                email: cn.email || "",
-                // Activity section shows full checkout amount (including fees) per spec.
-                // gross_amount = totalPayable; fallback to amount for legacy rows.
-                amount: Number(cn.gross_amount || cn.amount) || 0,
-                created_at: createdAt,
-                collection_title: titleMap[cn.collection_id] || "Unknown",
-                relative_time: relativeTime,
-              };
-            }),
-          );
-        }
-
-        setStats({
-          totalCollections,
-          activeCollections,
-          totalBalance,
-          availableBalance,
-          pendingBalance,
-        });
-      } catch (err) {
-        console.error("Dashboard load error:", err);
-      } finally {
-        if (isMountedRef.current) setLoading(false);
-      }
-    };
-
-    const load = async () => {
-      if (isLoadingRef.current) {
-        queuedReloadRef.current = true;
-        return;
-      }
-
-      isLoadingRef.current = true;
-      try {
-        do {
-          queuedReloadRef.current = false;
-          await loadOnce();
-        } while (queuedReloadRef.current);
-      } finally {
-        isLoadingRef.current = false;
-      }
-    };
-
-    load();
-
-    // ── Real-time: re-run load() whenever a contribution or wallet changes ──
-    // This ensures the host dashboard updates automatically after every payment
-    // without requiring a manual refresh.
-    const userId2 = userId; // capture for closure
     const rtChannel = supabase
-      .channel(`dashboard-rt-${userId2}`)
+      .channel(`dashboard-rt-${userId || "guest"}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "contributions" },
         () => {
-          load();
+          void loadDashboardHome(userId, { force: true, silent: true });
         },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "contributions" },
         () => {
-          load();
+          void loadDashboardHome(userId, { force: true, silent: true });
         },
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "wallets" },
         () => {
-          load();
+          void loadDashboardHome(userId, { force: true, silent: true });
+        },
+      )
+      .on(
+        // Collection status/target/limit changes refresh the dashboard cards.
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "collections" },
+        () => {
+          void loadDashboardHome(userId, { force: true, silent: true });
         },
       )
       .subscribe();
 
     return () => {
-      isMountedRef.current = false;
       supabase.removeChannel(rtChannel);
     };
-  }, [user?.id]);
-
-  /* ── Loading state ────────────────────────────────────────────────────────── */
+  }, [user?.id, loadDashboardHome]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    );
+    return <DashboardHomeSkeleton />;
   }
-
-  /* ── Render ───────────────────────────────────────────────────────────────── */
 
   return (
     <div className="space-y-8 pb-8">
@@ -633,13 +397,18 @@ const DashboardPage: React.FC = () => {
             {recentCollections.map((col) => {
               const m = TYPE_META[col.collection_type] ?? TYPE_META.fixed;
               const Icon = m.IconEl;
-              const sCls =
-                STATUS_COLORS[col.status] ?? "bg-gray-100 text-gray-700";
-              const sLabel = col.status
-                ? col.status
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())
-                : "—";
+              // Canonical status (folds full/expired into the raw lifecycle
+              // status) — never print collections.status directly, see
+              // src/utils/collectionStatus.ts.
+              const { label: sLabel, className: sCls } = getCollectionStatusMeta({
+                status: col.status,
+                deadline: col.deadline,
+                collection_type: col.collection_type,
+                maxParticipants: col.maxParticipants ?? null,
+                participantsCount: col.participants,
+                goalAmount: col.goalAmount ?? null,
+                totalRaised: col.totalRaised,
+              });
 
               return (
                 <div
@@ -709,6 +478,15 @@ const DashboardPage: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+          <div className="mt-4 flex justify-center">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto border-green-100 text-green-700 hover:bg-green-50 hover:text-green-800"
+              onClick={() => navigate("/dashboard/collections")}
+            >
+              View All Collections <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
           </div>
         </div>
       )}
@@ -795,8 +573,11 @@ const DashboardPage: React.FC = () => {
         onOpenChange={setIsGlobalWithdrawOpen}
         availableBalance={0} // Not used for global since we'll require collection selection
         onComplete={() => {
-          // Could refresh dashboard state here
-          setTimeout(() => window.location.reload(), 1500);
+          setIsGlobalWithdrawOpen(false);
+          void loadDashboardHome(user?.id || getStoredUserId(), {
+            force: true,
+            silent: true,
+          });
         }}
       />
     </div>

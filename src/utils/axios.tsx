@@ -1,13 +1,23 @@
 import { useAuthStore } from "@/store";
+import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
 import axios from "axios";
 
-// API configuration following the backend pattern
+// API configuration following the backend pattern.
+//
+// Which URL wins depends on Vite's env-file precedence
+// (.env.[mode].local > .env.[mode] > .env.local > .env). In production mode
+// this always resolves to the deployed backend unless VITE_API_URL is
+// explicitly overridden. In dev mode, add a `.env.development.local` with
+// VITE_API_URL=http://localhost:<PORT>/api to point at a local backend —
+// see kolekto-fe-old/.env.development.local. The bare fallback below matches
+// the backend's own default port (see kolekto-be-old/app.js: `PORT || 3000`)
+// so a fresh checkout with no env file still points somewhere that exists.
 const API_BASE_URL =
   import.meta.env.MODE === "production"
     ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
     : import.meta.env.VITE_API_BASE_URL ||
       import.meta.env.VITE_API_URL ||
-      "http://localhost:5050/api";
+      "http://localhost:3000/api";
 
 // const { session } = useAuthStore()
 
@@ -55,19 +65,10 @@ axiosInstance.interceptors.request.use(
     }
 
     // Get session from localStorage
-    const sessionStr = localStorage.getItem("kolekto-auth-token");
-    if (sessionStr && !isAuthPublicEndpoint) {
-      try {
-        const session = JSON.parse(sessionStr);
-        if (session && session.access_token) {
-          // Add Authorization header with Bearer token
-          config.headers.Authorization = `Bearer ${session.access_token}`;
-        }
-      } catch (e) {
-        // Invalid token in storage, remove it
-        localStorage.removeItem("kolekto-auth-token");
-        delete config.headers.Authorization;
-      }
+    const session = !isAuthPublicEndpoint ? getValidAuthSessionFromStorage() : null;
+    if (session?.access_token) {
+      // Add Authorization header with Bearer token
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     } else {
       delete config.headers.Authorization;
     }
@@ -145,7 +146,7 @@ async function performSignOutAndRedirect() {
         await useAuthStore.getState().signOut();
       } catch (err) {
         console.error("[axios] signOut on 401 failed:", err);
-        localStorage.removeItem("kolekto-auth-token");
+        clearAuthSessionStorage();
         useAuthStore.setState({ user: null, session: null } as any);
       } finally {
         const path = window.location.pathname;
@@ -153,7 +154,8 @@ async function performSignOutAndRedirect() {
           || path.startsWith("/contribute/")
           || path.startsWith("/payment/");
         if (!onPublicPage) {
-          window.location.href = "/login";
+          window.history.replaceState(null, "", "/login");
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }
         signingOutPromise = null;
       }

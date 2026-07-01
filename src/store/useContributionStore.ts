@@ -4,6 +4,7 @@ import { Contribution, ContributionState } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { axiosInstance } from "@/utils/axios";
 import { normalizeContributions } from "@/utils/contributions";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export const useContributionStore = create((set, get) => ({
   contributions: [],
@@ -32,7 +33,7 @@ export const useContributionStore = create((set, get) => ({
 
       return formattedData as Contribution[];
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -60,7 +61,7 @@ export const useContributionStore = create((set, get) => ({
 
       return formattedData as Contribution[];
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -102,7 +103,7 @@ export const useContributionStore = create((set, get) => ({
 
       return data as Contribution;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },
@@ -145,7 +146,7 @@ export const useContributionStore = create((set, get) => ({
 
       return data as Contribution;
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+      set({ error: toFriendlyErrorMessage(error), isLoading: false });
       throw error;
     }
   },

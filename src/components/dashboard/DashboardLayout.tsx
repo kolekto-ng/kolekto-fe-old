@@ -4,9 +4,10 @@ import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import DashboardSidebar from './DashboardSidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuthStore } from '@/store';
-import { Loader2 } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
 import DashboardNavbar from './DashboardNavbar';
+import { DashboardShellSkeleton } from '@/components/ui/page-skeletons';
+import PushNotificationPrompt from '@/components/PushNotificationPrompt';
 
 const DashboardContent = () => {
   const location = useLocation();
@@ -23,9 +24,15 @@ const DashboardContent = () => {
   return (
     <div className="flex-1 w-full flex flex-col bg-gray-50 min-w-0">
       <DashboardNavbar />
-      <div className="p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
-        <Outlet />
-      </div>
+      <PushNotificationPrompt />
+      <main className="p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
+        <div
+          key={location.pathname}
+          className="animate-in fade-in-0 slide-in-from-bottom-1 duration-150 ease-out"
+        >
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 };
@@ -35,11 +42,7 @@ const DashboardLayout: React.FC = () => {
   const { user, isLoading } = useAuthStore();
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-      </div>
-    );
+    return <DashboardShellSkeleton />;
   }
 
   if (!user) {

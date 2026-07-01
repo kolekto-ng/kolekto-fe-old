@@ -12,6 +12,8 @@ import {
   Phone,
   Calendar,
   MapPin,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { useProfileStore } from "@/store/useProfileStore";
@@ -20,7 +22,7 @@ import { axiosInstance } from "@/utils/axios";
 
 const PersonalInfoSection: React.FC = () => {
   const { user } = useAuthStore() as any;
-  const { profile, profileLoading, updateProfile, fetchProfile } =
+  const { profile, profileLoading, updateProfile, fetchProfile, kycData } =
     useProfileStore();
   const { profile: settingsProfile, getProfile } = useSettings() as any;
 
@@ -111,6 +113,8 @@ const PersonalInfoSection: React.FC = () => {
         .toUpperCase()
         .slice(0, 2)
     : "U";
+  const kycStatus = kycData?.overallStatus || user?.verification_status || "not_started";
+  const isVerified = kycStatus === "verified";
 
   return (
     <div className="space-y-6">
@@ -132,6 +136,20 @@ const PersonalInfoSection: React.FC = () => {
                   <span className="text-2xl font-bold text-[#1B5E20]">
                     {initials}
                   </span>
+                )}
+              </div>
+              <div
+                className={`absolute -right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white shadow-lg ${
+                  isVerified
+                    ? "bg-emerald-500 text-white shadow-emerald-200"
+                    : "bg-amber-100 text-amber-700 shadow-amber-100"
+                }`}
+                aria-label={isVerified ? "Verified account" : "Verification pending"}
+              >
+                {isVerified ? (
+                  <ShieldCheck className="h-4 w-4" />
+                ) : (
+                  <ShieldAlert className="h-4 w-4" />
                 )}
               </div>
               <button

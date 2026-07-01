@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
-import { resolve } from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -10,33 +9,43 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["kelekto_logo-removebg-preview.png", "favicon.ico"],
+      includeAssets: ["icons/*.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
         short_name: "Kolekto",
         description: "Simplify group payments and collections with Kolekto",
-        start_url: "/",
+        start_url: "/dashboard",
         scope: "/",
         display: "standalone",
         orientation: "portrait",
         background_color: "#1B5E20",
         theme_color: "#1B5E20",
         categories: ["finance", "business"],
+        // Icon-only assets (no wordmark) — Android requires this distinction
+        // from the marketing logo, and the `maskable` entries fill their
+        // canvas edge-to-edge with the brand color so OS launchers that clip
+        // icons to a circle/squircle don't crop or letterbox the glyph.
         icons: [
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-192.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/kelekto_logo-removebg-preview.png",
+            src: "/icons/icon-192-maskable.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "/icons/icon-512-maskable.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
@@ -44,11 +53,17 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cacheId: "kolekto-pwa-v4",
+        importScripts: ["sw-cleanup.js", "push-sw.js"],
+        clientsClaim: true,
+        skipWaiting: true,
+
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
 
-        // Cache all static assets including HTML
-        globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff2}"],
+        // Cache static assets needed for offline support.
+        // Navigation requests use NetworkFirst below so fresh HTML wins online.
+        globPatterns: ["**/*.{js,css,ico,png,jpg,jpeg,svg,woff2}"],
 
         // Clean URLs - remove hash from precache
         cleanupOutdatedCaches: true,
@@ -62,12 +77,26 @@ export default defineConfig({
 
         // Runtime caching strategies
         runtimeCaching: [
+          // Always prefer the latest app shell when the network is available.
+          {
+            urlPattern: ({ request, url }) =>
+              request.mode === "navigate" && !url.pathname.startsWith("/api"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "kolekto-pages-v4",
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+            },
+          },
           // Fonts
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "google-fonts-cache",
+              cacheName: "kolekto-google-fonts-v4",
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -79,7 +108,7 @@ export default defineConfig({
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "images-cache",
+              cacheName: "kolekto-images-v4",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -135,12 +164,6 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB
-    rollupOptions: {
-      input: {
-        landing: resolve(__dirname, "index.html"),
-        pwa: resolve(__dirname, "pwa.html"),
-      },
-    },
   },
   define: {
     global: "globalThis",

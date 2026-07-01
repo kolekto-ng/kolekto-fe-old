@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -44,16 +45,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
         const message =
           error.message === 'Email not confirmed'
             ? 'Please check your email and verify your account before signing in.'
-            : error.message;
+            : toFriendlyErrorMessage(error, 'Sign in failed. Please check your details and try again.');
         setError(message);
         toast.error(message);
       } else {
-        toast.success('Login successful!');
+        toast.success('Login successful');
         navigate(resolvedRedirect);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-      toast.error(err.message);
+      const message = toFriendlyErrorMessage(err, 'Sign in failed. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -73,14 +75,15 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
     try {
       const { error } = await sendMagicLink(email);
       if (error) {
-        setError(error.message);
-        toast.error('Could not send magic link');
+        const message = toFriendlyErrorMessage(error, 'Could not send magic link. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
         setIsMagicLinkSent(true);
-        toast.success('Magic link sent! Check your email.');
+        toast.success('Magic link sent');
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+      setError(toFriendlyErrorMessage(err, 'Could not send magic link. Please try again.'));
       toast.error('Could not send magic link');
     } finally {
       setIsMagicLinkLoading(false);
@@ -89,68 +92,92 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
 
   if (isMagicLinkSent) {
     return (
-      <div className="text-center space-y-4">
-        <div className="bg-green-50 text-green-700 p-4 rounded-md">
+      <div className="text-center space-y-5">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+          <Mail className="h-6 w-6" />
+        </div>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-800">
           <h3 className="font-medium">Check your email</h3>
-          <p className="text-sm mt-1">
+          <p className="mt-1 text-sm leading-6">
             We've sent a magic link to <strong>{email}</strong>
           </p>
         </div>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm leading-6 text-slate-600">
           Click the link in your email to sign in to your account.
         </p>
-        <div className="mt-4">
-          <button
-            onClick={() => setIsMagicLinkSent(false)}
-            className="text-kolekto hover:underline"
-          >
-            Try another method
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setIsMagicLinkSent(false)}
+          className="min-h-11 rounded-full px-4 text-sm font-medium text-kolekto transition hover:bg-emerald-50"
+        >
+          Try another method
+        </button>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <Alert variant="destructive" className="bg-red-50 text-red-800 border-red-200">
+        <Alert variant="destructive" className="rounded-2xl border-red-200 bg-red-50 text-red-800">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="name@example.com"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+            <Mail className="h-5 w-5" />
+          </span>
+          <Label htmlFor="email" className="text-base font-medium text-slate-900">
+            Email
+          </Label>
+        </div>
+        <div className="relative">
+          <Mail className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="email"
+            type="email"
+            placeholder="name@example.com"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-14 rounded-2xl border-slate-200 bg-white pl-14 pr-4 text-base text-slate-900 shadow-sm transition focus-visible:ring-emerald-500/40"
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label htmlFor="password">Password</Label>
-          <Link to="/forgot-password" className="text-sm text-kolekto hover:underline">
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
+              <LockKeyhole className="h-5 w-5" />
+            </span>
+            <Label htmlFor="password" className="text-base font-medium text-slate-900">
+              Password
+            </Label>
+          </div>
+          <Link to="/forgot-password" className="min-h-11 rounded-full px-2 py-3 text-sm font-medium text-kolekto hover:bg-emerald-50">
             Forgot password?
           </Link>
         </div>
         <div className="relative">
+          <LockKeyhole className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <Input
             id="password"
             type={showPassword ? "text" : "password"}
+            placeholder="Enter your password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full pr-10"
+            className="h-14 rounded-2xl border-slate-200 bg-white pl-14 pr-14 text-base text-slate-900 shadow-sm transition focus-visible:ring-emerald-500/40"
           />
           <button
             type="button"
             tabIndex={-1}
-            className="absolute right-2 top-2 text-neutral-500 hover:text-neutral-700"
+            className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             onClick={() => setShowPassword((prev) => !prev)}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
@@ -161,37 +188,47 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
 
       <Button
         type="submit"
-        className="w-full bg-kolekto hover:bg-kolekto/90"
+        className="h-14 w-full rounded-2xl bg-gradient-to-r from-kolekto to-emerald-500 text-base font-semibold shadow-lg shadow-emerald-900/15 hover:from-kolekto hover:to-emerald-600"
         disabled={isLoading}
       >
-        {isLoading ? "Signing in..." : "Sign In with Password"}
+        {isLoading ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Signing in...
+          </>
+        ) : (
+          <>
+            <LockKeyhole className="h-5 w-5" />
+            Sign in to Kolekto
+          </>
+        )}
       </Button>
 
-      <div className="relative mt-4">
+      <div className="relative py-1">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-200"></div>
+          <div className="w-full border-t border-slate-200"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">Or</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-500">or</span>
         </div>
       </div>
 
       <Button
         type="button"
         variant="outline"
-        className="w-full"
+        className="h-14 w-full rounded-2xl border-slate-200 bg-white text-base font-medium text-slate-950 shadow-sm hover:bg-slate-50"
         onClick={handleMagicLink}
         disabled={isMagicLinkLoading}
       >
-        <Mail className="mr-2 h-4 w-4" />
-        {isMagicLinkLoading ? "Sending..." : "Sign In with Magic Link"}
+        {isMagicLinkLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5 text-kolekto" />}
+        {isMagicLinkLoading ? "Sending..." : "Email me a sign-in link"}
       </Button>
 
-      <div className="text-center text-sm">
+      <div className="pt-1 text-center text-base text-slate-700">
         Don't have an account?{" "}
         <Link
           to={`/register?redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`}
-          className="text-kolekto hover:underline"
+          className="font-medium text-kolekto hover:underline"
         >
           Sign up
         </Link>

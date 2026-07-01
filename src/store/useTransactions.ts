@@ -1,5 +1,6 @@
 import { axiosInstance } from "@/utils/axios";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface Collection {
   id: string;
@@ -45,8 +46,7 @@ export const useTransactions = () => {
         error: null,
       };
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || "Failed to fetch collections";
+      const message = toFriendlyErrorMessage(error, "Could not load collections. Please try again.");
       toast.error(message);
       return { data: [], loading: false, error: message };
     }
@@ -65,8 +65,7 @@ export const useTransactions = () => {
         error: null,
       };
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || "Failed to fetch payments";
+      const message = toFriendlyErrorMessage(error, "Could not load payments. Please try again.");
       toast.error(message);
       return { data: [], loading: false, error: message };
     }
@@ -86,8 +85,7 @@ export const useTransactions = () => {
         error: null,
       };
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || "Failed to fetch withdrawals";
+      const message = toFriendlyErrorMessage(error, "Could not load withdrawals. Please try again.");
       toast.error(message);
       return { data: [], loading: false, error: message };
     }
@@ -103,11 +101,10 @@ export const useTransactions = () => {
   }) => {
     try {
       const response = await axiosInstance.post("/withdrawals", data);
-      toast.success("Withdrawal submitted successfully");
+      toast.success("Withdrawal request sent");
       return response.data;
     } catch (error: any) {
-      const message =
-        error.response?.data?.message || "Failed to submit withdrawal";
+      const message = toFriendlyErrorMessage(error, "Could not submit withdrawal. Please try again.");
       toast.error(message);
       throw new Error(message);
     }

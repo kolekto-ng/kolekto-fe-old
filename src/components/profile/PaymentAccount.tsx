@@ -27,6 +27,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Banknote, CheckCircle2, Plus, Trash2, AlertCircle } from "lucide-react";
 import { useSettings } from "@/store/useSettings";
 import { axiosInstance } from "@/utils/axios";
+import { toast } from "@/lib/toast";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export default function PaymentAccounts() {
     const [open, setOpen] = useState(false);
@@ -68,7 +70,7 @@ export default function PaymentAccounts() {
             setAccountName(data.data.account_name);
             setVerified(true);
         } else {
-            alert("Account not found");
+            toast.error("Account not found");
         }
     };
 
@@ -84,7 +86,7 @@ export default function PaymentAccounts() {
             setOpen(false);
         } catch (error) {
             console.error("Save account error:", error);
-            alert("Unable to save bank account. Please try again.");
+            toast.error(toFriendlyErrorMessage(error, "Unable to save bank account. Please try again."));
         }
     };
 

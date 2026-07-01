@@ -7,7 +7,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import Footer from "@/components/Footer/Footer";
 import NavBar from "@/components/NavBar";
@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { FUNDRAISING_CATEGORIES } from "@/constants/fundraising";
 import { getActiveFundraisingCampaigns } from "@/utils/fundraisingCampaigns";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 interface ActiveCampaign extends ActiveCampaignCardData {
   keywords?: string[] | null;
@@ -97,7 +98,7 @@ const ActiveCampaignsPage: React.FC = () => {
       writeCampaignsCache(rows);
       setCampaigns(rows.filter(isCampaignCurrentlyActive));
     } catch (err: any) {
-      setError(err?.message || "Failed to load active campaigns.");
+      setError(toFriendlyErrorMessage(err, "Failed to load active campaigns."));
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +165,7 @@ const ActiveCampaignsPage: React.FC = () => {
         });
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
-        toast.success("Campaign link copied to clipboard.");
+        toast.success("Campaign link copied");
       } else {
         toast.info(shareUrl);
       }

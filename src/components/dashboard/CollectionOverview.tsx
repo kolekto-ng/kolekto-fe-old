@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { useCollectionStore, useAuthStore } from '@/store';
-import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useCollectionStore } from '@/store/useCollectionStore';
+import { toast } from "@/lib/toast";
 import { Lock, Layers, Waves, Ticket, Heart, Users } from 'lucide-react';
 
 const TYPE_ICON: Record<string, { label: string; icon: React.ElementType }> = {
@@ -38,8 +39,9 @@ const CollectionsOverview: React.FC = () => {
   }, [user, fetchCollections]);
 
   const collections = [...allCollections]
+    .filter((collection: any) => collection.status === 'active')
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 6);
+    .slice(0, 3);
 
   return (
     <div>
@@ -47,7 +49,7 @@ const CollectionsOverview: React.FC = () => {
         <h3 className="text-[18px] md:text-[24px] font-semibold flex items-center gap-2">
           Collections
           <span className="bg-green-600 -mt-4 text-white text-[14px] font-medium h-6 w-6 flex items-center justify-center rounded-full">
-            {allCollections.length}
+            {collections.length}
           </span>
         </h3>
         <Button
@@ -131,6 +133,15 @@ const CollectionsOverview: React.FC = () => {
           );
         })}
       </div>
+      {collections.length > 0 && (
+        <Button
+          variant="outline"
+          className="mt-4 w-full border-green-100 text-green-700 hover:bg-green-50 hover:text-green-800"
+          onClick={() => navigate('/collections')}
+        >
+          View All Collections
+        </Button>
+      )}
     </div>
   );
 };

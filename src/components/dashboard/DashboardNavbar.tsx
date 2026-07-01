@@ -1,12 +1,10 @@
-import React, { useEffect } from 'react'
-import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/store';
-import { Bell } from 'lucide-react';
+import React from 'react'
+import { useAuthStore } from '@/store/useAuthStore';
 import { SidebarTrigger } from '../ui/sidebar';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '../Logo';
-import { useActivities } from '@/store/useDashboard';
+import NotificationCenter from './NotificationCenter';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Home',
@@ -19,43 +17,15 @@ const PAGE_TITLES: Record<string, string> = {
 
 const DashboardNavbar: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const user = useAuthStore((state) => state.user);
-  const { activities, getActivities } = useActivities();
-
-  useEffect(() => {
-    getActivities();
-  }, []);
-
-  const activityCount = (activities as any[]).length;
+  // Touch the auth store so the navbar re-renders on sign-in/out; the
+  // NotificationCenter reads the user independently for its own feed.
+  useAuthStore((state) => state.user);
 
   const getPageTitle = () => {
     if (location.pathname.startsWith('/dashboard/collections/')) return 'Collection Details';
     return PAGE_TITLES[location.pathname] ?? 'Dashboard';
   };
-
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0]
-    || user?.user_metadata?.firstName
-    || user?.email?.split('@')[0]
-    || 'there';
-
-  const BellButton = () => (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="relative h-9 w-9"
-      onClick={() => navigate('/dashboard/activities')}
-      aria-label={`Activities${activityCount > 0 ? ` (${activityCount})` : ''}`}
-    >
-      <Bell className="h-5 w-5 text-gray-600" />
-      {activityCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 ring-2 ring-white">
-          {activityCount > 99 ? '99+' : activityCount}
-        </span>
-      )}
-    </Button>
-  );
 
   if (isMobile) {
     return (
@@ -68,7 +38,7 @@ const DashboardNavbar: React.FC = () => {
             <Logo size="sm" />
           </div>
           <div className="flex items-center gap-2">
-            <BellButton />
+            <NotificationCenter />
           </div>
         </div>
       </header>
@@ -83,7 +53,7 @@ const DashboardNavbar: React.FC = () => {
           <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <BellButton />
+          <NotificationCenter />
         </div>
       </div>
     </div>

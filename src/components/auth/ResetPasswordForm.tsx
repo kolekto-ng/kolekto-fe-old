@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 const ResetPasswordForm: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -53,18 +54,20 @@ const ResetPasswordForm: React.FC = () => {
       });
 
       if (error) {
-        setError(error.message);
-        toast.error('Failed to reset password');
+        const message = toFriendlyErrorMessage(error, 'Could not reset your password. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
-        toast.success('Password has been reset successfully');
+        toast.success('Password reset successfully');
         // Give the toast time to be seen
         setTimeout(() => {
           navigate('/login');
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-      toast.error('Failed to reset password');
+      const message = toFriendlyErrorMessage(err, 'Could not reset your password. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

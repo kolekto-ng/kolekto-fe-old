@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  detectInstallPlatform,
+  isStandalonePwa,
+  type InstallPlatform,
+} from "@/utils/platformDetection";
 
-// Declare gtag as a global function from Google Analytics
 declare global {
   interface Window {
-    gtag?: (command: string, eventName: string, params?: any) => void;
-    dataLayer?: any[];
+    gtag?: (
+      command: string,
+      eventName: string,
+      params?: Record<string, unknown>
+    ) => void;
   }
 }
 
@@ -13,41 +20,42 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export const usePWAInstall = () => {
+interface UsePWAInstallResult {
+  platform: InstallPlatform;
+  isInstalled: boolean;
+  /** True once Chrome/Edge has actually offered the native install event. */
+  canInstall: boolean;
+  promptInstall: () => Promise<boolean>;
+}
+
+function trackPwaEvent(eventName: string, label: string) {
+  if (typeof window.gtag === "function") {
+    window.gtag("event", eventName, {
+      event_category: "PWA",
+      event_label: label,
+    });
+  }
+}
+
+export const usePWAInstall = (): UsePWAInstallResult => {
+  const platform = useMemo(detectInstallPlatform, []);
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstallable, setIsInstallable] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(isStandalonePwa);
 
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-      return;
-    }
+    if (isInstalled) return;
 
-    // Listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
+      // Prevent the mini-infobar from appearing on mobile.
       e.preventDefault();
-      // Stash the event so it can be triggered later
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setIsInstallable(true);
     };
 
-    // Listen for successful installation
     const handleAppInstalled = () => {
       setIsInstalled(true);
-      setIsInstallable(false);
       setDeferredPrompt(null);
-
-      // Track installation with Google Analytics if available
-      if (typeof window.gtag === "function") {
-        window.gtag("event", "pwa_installed", {
-          event_category: "PWA",
-          event_label: "App Installed Successfully",
-        });
-      }
+      trackPwaEvent("pwa_installed", "App Installed Successfully");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -60,48 +68,30 @@ export const usePWAInstall = () => {
       );
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
-  }, []);
+  }, [isInstalled]);
 
-  const promptInstall = async () => {
-    if (!deferredPrompt) {
-      return false;
-    }
+  const promptInstall = useCallback(async () => {
+    if (!deferredPrompt) return false;
 
-    // Track install prompt shown
-    if (typeof window.gtag === "function") {
-      window.gtag("event", "pwa_install_prompt_shown", {
-        event_category: "PWA",
-        event_label: "Install Prompt Displayed",
-      });
-    }
+    trackPwaEvent("pwa_install_prompt_shown", "Install Prompt Displayed");
 
-    // Show the install prompt
     deferredPrompt.prompt();
-
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
 
-    // Track user choice
-    if (typeof window.gtag === "function") {
-      window.gtag("event", `pwa_install_${outcome}`, {
-        event_category: "PWA",
-        event_label:
-          outcome === "accepted"
-            ? "User Accepted Install"
-            : "User Dismissed Install",
-      });
-    }
+    trackPwaEvent(
+      `pwa_install_${outcome}`,
+      outcome === "accepted" ? "User Accepted Install" : "User Dismissed Install"
+    );
 
-    // Clear the deferred prompt
+    // A BeforeInstallPromptEvent can only be used once.
     setDeferredPrompt(null);
-    setIsInstallable(false);
-
     return outcome === "accepted";
-  };
+  }, [deferredPrompt]);
 
   return {
-    isInstallable,
+    platform,
     isInstalled,
+    canInstall: deferredPrompt !== null,
     promptInstall,
   };
 };

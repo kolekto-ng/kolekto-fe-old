@@ -12,6 +12,7 @@ import {
   Waves,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 
 type Status = "active" | "paused" | "expired" | "completed" | "closed" | "deleted" | "pending_review" | string;
 type CollectionType = "fixed" | "tiered" | "open_pool" | "ticket" | "fundraising" | "flat" | string;
@@ -34,11 +35,11 @@ interface CollectionCardProps {
 }
 
 function fmt(n: number) {
-  return `₦${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
+  return `\u20A6${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 0 })}`;
 }
 
 function fmtDate(d?: string) {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -52,16 +53,6 @@ const TYPE_ICON: Record<string, { label: string; description: string; icon: Reac
 };
 
 const DEFAULT_TYPE = { label: "Collection", description: "Track contributions and payout activity", icon: Target };
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700",
-  paused: "bg-yellow-100 text-yellow-800",
-  expired: "bg-red-100 text-red-700",
-  completed: "bg-blue-100 text-blue-700",
-  closed: "bg-slate-200 text-slate-700",
-  deleted: "bg-slate-300 text-slate-600",
-  pending_review: "bg-amber-100 text-amber-700",
-};
 
 const CollectionCard: React.FC<CollectionCardProps> = ({
   title,
@@ -80,8 +71,18 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
 }) => {
   const cfg = TYPE_ICON[type] ?? DEFAULT_TYPE;
   const Icon = cfg.icon;
-  const sCls = STATUS_COLORS[status] ?? "bg-slate-100 text-slate-700";
-  const sLabel = status ? status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
+  // Canonical status: folds full (limit/target reached) and expired (past
+  // deadline) into the raw lifecycle status so the tag is never a misleading
+  // "Active". Single source of truth in utils/collectionStatus.
+  const { label: sLabel, className: sCls } = getCollectionStatusMeta({
+    status,
+    deadline,
+    collection_type: type,
+    maxParticipants: maxParticipants ?? null,
+    participantsCount,
+    goalAmount: goalAmount ?? null,
+    totalRaised,
+  });
   const progress = goalAmount && goalAmount > 0 ? Math.min((totalRaised / goalAmount) * 100, 100) : 0;
   const lowestTier = tiers?.length ? Math.min(...tiers.map(t => t.amount)) : 0;
   const isFundraising = type === "fundraising";
@@ -92,11 +93,10 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
   return (
     <article
       className="group overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg flex flex-col"
-      style={{ minHeight: '320px' }}
+      style={{ minHeight: "320px" }}
       onClick={onViewDetails}
     >
-      {/* Header */}
-      <div className="px-5 py-4" style={{ backgroundColor: '#f5ce42' }}>
+      <div className="px-5 py-4" style={{ backgroundColor: "#f5ce42" }}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div className="rounded-2xl bg-white/30 p-3 text-gray-900 backdrop-blur-sm">
@@ -112,7 +112,6 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
         </div>
       </div>
 
-      {/* Body */}
       <div className="border-t border-gray-200 px-5 py-5 bg-gray-50/50 flex-1 flex flex-col">
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 min-w-0">
@@ -127,7 +126,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
               {isFundraising
                 ? fmt(goalAmount || 0)
                 : isTiered
-                  ? lowestTier > 0 ? fmt(lowestTier) : "—"
+                  ? lowestTier > 0 ? fmt(lowestTier) : "-"
                   : isOpenPool
                     ? amount > 0 ? fmt(amount) : "Any"
                     : fmt(amount)}
@@ -160,7 +159,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
             <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
               <div
                 className="h-full rounded-full bg-green-600"
-                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? '100%' : '0%' }}
+                style={{ width: goalAmount && goalAmount > 0 ? `${progress}%` : totalRaised > 0 ? "100%" : "0%" }}
               />
             </div>
             {goalAmount && goalAmount > 0 && (

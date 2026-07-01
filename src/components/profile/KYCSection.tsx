@@ -13,7 +13,6 @@ import {
   X,
   AlertCircle,
   ChevronRight,
-  Loader2,
   CreditCard,
   MapPin,
   RefreshCw,
@@ -23,7 +22,8 @@ import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 import { DocumentUploadForm } from './forms/DocumentUploadForm';
 import { axiosInstance } from '@/utils/axios';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
+import { Skeleton } from '@/components/ui/skeleton';
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config: Record<
@@ -101,8 +101,10 @@ const KYCSection: React.FC = () => {
 
   if (kycLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-[#1B5E20]" />
+      <div className="space-y-6">
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
       </div>
     );
   }

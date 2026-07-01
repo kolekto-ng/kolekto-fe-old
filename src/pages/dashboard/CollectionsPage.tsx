@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
 import CollectionCard from '@/components/collections/CollectionCard';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 
 import { useCollectionStore } from '@/store/useCollectionStore';
-import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store';
+import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
+import { supabase } from '@/integrations/supabase/client';
 
 const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -16,12 +17,34 @@ const CollectionsPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      fetchCollections(user.id).catch((err) => {
+      fetchCollections(user.id, {
+        silent: Array.isArray(collections) && collections.length > 0,
+      }).catch((err) => {
         console.error('Error loading collections:', err);
         toast.error('Failed to load collections. Please try again.');
       });
     }
-  }, [user, fetchCollections]);
+  }, [user?.id, collections?.length, fetchCollections]);
+
+  // Live-update the list when any of the user's collections changes (status
+  // flips to closed/paused, a new collection is created, target/limit edited).
+  // One channel per user, torn down on unmount — no duplicate subscriptions.
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`collections-list-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${user.id}` },
+        () => {
+          void fetchCollections(user.id, { silent: true }).catch(() => undefined);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchCollections]);
 
   const handleShare = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,15 +81,8 @@ const CollectionsPage: React.FC = () => {
       </div> */}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
-          <Card className="col-span-full">
-            <CardContent className="py-10 text-center">
-              <div className="flex justify-center mb-4">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
-              </div>
-              <p className="text-gray-500">Loading collections...</p>
-            </CardContent>
-          </Card>
+        {isLoading && sortedCollections.length === 0 ? (
+          <CollectionGridSkeleton />
         ) : sortedCollections && sortedCollections.length > 0 ? (
 
           sortedCollections.map(collection => {
@@ -77,7 +93,7 @@ const CollectionsPage: React.FC = () => {
                 id={collection.id}
                 title={collection.title}
                 amount={collection.amount}
-                deadline={collection.deadline || undefined}
+                deadline={collection.deadline || new Date().toISOString()}
                 status={collection.status}
                 type={collection.collection_type || collection.type || 'fixed'}
                 participantsCount={collection.total_contributions || collection.participants_count || 0}

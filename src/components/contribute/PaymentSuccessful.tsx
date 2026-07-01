@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { formatCurrency, formatDateTime } from '@/utils/formatters';
 
 interface PaymentDetail {
@@ -380,8 +380,8 @@ const PaymentSuccessful = ({
 
     navigator.clipboard
       .writeText(message)
-      .then(() => toast.success('Receipt details copied!'))
-      .catch(() => toast.error('Failed to copy receipt'));
+      .then(() => toast.success('Receipt copied'))
+      .catch(() => toast.error('Could not copy receipt'));
   };
 
   const getReceiptFilename = () => {

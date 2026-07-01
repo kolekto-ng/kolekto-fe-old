@@ -1,7 +1,6 @@
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const CreateCollectionPage = lazy(() => import("./pages/CreateCollectionPage"));
@@ -29,11 +28,13 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
 const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
-import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import "aos/dist/aos.css";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
+import SessionTimeoutGuard from "./components/SessionTimeoutGuard";
+import { AppRouteSkeleton, DashboardShellSkeleton } from "@/components/ui/page-skeletons";
+import PwaUpdatePrompt from "@/components/PwaUpdatePrompt";
+const PwaInstallManager = lazy(() => import("@/components/pwa/PwaInstallManager"));
 // Create query client outside of the component to avoid React hooks issues
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
@@ -42,11 +43,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuthStore() as any;
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-      </div>
-    );
+    return <DashboardShellSkeleton />;
   }
 
   if (!user) {
@@ -54,6 +51,76 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <>{children}</>;
+};
+
+function getLegacyPwaTarget(pathname: string): string {
+  const legacyPath = pathname.replace(/^\/pwa\/?/, "/");
+  const normalizedPath = legacyPath === "" ? "/" : legacyPath;
+
+  if (normalizedPath === "/" || normalizedPath === "/dashboard") {
+    return "/dashboard";
+  }
+
+  if (
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(
+      normalizedPath
+    )
+  ) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.startsWith("/dashboard")) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath === "/activities") {
+    return "/dashboard/activities";
+  }
+
+  if (normalizedPath === "/create-collection") {
+    return "/dashboard/create-collection";
+  }
+
+  if (normalizedPath === "/collections" || normalizedPath.startsWith("/collections/")) {
+    return `/dashboard${normalizedPath}`;
+  }
+
+  if (normalizedPath === "/wallet") {
+    return "/dashboard/transactions";
+  }
+
+  if (normalizedPath === "/profile") {
+    return "/dashboard/settings";
+  }
+
+  return "/dashboard";
+}
+
+const LegacyPwaRedirect = () => {
+  const location = useLocation();
+  const targetPath = getLegacyPwaTarget(location.pathname);
+
+  return (
+    <Navigate
+      to={`${targetPath}${location.search}${location.hash}`}
+      replace
+    />
+  );
+};
+
+const CollectionNotificationRedirect = () => {
+  const location = useLocation();
+  const { collectionId } = useParams();
+  const targetPath = collectionId
+    ? `/dashboard/collections/${collectionId}`
+    : "/dashboard/collections";
+
+  return (
+    <Navigate
+      to={`${targetPath}${location.search}${location.hash}`}
+      replace
+    />
+  );
 };
 
 // Auth layout that wraps all routes
@@ -77,13 +144,7 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AppRouteSkeleton />}>
       <Routes>
       {/* Public Routes */}
       <Route path="/" element={<HomePage />} />
@@ -102,12 +163,14 @@ const AuthenticatedApp = () => {
       <Route path="/active-campaigns" element={<ActiveCampaignsPage />} />
       <Route path="/ambassadors" element={<AmbassadorsPage />} />
       <Route path="/ambassador/*" element={<AmbassadorPortal />} />
+      <Route path="/collections/:collectionId" element={<CollectionNotificationRedirect />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/help" element={<HelpCenterPage />} />
       <Route path="/payment/verify" element={<PaymentCallback />} />
+      <Route path="/pwa/*" element={<LegacyPwaRedirect />} />
 
       {/* Protected Dashboard Routes */}
       <Route
@@ -156,9 +219,9 @@ const App = () => {
 
   useEffect(() => {
     // AOS is purely a UX enhancement; keep it out of the initial JS chunk.
-    import("aos")
-      .then((mod) => mod.default)
-      .then((AOS) => {
+    Promise.all([import("aos"), import("aos/dist/aos.css")])
+      .then(([mod]) => {
+        const AOS = mod.default;
         AOS.init({
           offset: 120, // offset (in px) from the original trigger point
           delay: 0, // delay in ms
@@ -192,10 +255,16 @@ const App = () => {
 
   return (
     <TooltipProvider>
-      <Toaster />
       <Sonner />
+      <PwaUpdatePrompt />
       <ScrollToTop />
+      <SessionTimeoutGuard />
       <AuthenticatedApp />
+      {shouldShowWhatsAppButton && (
+        <Suspense fallback={null}>
+          <PwaInstallManager />
+        </Suspense>
+      )}
       {shouldShowWhatsAppButton && <WhatsAppButton />}
       {/* <AuthSessionWatcher /> */}
     </TooltipProvider>

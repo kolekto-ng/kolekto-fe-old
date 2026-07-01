@@ -1,8 +1,9 @@
 
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { isNetworkError } from '@/utils/dbHelpers';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 export interface PaystackMetadata {
   collectionId: string;
@@ -79,11 +80,11 @@ export const usePaystack = () => {
       if (error) {
         console.error('Supabase function error:', error);
 
-        // Handle specific error messages from the edge function
-        let errorMessage = 'Failed to connect to payment service';
+        // Keep gateway and edge-function failures user-facing before they reach toast/UI.
+        let errorMessage = 'We could not start your payment. Please try again.';
 
         if (isNetworkError(error)) {
-          errorMessage = 'Network connection error. Please check your internet connection and try again.';
+          errorMessage = 'Unable to connect. Check your internet and try again.';
         } else if (error.message?.includes('Server configuration error')) {
           errorMessage = 'Payment system is not properly configured. Please contact support.';
         } else if (error.message?.includes('Invalid response from payment gateway')) {
@@ -102,8 +103,6 @@ export const usePaystack = () => {
           errorMessage = 'Payment gateway returned an invalid response. Please try again later.';
         } else if (error.message?.includes('Failed to connect to payment service after')) {
           errorMessage = 'Payment service is temporarily unavailable. Please try again later.';
-        } else if (error.message) {
-          errorMessage = error.message;
         }
 
         throw new Error(errorMessage);
@@ -121,7 +120,7 @@ export const usePaystack = () => {
         cause: error.cause,
         stack: error.stack,
       });
-      toast.error(`Payment initialization failed: ${error.message || 'An unexpected error occurred'}`);
+      toast.error(toFriendlyErrorMessage(error, 'We could not start your payment. Please try again.'));
       throw error;
     } finally {
       setIsLoading(false);
@@ -152,12 +151,10 @@ export const usePaystack = () => {
 
       if (error) {
         console.error('Verification function error:', error);
-        let errorMessage = 'Failed to verify payment';
+        let errorMessage = 'We could not verify your payment. Please try again.';
 
         if (isNetworkError(error)) {
-          errorMessage = 'Network connection error. Please check your internet connection.';
-        } else if (error.message) {
-          errorMessage = error.message;
+          errorMessage = 'Unable to connect. Check your internet and try again.';
         }
 
         throw new Error(errorMessage);
@@ -179,8 +176,9 @@ export const usePaystack = () => {
         cause: error.cause,
         stack: error.stack,
       });
-      toast.error(`Payment verification failed: ${error.message || 'An unexpected error occurred'}`);
-      return { status: 'error', message: error.message || 'An unexpected error occurred' };
+      const message = toFriendlyErrorMessage(error, 'We could not verify your payment. Please try again.');
+      toast.error(message);
+      return { status: 'error', message };
     } finally {
       setIsLoading(false);
     }

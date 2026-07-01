@@ -2,8 +2,9 @@ import { create } from "zustand";
 import { supabase } from "@/integrations/supabase/client";
 import { Withdrawal, WithdrawalState } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 export const useWithdrawalStore = create((set, get) => ({
   withdrawals: [],
@@ -13,14 +14,19 @@ export const useWithdrawalStore = create((set, get) => ({
   lastFetchedAt: 0,
   lastFetchKey: "",
 
-  fetchWithdrawals: async (userId?: string, collectionId?: string) => {
+  fetchWithdrawals: async (
+    userId?: string,
+    collectionId?: string,
+    opts: { force?: boolean } = {},
+  ) => {
     const key = `${userId || "all"}:${collectionId || "all"}`;
     const { inFlight, lastFetchedAt, lastFetchKey, withdrawals } = get();
+    const { force = false } = opts;
     const isFresh =
       lastFetchKey === key && Date.now() - Number(lastFetchedAt || 0) < 30_000;
 
-    if (inFlight && lastFetchKey === key) return inFlight;
-    if (isFresh && Array.isArray(withdrawals)) return { withdrawals };
+    if (!force && inFlight && lastFetchKey === key) return inFlight;
+    if (!force && isFresh && Array.isArray(withdrawals)) return { withdrawals };
 
     const request = (async () => {
       set({ isLoading: true, error: null, lastFetchKey: key });
@@ -39,7 +45,7 @@ export const useWithdrawalStore = create((set, get) => ({
 
         return res.data;
       } catch (error: any) {
-        set({ error: error.message, isLoading: false });
+        set({ error: toFriendlyErrorMessage(error, "Could not load withdrawals. Please try again."), isLoading: false });
         throw error;
       } finally {
         set({ inFlight: null });
@@ -58,20 +64,16 @@ export const useWithdrawalStore = create((set, get) => ({
         withdrawalData
       );
       set({ isLoading: false });
-      toast.success("Withdrawal request submitted successfully");
+      toast.success("Withdrawal request sent");
       return data;
     } catch (error: any) {
       // Prefer the backend's specific error message (the controller now
       // returns `error`, `code`, `details`, `hint`). Falling back to the
       // raw axios message would show "Request failed with status code 500"
       // which is useless to the user.
-      const backendMessage =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Withdrawal request failed";
-      set({ error: backendMessage, isLoading: false });
-      toast.error(backendMessage);
+      const message = toFriendlyErrorMessage(error, "We could not send the withdrawal request. Please try again.");
+      set({ error: message, isLoading: false });
+      toast.error(message);
       throw error;
     }
   },

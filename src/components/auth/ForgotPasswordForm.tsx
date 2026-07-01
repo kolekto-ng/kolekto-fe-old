@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 const ForgotPasswordForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -25,15 +26,17 @@ const ForgotPasswordForm: React.FC = () => {
       });
 
       if (error) {
-        setError(error.message);
-        toast.error('Failed to send reset link');
+        const message = toFriendlyErrorMessage(error, 'Could not send the reset link. Please try again.');
+        setError(message);
+        toast.error(message);
       } else {
         setIsSubmitted(true);
         toast.success('Password reset link sent');
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
-      toast.error('Failed to send reset link');
+      const message = toFriendlyErrorMessage(err, 'Could not send the reset link. Please try again.');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

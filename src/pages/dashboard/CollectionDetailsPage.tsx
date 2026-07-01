@@ -5,6 +5,7 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { getCollectionStatusMeta } from '@/utils/collectionStatus';
 import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -21,11 +22,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from '@/components/ui/drawer';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import {
-  Wallet, Share2, Edit, QrCode, ScanLine, Download, Search, ChevronDown,
-  Loader2, ArrowLeft, Users, Calendar, Clock, TrendingUp,
+  Wallet, Share2, Edit, ScanLine, Download, Search, ChevronDown,
+  ArrowLeft, Users, Calendar, Clock, TrendingUp,
   CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
+  Link2, Tag, Flag, MessageCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
@@ -33,12 +35,19 @@ import { useCollectionStore } from '@/store/useCollectionStore';
 import {
   getCollectionContributorFields,
   getContributorFieldValue,
+  getContributionTierName,
+  formatContributorValue,
   normalizeContributions,
 } from '@/utils/contributions';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
 import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
+import {
+  ActivityListSkeleton,
+  CollectionDetailsSkeleton,
+  TableRowsSkeleton,
+} from '@/components/ui/page-skeletons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,16 +71,6 @@ function daysLeft(deadline?: string | null): number | null {
   const diff = new Date(deadline).getTime() - Date.now();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-100 text-green-800',
-  paused: 'bg-yellow-100 text-yellow-800',
-  expired: 'bg-red-100 text-red-800',
-  completed: 'bg-blue-100 text-blue-800',
-  closed: 'bg-gray-200 text-gray-700',
-  deleted: 'bg-gray-300 text-gray-800',
-  pending_review: 'bg-amber-100 text-amber-800',
-};
 
 const CHECK_IN_COLORS: Record<string, string> = {
   not_checked_in: 'bg-gray-100 text-gray-600',
@@ -100,7 +99,7 @@ const StatCard: React.FC<{
     </div>
     <div>
       <p className="text-xs text-gray-500">{label}</p>
-      <p className={`font-bold text-lg leading-tight ${highlight ? 'text-green-700' : 'text-gray-900'}`}>{value}</p>
+      <p className={`text-lg font-semibold leading-tight ${highlight ? 'text-green-700' : 'text-gray-900'}`}>{value}</p>
       {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
     </div>
   </div>
@@ -133,7 +132,8 @@ const CollectionDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { updateCollectionStatus } = useCollectionStore();
+  const { updateCollectionStatus, deleteCollection, collections } = useCollectionStore() as any;
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [col, setCol] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
@@ -154,7 +154,7 @@ const CollectionDetailsPage: React.FC = () => {
     totalRaised: number;
     totalBalance: number;
     availableBalance: number;
-    pendingBalance: number;
+    pendingBalance: number; 
     withdrawn: number;
     pendingWithdrawalRequests: number;
   } | null>(null);
@@ -178,6 +178,13 @@ const CollectionDetailsPage: React.FC = () => {
   const withdrawnAmount = Number(balanceStats?.withdrawn ?? wallet?.withdrawn ?? 0);
   const pendingWithdrawalRequests = Number(balanceStats?.pendingWithdrawalRequests ?? 0);
   const shareUrl = `${window.location.origin}/contribute/${col?.slug || id}`;
+
+  const handleWhatsAppShare = () => {
+    const collectionName = col?.title || 'this collection';
+    const message = `Hi, please make your contribution for ${collectionName} using this Kolekto link: ${shareUrl}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  };
 
   // ── Fetch helpers ───────────────────────────────────────────────────────────
 
@@ -246,6 +253,17 @@ const CollectionDetailsPage: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
+    const cachedCollection = Array.isArray(collections)
+      ? collections.find((collection: any) => collection.id === id)
+      : null;
+
+    if (cachedCollection) {
+      setCol(cachedCollection);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     loadCollection();
     loadContributions();
     loadBalanceStats();
@@ -254,7 +272,11 @@ const CollectionDetailsPage: React.FC = () => {
     if (params.get('share') === 'true') setIsShareOpen(true);
   }, [id]);
 
-  // ── Real-time: refresh contributions + wallet on any change ─────────────────
+  // ── Real-time: refresh contributions + wallet + the collection row itself ────
+  // The collection listener is what makes a status change (active→closed/paused),
+  // target/limit edit, or deadline update reflect here instantly — without it,
+  // enabling `collections` in the realtime publication has nothing on the client
+  // listening for it.
   useEffect(() => {
     if (!id) return;
     const channel = supabase
@@ -267,7 +289,16 @@ const CollectionDetailsPage: React.FC = () => {
         { event: '*', schema: 'public', table: 'wallets', filter: `collection_id=eq.${id}` },
         () => { loadWallet(); loadBalanceStats(); }
       )
-      .subscribe();
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'collections', filter: `id=eq.${id}` },
+        () => { loadCollection(); }
+      )
+      // Realtime does not backfill events missed during a socket drop (sleep/network
+      // blip/backgrounded tab). Refetching on every (re)SUBSCRIBE — not just on row
+      // events — closes that gap so a reconnect always re-syncs current state.
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') { loadContributions(); loadBalanceStats(); loadWallet(); }
+      });
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
@@ -288,17 +319,17 @@ const CollectionDetailsPage: React.FC = () => {
   const deadline = col?.deadline || null;
   const remaining = daysLeft(deadline);
 
-  // Tier matching — prefer stored Tier name in contributor_information, fall back to amount
+  // Tier matching — prefer stored Tier name in contributor_information (covers
+  // Tier/tierName/tier_name shapes), fall back to amount-tolerance matching
+  // only for legacy rows that never had a tier name recorded.
   const getTierForContribution = (c: any): any => {
     if (!priceTiers.length) return null;
-    const tierName = (c.contributor_information?.[0] as any)?.Tier;
-    if (tierName) return priceTiers.find(t => t.name === tierName) || null;
+    const tierName = getContributionTierName(c);
+    if (tierName) {
+      const byName = priceTiers.find(t => String(t.name ?? '').trim() === tierName);
+      if (byName) return byName;
+    }
     return priceTiers.find(t => Math.abs(Number(t.price) - Number(c.amount)) < 1) || null;
-  };
-  // Legacy helper used in CSV export
-  const getTierForAmount = (amount: number): any => {
-    if (!priceTiers.length) return null;
-    return priceTiers.find(t => Math.abs(Number(t.price) - amount) < 1) || null;
   };
 
   // ── Tabs config ─────────────────────────────────────────────────────────────
@@ -359,11 +390,11 @@ const CollectionDetailsPage: React.FC = () => {
     ];
 
     const rows = filtered.map(c => {
-      const tierName = getTierForContribution(c)?.name || '';
+      const tierName = getTierForContribution(c)?.name || 'Not provided';
       return [
-        ...exportFields.map((field: any) => getContributorFieldValue(c, field) || ''),
+        ...exportFields.map((field: any) => formatContributorValue(getContributorFieldValue(c, field))),
         ...(tierCol ? [tierName] : []),
-        ...(exportHasUniqueCode ? [c.contributor_unique_code || ''] : []),
+        ...(exportHasUniqueCode ? [c.contributor_unique_code || 'Not provided'] : []),
       ];
     });
 
@@ -427,7 +458,7 @@ const CollectionDetailsPage: React.FC = () => {
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
       }).from(el).save();
       document.body.removeChild(el);
-      toast.success('PDF exported successfully!');
+      toast.success('PDF exported');
     } catch (err) {
       console.error('PDF export error:', err);
       toast.error('Failed to export PDF');
@@ -498,194 +529,341 @@ const CollectionDetailsPage: React.FC = () => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-      </div>
-    );
+    return <CollectionDetailsSkeleton />;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const statusLabel = col?.status === 'pending_review' ? 'Pending Review'
-    : col?.status ? col.status.charAt(0).toUpperCase() + col.status.slice(1) : 'Active';
+  // Canonical display tag (folds in full/expired). Action buttons below still
+  // key off the raw col.status lifecycle value — you can close/pause a
+  // collection that is merely "full" or "expired".
+  const statusMeta = getCollectionStatusMeta({
+    status: col?.status,
+    deadline,
+    collection_type: colType,
+    max_participants: col?.max_participants,
+    max_contributions: col?.max_contributions,
+    participants_count: paidContributions.length,
+    target_amount: col?.target_amount,
+    total_raised: totalRaised,
+  });
+  const statusLabel = statusMeta.label;
+  const collectionTypeLabel =
+    colType === 'open_pool' ? 'Open Pool'
+      : colType === 'fundraising' ? 'Fundraising'
+      : colType === 'ticket' ? 'Ticketing'
+      : colType === 'tiered' ? 'Tiered'
+      : 'Fixed Amount';
+  const createdDisplay = col?.created_at ? fmtDate(col.created_at) : 'Recently created';
+  const deadlineDisplay = deadline ? fmtDate(deadline) : 'No deadline';
+  const remainingLabel = remaining === null ? 'Open' : remaining <= 0 ? 'Ended' : `${remaining} day${remaining !== 1 ? 's' : ''}`;
+  const remainingSub = remaining !== null && remaining <= 0 ? 'Collection has ended' : 'Time remaining';
+  const amountLabel =
+    colType === 'tiered' || colType === 'ticket'
+      ? `${priceTiers.length} tier${priceTiers.length === 1 ? '' : 's'}`
+      : colType === 'open_pool'
+        ? fmtCurrency(Number(col.min_contribution || col.amount || 0))
+        : fmtCurrency(Number(col.amount || 0));
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-5 max-w-5xl mx-auto pb-12">
 
       {/* ── Back ───────────────────────────────────────────────────────────── */}
-      <button
-        onClick={() => navigate('/dashboard/collections')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        All Collections
-      </button>
+
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
-        {/* Title row */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="space-y-1.5">
-            <h1 className="text-2xl font-bold text-gray-900">{col.title}</h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[col.status] || 'bg-gray-100 text-gray-700'}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => navigate('/dashboard/collections')}
+          aria-label="Back to all collections"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-900 transition-all hover:bg-gray-100 active:scale-[0.96]"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h1 className="min-w-0 text-xl font-semibold leading-tight text-gray-900 sm:text-2xl">Collection Details</h1>
+      </div>
+
+      <div className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm transition-shadow sm:p-5">
+        <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="min-w-0 break-words text-xl font-semibold leading-snug text-gray-950 sm:text-2xl">{col.title}</h2>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${statusMeta.className}`}>
+                <span className="h-2 w-2 rounded-full bg-current" />
                 {statusLabel}
               </span>
-              {colType === 'ticket' && col.event_date && (
-                <span className="text-xs text-gray-500">
-                  Event: {fmtDate(col.event_date)}
-                </span>
-              )}
             </div>
-          </div>
+            <p className="mt-2 text-sm font-medium text-gray-500">Created on {createdDisplay}</p>
+            {colType === 'ticket' && col.event_date && (
+              <p className="mt-1 text-xs font-medium text-gray-500">Event: {fmtDate(col.event_date)}</p>
+            )}
+        </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="mt-5 grid grid-cols-4 gap-2.5 min-[380px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_3.25rem_3.25rem]">
+          <Button
+            size="sm"
+            onClick={() => setIsWithdrawOpen(true)}
+            disabled={availableBalance <= 0}
+            className="min-h-12 min-w-0 justify-center gap-1.5 rounded-2xl bg-green-700 px-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-green-800 active:scale-[0.98] min-[380px]:px-3"
+            aria-label="Withdraw"
+          >
+            <Wallet className="h-4 w-4 shrink-0" />
+            <span className="hidden truncate min-[380px]:inline">Withdraw</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsShareOpen(true)}
+            className="min-h-12 min-w-0 justify-center gap-1.5 rounded-2xl border-gray-200 px-2 text-sm font-medium text-gray-900 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98] min-[380px]:px-3"
+            aria-label="Share collection"
+          >
+            <Share2 className="h-4 w-4 shrink-0" />
+            <span className="hidden min-[380px]:inline">Share</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsEditOpen(true)}
+            className="min-h-12 min-w-0 justify-center rounded-2xl border-gray-200 px-2 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]"
+            aria-label="Edit collection"
+          >
+            <Edit className="h-4 w-4 shrink-0" />
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="min-h-12 min-w-0 justify-center rounded-2xl border-gray-200 px-2 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]" aria-label="More collection actions">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {col.status !== 'active' && col.status !== 'pending_review' && (
+                <DropdownMenuItem onClick={() => handleStatusChange('active')}>
+                  <CheckCircle2 className="w-4 h-4 mr-2 text-green-600" /> Resume Collection
+                </DropdownMenuItem>
+              )}
+              {col.status === 'active' && (
+                <DropdownMenuItem onClick={() => handleStatusChange('paused')}>
+                  <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" /> Pause Collection
+                </DropdownMenuItem>
+              )}
+              {col.status !== 'closed' && (
+                <DropdownMenuItem onClick={() => handleStatusChange('closed')}>
+                  <X className="w-4 h-4 mr-2 text-gray-600" /> Close Collection
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600"
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                Delete Collection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {(colType === 'ticket' || colType === 'fundraising') && (
+          <div className="mt-3 flex flex-wrap gap-2">
             {colType === 'ticket' && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => { setScanInput(''); setScannedTicket(null); setIsScanOpen(true); }}
-                className="flex items-center gap-1.5"
+                className="min-h-10 justify-center gap-1.5 rounded-xl border-gray-200"
               >
                 <ScanLine className="w-4 h-4" />
                 Scan QR
               </Button>
             )}
 
-            <Button
-              size="sm"
-              onClick={() => setIsWithdrawOpen(true)}
-              disabled={availableBalance <= 0}
-              className="bg-green-700 hover:bg-green-800 text-white flex items-center gap-1.5"
-            >
-              <Wallet className="w-4 h-4" />
-              Withdraw
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsEditOpen(true)}
-              className="flex items-center gap-1.5"
-            >
-              <Edit className="w-4 h-4" />
-              Edit
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsShareOpen(true)}
-              className="flex items-center gap-1.5"
-            >
-              <Share2 className="w-4 h-4" />
-              Share
-            </Button>
-
             {colType === 'fundraising' && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setIsFlierOpen(true)}
-                className="flex items-center gap-1.5 border-green-600 text-green-700 hover:bg-green-50"
+                className="min-h-10 justify-center gap-1.5 rounded-xl border-green-600 text-green-700 hover:bg-green-50"
               >
                 <Download className="w-4 h-4" />
                 Campaign Flyer
               </Button>
             )}
-
-            {/* Status management menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="px-2">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {col.status !== 'active' && col.status !== 'pending_review' && (
-                  <DropdownMenuItem onClick={() => handleStatusChange('active')}>
-                    <CheckCircle2 className="w-4 h-4 mr-2 text-green-600" /> Resume Collection
-                  </DropdownMenuItem>
-                )}
-                {col.status === 'active' && (
-                  <DropdownMenuItem onClick={() => handleStatusChange('paused')}>
-                    <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" /> Pause Collection
-                  </DropdownMenuItem>
-                )}
-                {col.status !== 'closed' && (
-                  <DropdownMenuItem onClick={() => handleStatusChange('closed')}>
-                    <X className="w-4 h-4 mr-2 text-gray-600" /> Close Collection
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-600"
-                  onClick={() => {
-                    if (paidContributions.length > 0) {
-                      toast.error('Cannot delete a collection with existing payments. Close it instead.');
-                    } else {
-                      setDeleteConfirmOpen(true);
-                    }
-                  }}
-                >
-                  Delete Collection
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
-        </div>
-
-        {/* Share link + QR inline */}
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-500 mb-1">Collection Link</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-700 truncate">{shareUrl}</span>
-              <button
-                onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success('Link copied!'); }}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-700"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsShareOpen(true)}
-            className="flex-shrink-0 p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-            title="View QR Code"
-          >
-            <QrCode className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
+        )}
 
         {col.status === 'paused' && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-800">
-            This collection is currently paused — contributors cannot make payments.
+          <div className="mt-4 rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+            This collection is currently paused - contributors cannot make payments.
           </div>
         )}
       </div>
 
-      {/* ── Tabs ────────────────────────────────────────────────────────────── */}
+      <div className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-50 text-gray-600">
+              <Link2 className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-500">Collection Link</p>
+              <p className="mt-1 break-all text-sm font-medium leading-relaxed text-gray-950 sm:text-base">{shareUrl}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <Button
+              variant="outline"
+              onClick={() => { navigator.clipboard.writeText(shareUrl); toast.success('Link copied'); }}
+              className="min-h-12 justify-center gap-2 rounded-2xl border-gray-200 px-4 text-green-700 shadow-sm hover:bg-green-50"
+            >
+              <Copy className="h-4 w-4" />
+              Copy
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleWhatsAppShare}
+              className="min-h-12 justify-center gap-2 rounded-2xl border-gray-200 px-4 text-green-700 shadow-sm hover:bg-green-50"
+              aria-label="Share collection link on WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-gray-100 p-1 rounded-xl h-auto">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-gray-100 p-1">
           {tabs.map(t => (
             <TabsTrigger
               key={t.id}
               value={t.id}
-              className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="min-h-11 rounded-xl px-2 py-2 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm sm:px-5 sm:text-sm"
             >
               {t.label}
             </TabsTrigger>
           ))}
         </TabsList>
 
-        {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
-        <TabsContent value="overview" className="mt-6 space-y-6">
+        <TabsContent value="overview" className="mt-5 space-y-5">
+      <div className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-gray-100">
+          <div className="space-y-2 lg:pr-5">
+            <p className="text-sm font-medium text-gray-500">Total Raised</p>
+            <p className="break-words text-xl font-semibold leading-snug text-green-700">{fmtCurrency(totalRaised)}</p>
+          </div>
+          <div className="space-y-2 lg:px-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-700">
+              <Users className="h-4 w-4" />
+            </span>
+            <p className="break-words text-xl font-semibold leading-snug text-gray-950">{paidContributions.length}</p>
+            <p className="text-sm font-medium text-gray-500">
+              {colType === 'fundraising' ? 'Donor' : colType === 'ticket' ? 'Ticket' : 'Contributor'}{paidContributions.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          <div className="space-y-2 lg:px-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-700">
+              <Calendar className="h-4 w-4" />
+            </span>
+            <p className="break-words text-base font-semibold leading-snug text-gray-950">{deadlineDisplay}</p>
+            <p className="text-sm font-medium text-gray-500">Deadline</p>
+          </div>
+          <div className="space-y-2 lg:pl-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-green-50 text-green-700">
+              <Clock className="h-4 w-4" />
+            </span>
+            <p className="break-words text-xl font-semibold leading-snug text-gray-950">{remainingLabel}</p>
+            <p className="text-sm font-medium text-gray-500">{remainingSub}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[1.35rem] border border-green-100 bg-green-50/40 p-4 shadow-sm sm:p-5">
+        <h2 className="text-lg font-semibold text-gray-950">Wallet</h2>
+        <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 divide-y divide-gray-100 min-[380px]:grid-cols-3 min-[380px]:gap-0 min-[380px]:divide-x min-[380px]:divide-y-0">
+            <div className="min-w-0 pb-4 min-[380px]:pb-0 min-[380px]:pr-3">
+              <p className="flex items-center gap-2 text-xs font-medium text-gray-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-600" />
+                Available
+              </p>
+              <p className="mt-2 break-words text-lg font-semibold leading-snug text-green-700">{fmtCurrency(availableBalance)}</p>
+            </div>
+            <div className="min-w-0 py-4 min-[380px]:px-3 min-[380px]:py-0">
+              <p className="flex items-center gap-2 text-xs font-medium text-gray-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                Pending
+              </p>
+              <p className="mt-2 break-words text-lg font-semibold leading-snug text-amber-700">{fmtCurrency(pendingBalance)}</p>
+              {pendingWithdrawalRequests > 0 && (
+                <p className="mt-1 text-[10px] leading-tight text-amber-700">{fmtCurrency(pendingWithdrawalRequests)} awaiting approval</p>
+              )}
+            </div>
+            <div className="min-w-0 pt-4 min-[380px]:pl-3 min-[380px]:pt-0">
+              <p className="flex items-center gap-2 text-xs font-medium text-gray-500">
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
+                Withdrawn
+              </p>
+              <p className="mt-2 break-words text-lg font-semibold leading-snug text-slate-600">{fmtCurrency(withdrawnAmount)}</p>
+            </div>
+          </div>
+        </div>
+        <Button
+          disabled={availableBalance <= 0}
+          onClick={() => setIsWithdrawOpen(true)}
+          className="mt-4 min-h-[3.25rem] w-full justify-center gap-2 rounded-2xl bg-green-700 text-sm font-medium text-white shadow-sm hover:bg-green-800"
+        >
+          <Wallet className="h-5 w-5" />
+          Withdraw Funds
+        </Button>
+      </div>
+
+      <div className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+        <h2 className="text-lg font-semibold text-gray-950">Collection Information</h2>
+        <div className="mt-4 divide-y divide-gray-100">
+          <div className="flex flex-col gap-2 py-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500">
+              <Tag className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-sm font-medium text-gray-500">Contribution Type</p>
+            <p className="w-full break-words text-left text-sm font-medium text-gray-950 min-[380px]:max-w-[50%] min-[380px]:text-right">{collectionTypeLabel}</p>
+          </div>
+          <div className="flex flex-col gap-2 py-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500">
+              <Wallet className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-sm font-medium text-gray-500">
+              {colType === 'tiered' || colType === 'ticket' ? 'Pricing Structure' : colType === 'open_pool' ? 'Minimum Contribution' : 'Amount per Contributor'}
+            </p>
+            <p className="w-full break-words text-left text-sm font-medium text-gray-950 min-[380px]:max-w-[50%] min-[380px]:text-right">{amountLabel}</p>
+          </div>
+          <div className="flex flex-col gap-2 py-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-50 text-gray-500">
+              <Calendar className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-sm font-medium text-gray-500">Collection Deadline</p>
+            <p className="w-full break-words text-left text-sm font-medium text-gray-950 min-[380px]:max-w-[50%] min-[380px]:text-right">{deadlineDisplay}</p>
+          </div>
+          <div className="flex flex-col gap-2 py-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-50 text-green-700">
+              <Flag className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 flex-1 text-sm font-medium text-gray-500">Status</p>
+            <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
+              {statusLabel}
+            </span>
+          </div>
+        </div>
+      </div>
+
+          <div className="space-y-5">
           {loadingContribs ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-28 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
           ) : (
             <>
               {/* Fundraising banner + summary */}
@@ -705,40 +883,6 @@ const CollectionDetailsPage: React.FC = () => {
                       <span className="font-medium">Event Date:</span> {fmtDate(col.event_date)}
                     </p>
                   )}
-                </div>
-              )}
-
-              {/* Stat cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <StatCard
-                  icon={<TrendingUp className="w-5 h-5" />}
-                  label={colType === 'fundraising' ? 'Total Donated' : colType === 'ticket' ? 'Total Revenue' : 'Total Raised'}
-                  value={fmtCurrency(totalRaised)}
-                  highlight
-                />
-                <StatCard
-                  icon={<Users className="w-5 h-5" />}
-                  label={colType === 'fundraising' ? 'Donors' : colType === 'ticket' ? 'Tickets Sold' : 'Contributors'}
-                  value={paidContributions.length.toString()}
-                />
-                <StatCard
-                  icon={<Calendar className="w-5 h-5" />}
-                  label="Deadline"
-                  value={deadline ? fmtDate(deadline) : 'No deadline'}
-                />
-                <StatCard
-                  icon={<Clock className="w-5 h-5" />}
-                  label="Time Remaining"
-                  value={remaining === null ? '—' : remaining <= 0 ? 'Ended' : `${remaining} day${remaining !== 1 ? 's' : ''}`}
-                  sub={remaining !== null && remaining <= 0 ? 'Collection has ended' : undefined}
-                />
-              </div>
-
-              {/* Fixed amount */}
-              {colType === 'fixed' && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-sm text-gray-500">Fixed Amount per Contributor</p>
-                  <p className="text-2xl font-bold text-gray-900">{fmtCurrency(Number(col.amount || 0))}</p>
                 </div>
               )}
 
@@ -777,50 +921,9 @@ const CollectionDetailsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Open pool info */}
-              {colType === 'open_pool' && col.min_contribution > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-sm text-gray-500">Minimum Contribution</p>
-                  <p className="text-xl font-bold text-gray-900">{fmtCurrency(Number(col.min_contribution))}</p>
-                </div>
-              )}
-
-              {/* Wallet Summary Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Total Balance</p>
-                  <p className="text-xl font-bold text-gray-900">{fmtCurrency(ledgerBalance)}</p>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-green-700 mb-1">Available to Withdraw</p>
-                    <p className="text-xl font-bold text-green-700">{fmtCurrency(availableBalance)}</p>
-                    {pendingWithdrawalRequests > 0 && (
-                      <p className="text-[10px] text-green-700/70 mt-0.5">
-                        {fmtCurrency(pendingWithdrawalRequests)} awaiting approval
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={availableBalance <= 0}
-                    onClick={() => setIsWithdrawOpen(true)}
-                    className="bg-green-700 hover:bg-green-800 text-white"
-                  >
-                    <Wallet className="w-4 h-4 mr-1.5" /> Withdraw
-                  </Button>
-                </div>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                  <p className="text-xs font-medium text-yellow-700 mb-1">Pending Balance</p>
-                  <p className="text-xl font-bold text-yellow-700">{fmtCurrency(pendingBalance)}</p>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-medium text-gray-600 mb-1">Withdrawn</p>
-                  <p className="text-xl font-bold text-gray-800">{fmtCurrency(withdrawnAmount)}</p>
-                </div>
-              </div>
             </>
           )}
+          </div>
         </TabsContent>
 
         {/* ── CONTRIBUTORS ────────────────────────────────────────────────── */}
@@ -860,7 +963,13 @@ const CollectionDetailsPage: React.FC = () => {
 
             {/* Table */}
             {loadingContribs ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <Table>
+                  <TableBody>
+                    <TableRowsSkeleton rows={6} columns={Math.max(contributorColumnCount, 1)} />
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 <Table>
@@ -893,12 +1002,12 @@ const CollectionDetailsPage: React.FC = () => {
                           <TableRow key={c.id}>
                             {visibleContributorFields.map((field: any) => (
                               <TableCell key={field.id || field.name}>
-                                {getContributorFieldValue(c, field) || '-'}
+                                {formatContributorValue(getContributorFieldValue(c, field))}
                               </TableCell>
                             ))}
                             {colType === 'tiered' && (
                               <TableCell>
-                                <Badge variant="outline">{tier?.name || '-'}</Badge>
+                                <Badge variant="outline">{tier?.name || 'Not provided'}</Badge>
                               </TableCell>
                             )}
                             {hasUniqueCode && (
@@ -923,7 +1032,7 @@ const CollectionDetailsPage: React.FC = () => {
         {colType === 'fundraising' && (
           <TabsContent value="contributors" className="mt-6 space-y-5">
             {loadingContribs ? (
-              <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              <ActivityListSkeleton count={5} />
             ) : paidContributions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="w-12 h-12 text-gray-200 mb-3" />
@@ -962,7 +1071,7 @@ const CollectionDetailsPage: React.FC = () => {
                             i === 0 ? 'border-yellow-300' : i === 1 ? 'border-gray-300' : 'border-orange-200'
                           }`}
                         >
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-white text-sm ${
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-semibold text-white text-sm ${
                             i === 0 ? 'bg-yellow-400' : i === 1 ? 'bg-gray-400' : 'bg-orange-400'
                           }`}>
                             {isAnon(c) ? '?' : displayName(c)[0].toUpperCase()}
@@ -970,9 +1079,9 @@ const CollectionDetailsPage: React.FC = () => {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1">
                               <span className="text-base leading-none">{MEDAL[i]}</span>
-                              <p className="text-xs font-semibold text-gray-900 truncate">{displayName(c)}</p>
+                              <p className="text-xs font-medium text-gray-900 break-words">{displayName(c)}</p>
                             </div>
-                            <p className="text-sm font-bold text-green-700 mt-0.5">{fmtCurrency(Number(c.amount))}</p>
+                            <p className="text-sm font-semibold text-green-700 mt-0.5">{fmtCurrency(Number(c.amount))}</p>
                           </div>
                         </div>
                       ))}
@@ -1038,7 +1147,7 @@ const CollectionDetailsPage: React.FC = () => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <span className="text-sm font-bold text-green-700">{fmtCurrency(Number(c.amount))}</span>
+                                <span className="text-sm font-semibold text-green-700">{fmtCurrency(Number(c.amount))}</span>
                               </TableCell>
                               <TableCell className="text-xs text-gray-400 whitespace-nowrap">
                                 {fmtDate(c.created_at)}
@@ -1112,7 +1221,7 @@ const CollectionDetailsPage: React.FC = () => {
                     </TableRow>
                   ) : (
                     getFilteredTickets().map(c => {
-                      const tier = getTierForAmount(Number(c.amount));
+                      const tier = getTierForContribution(c);
                       const checkIn = c.check_in_status || 'not_checked_in';
                       return (
                         <TableRow key={c.id}>
@@ -1122,14 +1231,14 @@ const CollectionDetailsPage: React.FC = () => {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <p className="text-sm font-medium">{c.name}</p>
-                            <p className="text-xs text-gray-500">{c.email}</p>
+                            <p className="text-sm font-medium">{formatContributorValue(c.name)}</p>
+                            <p className="text-xs text-gray-500">{formatContributorValue(c.email)}</p>
                           </TableCell>
                           <TableCell>
                             {tier ? (
                               <Badge variant="outline">{tier.name}</Badge>
                             ) : (
-                              <span className="text-gray-400 text-sm">—</span>
+                              <span className="text-gray-400 text-sm">Not provided</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -1182,7 +1291,7 @@ const CollectionDetailsPage: React.FC = () => {
         {/* ── ACTIVITIES ──────────────────────────────────────────────────── */}
         <TabsContent value="activities" className="mt-6 space-y-4">
           {loadingContribs ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <ActivityListSkeleton count={6} />
           ) : paidContributions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <TrendingUp className="w-12 h-12 text-gray-300 mb-3" />
@@ -1192,9 +1301,9 @@ const CollectionDetailsPage: React.FC = () => {
           ) : (
             <div className="space-y-1">
               {paidContributions.map(c => {
-                const tier = getTierForAmount(Number(c.amount));
+                const tier = getTierForContribution(c);
                 const isAnon = colType === 'fundraising' && (!c.name || c.name.toLowerCase() === 'anonymous');
-                const displayName = isAnon ? 'Anonymous' : c.name;
+                const displayName = isAnon ? 'Anonymous' : formatContributorValue(c.name);
                 const verb = colType === 'fundraising' ? 'donated' : colType === 'ticket' ? 'purchased a ticket for' : 'paid';
                 // Activities show the full checkout amount (gross_amount = totalPayable incl. fees).
                 // Fall back to amount for legacy rows that pre-date gross_amount column.
@@ -1211,7 +1320,7 @@ const CollectionDetailsPage: React.FC = () => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">{displayName}</p>
                         <span className="text-sm text-gray-500">{verb}</span>
-                        <span className="text-sm font-bold text-green-700">{fmtCurrency(displayAmount)}</span>
+                        <span className="text-sm font-semibold text-green-700">{fmtCurrency(displayAmount)}</span>
                         {tier && (
                           <Badge variant="outline" className="text-xs">{tier.name}</Badge>
                         )}
@@ -1224,7 +1333,7 @@ const CollectionDetailsPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex-shrink-0 text-right">
-                      <span className="text-sm font-bold text-gray-900">{fmtCurrency(displayAmount)}</span>
+                      <span className="text-sm font-semibold text-gray-900">{fmtCurrency(displayAmount)}</span>
                     </div>
                   </div>
                 );
@@ -1250,7 +1359,7 @@ const CollectionDetailsPage: React.FC = () => {
           // pending request without requiring a manual reload.
           loadWallet();
           loadBalanceStats();
-          toast.success('Withdrawal submitted!');
+          toast.success('Withdrawal request sent');
         }}
       />
 
@@ -1324,7 +1433,8 @@ const CollectionDetailsPage: React.FC = () => {
         onSuccess={() => {
           setIsEditOpen(false);
           loadCollection();
-          toast.success('Collection updated');
+          // The dialog already shows the "Collection updated" success toast on
+          // save — don't fire a second one here (one action = one toast).
         }}
       />
 
@@ -1357,17 +1467,17 @@ const CollectionDetailsPage: React.FC = () => {
             {scannedTicket && (
               <div className="border border-gray-200 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-900">{scannedTicket.name}</p>
+                  <p className="font-semibold text-gray-900">{formatContributorValue(scannedTicket.name)}</p>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${CHECK_IN_COLORS[scannedTicket.check_in_status || 'not_checked_in']}`}>
                     {CHECK_IN_LABELS[scannedTicket.check_in_status || 'not_checked_in']}
                   </span>
                 </div>
                 <div className="space-y-1 text-sm text-gray-600">
-                  <p><span className="text-gray-400">Email:</span> {scannedTicket.email}</p>
+                  <p><span className="text-gray-400">Email:</span> {formatContributorValue(scannedTicket.email)}</p>
                   <p><span className="text-gray-400">Ticket ID:</span> <span className="font-mono">{scannedTicket.contributor_unique_code || '—'}</span></p>
                   <p><span className="text-gray-400">Amount:</span> {fmtCurrency(Number(scannedTicket.amount))}</p>
-                  {getTierForAmount(Number(scannedTicket.amount)) && (
-                    <p><span className="text-gray-400">Tier:</span> {getTierForAmount(Number(scannedTicket.amount))?.name}</p>
+                  {getTierForContribution(scannedTicket) && (
+                    <p><span className="text-gray-400">Tier:</span> {getTierForContribution(scannedTicket)?.name}</p>
                   )}
                   {scannedTicket.payment_id && (
                     <p><span className="text-gray-400">Ref:</span> {scannedTicket.payment_id}</p>
@@ -1422,19 +1532,31 @@ const CollectionDetailsPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this collection?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The collection and all its data will be permanently deleted.
+              This will archive the collection — it will no longer be visible to you or contributors,
+              and cannot accept new payments. Any existing payment, withdrawal, and wallet records are
+              preserved for your records and cannot be recovered into an active collection.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
+              disabled={isDeleting}
               onClick={async () => {
-                await handleStatusChange('deleted');
-                navigate('/dashboard/collections');
+                setIsDeleting(true);
+                try {
+                  await deleteCollection(id!);
+                  toast.success('Collection deleted');
+                  navigate('/dashboard/collections');
+                } catch (err: any) {
+                  toast.error(err?.message || 'Failed to delete collection');
+                } finally {
+                  setIsDeleting(false);
+                  setDeleteConfirmOpen(false);
+                }
               }}
             >
-              Delete
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

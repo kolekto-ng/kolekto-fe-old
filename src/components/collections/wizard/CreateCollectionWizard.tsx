@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import {
   CollectionType,
   STEP_FLOWS,
@@ -124,8 +126,25 @@ const validateStep = (stepId: StepId, data: WizardData): string | null => {
       return null;
     }
 
-    case 'unique-id':
+    case 'unique-id': {
+      if (!data.unique_id_enabled) return null;
+
+      const isTicketStep = data.collection_type === 'ticket';
+      const usesTierPrefixes =
+        data.collection_type === 'tiered' || (isTicketStep && data.ticket_mode === 'tiered');
+
+      if (usesTierPrefixes) {
+        const hasAnyTierPrefix = data.pricing_tiers.some((tier) => tier.prefix.trim());
+        if (!hasAnyTierPrefix) {
+          return 'Add a prefix to at least one tier, or turn off unique IDs for this collection.';
+        }
+      } else if (!data.unique_id_prefix.trim()) {
+        return isTicketStep
+          ? 'Add a prefix to generate ticket IDs, or turn off this toggle.'
+          : 'Add a prefix to generate unique IDs, or turn off this toggle.';
+      }
       return null;
+    }
 
     case 'fundraising-goal': {
       if (!data.fundraising_open_ended) {
@@ -179,11 +198,6 @@ const buildPayload = (
         prefix: tier.prefix || null,
       }))
     : null;
-  const hasConfiguredUniquePrefix =
-    Boolean(data.unique_id_prefix.trim()) ||
-    data.pricing_tiers.some((tier) => Boolean(tier.prefix.trim()));
-  const shouldAssignUniqueIds = data.unique_id_enabled && hasConfiguredUniquePrefix;
-
   const amount =
     data.collection_type === 'fixed'
       ? parseFloat(data.fixed_amount) || 0
@@ -216,8 +230,12 @@ const buildPayload = (
     deadline: deadlineIso,
     fee_bearer: isFundraising || isOpenPool ? 'contributor' : data.fee_bearer,
     contributions_fields: isFundraising || isTicket ? [] : data.form_fields,
-    code_prefix: shouldAssignUniqueIds && data.unique_id_prefix ? data.unique_id_prefix : null,
-    unique_id_enabled: shouldAssignUniqueIds,
+    // unique_id_enabled is saved exactly as the organizer set it — it must
+    // not be silently downgraded to false just because no prefix was typed
+    // yet (a prior regression conflated "feature enabled" with "prefix
+    // configured", which prevented the toggle from ever reaching the DB).
+    code_prefix: data.unique_id_enabled && data.unique_id_prefix ? data.unique_id_prefix : null,
+    unique_id_enabled: data.unique_id_enabled,
     ticket_mode: isTicket ? data.ticket_mode : null,
     allow_multiple_quantity: isTicket ? data.allow_multiple_quantity : null,
     event_date: isTicket && data.event_date ? new Date(data.event_date).toISOString() : null,
@@ -419,25 +437,31 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     clearPublishIntent();
     setIsSubmitting(true);
 
+    const isFundraising = data.collection_type === 'fundraising';
+    // A single stable toast id: the loading toast is replaced in-place by the
+    // success or error toast, so a submit can never stack duplicate popups and
+    // the user always gets exactly one piece of feedback (no silent failure).
+    const toastId = 'collection-publish';
+    toast.loading(
+      isFundraising ? 'Submitting your campaign for review…' : 'Creating your collection…',
+      { id: toastId }
+    );
+
     try {
       const newCollection = await publishCollection();
       toast.success(
-        data.collection_type === 'fundraising'
-          ? 'Campaign submitted for review. We will notify you once it is reviewed.'
-          : 'Collection created successfully.'
+        isFundraising ? 'Campaign submitted for review' : 'Collection created successfully',
+        { id: toastId }
       );
       resetDraft();
       autoPublishTriggeredRef.current = false;
       navigate(`/dashboard/collections/${newCollection.id}`);
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'An error occurred while creating the collection.';
+      const message = toFriendlyErrorMessage(error, 'Could not create collection. Please try again.');
       if (isAutoTriggered) {
         autoPublishTriggeredRef.current = false;
       }
-      toast.error(message);
+      toast.error(message, { id: toastId });
     } finally {
       setIsSubmitting(false);
     }
@@ -507,8 +531,16 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-gray-100 bg-white">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#1C5C23]/20 border-t-[#1C5C23]" />
+      <div className="space-y-6 rounded-2xl border border-gray-100 bg-white p-6">
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-2 flex-1 rounded-full" />
+          ))}
+        </div>
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-32 w-full rounded-xl" />
       </div>
     );
   }

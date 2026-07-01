@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
 import { createClient } from "@supabase/supabase-js";
+import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -11,11 +12,38 @@ const supabase = createClient(
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 
+// KYC realtime subscription is a singleton keyed by user. Without this guard,
+// fetchKYCStatus() created a brand-new channel on every call — and its own
+// realtime callback re-invokes fetchKYCStatus(), so each kyc_verifications
+// change doubled the number of live channels (a runaway subscription leak).
+let kycChannel: ReturnType<typeof supabase.channel> | null = null;
+let kycSubscribedFor: string | null = null;
+
+function ensureKycSubscription(userId: string, onChange: () => void) {
+  if (kycSubscribedFor === userId && kycChannel) return; // already live
+  if (kycChannel) {
+    supabase.removeChannel(kycChannel);
+    kycChannel = null;
+  }
+  kycChannel = supabase
+    .channel(`kyc-status-${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "kyc_verifications", filter: `user_id=eq.${userId}` },
+      onChange,
+    )
+    .subscribe();
+  kycSubscribedFor = userId;
+}
+
 interface ProfileState {
   profile: any;
   kycData: any;
   kycLoading: boolean;
   profileLoading: boolean;
+  profileRefreshing: boolean;
+  profileLastFetchedAt: number;
+  profileInFlight: Promise<void> | null;
   passwordStep: "idle" | "requesting" | "otp-sent" | "verifying" | "success" | "error";
   passwordError: string | null;
   otpEmail: string | null;
@@ -34,6 +62,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   kycData: null,
   kycLoading: false,
   profileLoading: false,
+  profileRefreshing: false,
+  profileLastFetchedAt: 0,
+  profileInFlight: null,
   passwordStep: "idle",
   passwordError: null,
   otpEmail: null,
@@ -42,14 +73,37 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   setActiveSection: (section: string) => set({ activeSection: section }),
 
   fetchProfile: async () => {
-    set({ profileLoading: true });
-    try {
-      const { data } = await axiosInstance.get("/settings/profile");
-      set({ profile: data.data, profileLoading: false });
-    } catch (error) {
-      console.error("Failed to fetch profile:", error);
-      set({ profileLoading: false });
-    }
+    const { profile, profileLastFetchedAt, profileInFlight } = get();
+    const hasCachedProfile = !!profile;
+    const isFresh =
+      hasCachedProfile && Date.now() - Number(profileLastFetchedAt || 0) < 60_000;
+
+    if (profileInFlight) return profileInFlight;
+    if (isFresh) return;
+
+    const request = (async () => {
+      set({
+        profileLoading: !hasCachedProfile,
+        profileRefreshing: hasCachedProfile,
+      });
+      try {
+        const { data } = await axiosInstance.get("/settings/profile");
+        set({
+          profile: data.data,
+          profileLoading: false,
+          profileRefreshing: false,
+          profileLastFetchedAt: Date.now(),
+        });
+      } catch (error) {
+        console.error("Failed to fetch profile:", error);
+        set({ profileLoading: false, profileRefreshing: false });
+      } finally {
+        set({ profileInFlight: null });
+      }
+    })();
+
+    set({ profileInFlight: request });
+    return request;
   },
 
   updateProfile: async (profileData: any) => {
@@ -73,12 +127,17 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to update profile");
 
-      set({ profile: result.data, profileLoading: false });
-      toast.success("Profile updated successfully");
+      set({
+        profile: result.data,
+        profileLoading: false,
+        profileRefreshing: false,
+        profileLastFetchedAt: Date.now(),
+      });
+      toast.success("Profile updated");
       return true;
     } catch (error: any) {
       console.error("Profile update error:", error);
-      toast.error(error.message || "Failed to update profile");
+      toast.error(toFriendlyErrorMessage(error, "Could not update profile. Please try again."));
       set({ profileLoading: false });
       return false;
     }
@@ -89,23 +148,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
     // Subscribe to real-time changes on this user's kyc_verifications row so
     // the KYC section updates automatically when an admin approves a document
-    // — without requiring a manual refresh.
-    supabase
-      .channel(`kyc-status-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "kyc_verifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          // Re-fetch silently (no loading spinner) when any KYC row changes
-          get().fetchKYCStatus(userId);
-        }
-      )
-      .subscribe();
+    // — without requiring a manual refresh. Idempotent: only one channel per
+    // user ever exists, so the re-fetch in the callback can never spawn more.
+    ensureKycSubscription(userId, () => {
+      get().fetchKYCStatus(userId);
+    });
 
     try {
       const [res, kycVerificationRes] = await Promise.all([
@@ -175,15 +222,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         otpEmail: email || null,
         passwordError: null,
       });
-      toast.success("OTP sent to your email");
+      toast.success("OTP sent");
       return true;
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to send OTP";
+      const msg = toFriendlyErrorMessage(error, "Could not send OTP. Please try again.");
       set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;
@@ -200,7 +242,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       });
 
       set({ passwordStep: "success", passwordError: null });
-      toast.success("Password changed successfully!");
+      toast.success("Password changed");
 
       // Supabase invalidates active sessions when a password changes.
       // If the backend confirms this, clear local credentials and route the
@@ -214,18 +256,14 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }
         // Give the success state a beat so the user sees the confirmation.
         setTimeout(() => {
-          window.location.href = "/login";
+          window.history.replaceState(null, "", "/login");
+          window.dispatchEvent(new PopStateEvent("popstate"));
         }, 1200);
       }
 
       return true;
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.response?.data?.details ||
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to change password";
+      const msg = toFriendlyErrorMessage(error, "Could not change password. Please try again.");
       set({ passwordStep: "error", passwordError: msg });
       toast.error(msg);
       return false;

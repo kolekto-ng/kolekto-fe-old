@@ -4,7 +4,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, ImageIcon, Loader2, ExternalLink } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import FundraisingShareCanvas, { FundraisingShareCanvasProps } from './FundraisingShareCanvas';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

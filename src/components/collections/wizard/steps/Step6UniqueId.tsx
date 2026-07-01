@@ -20,9 +20,13 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
   };
 
   const updateTierPrefix = (tierId: string, prefix: string) => {
+    // Strip spaces as the organizer types — a unique code is a short, clean
+    // token, not a label, so "VIP 1" should become "VIP1" rather than
+    // producing codes like "VIP 1-001".
+    const sanitized = prefix.toUpperCase().replace(/\s+/g, '');
     onChange({
       pricing_tiers: data.pricing_tiers.map((tier) =>
-        tier.id === tierId ? { ...tier, prefix: prefix.toUpperCase() } : tier
+        tier.id === tierId ? { ...tier, prefix: sanitized } : tier
       ),
     });
   };
@@ -33,7 +37,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
         <h2 className="mb-1 text-2xl font-bold text-gray-900">Unique ID Configuration</h2>
         <p className="text-sm text-gray-500">
           {isTicket
-            ? 'Add a prefix only if you want ticket IDs generated for each purchase'
+            ? 'Enable and add a prefix to generate a ticket ID for each purchase'
             : 'Optionally assign each contributor a unique identifier'}
         </p>
       </div>
@@ -50,7 +54,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
             {isTicket ? 'Enable Ticket IDs' : 'Enable Unique ID for contributors'}
           </p>
           <p className="mt-0.5 text-xs text-gray-500">
-            IDs are only generated when you add a prefix. No prefix means no unique ID will be assigned.
+            A prefix is required to generate IDs — add one below once enabled.
           </p>
         </div>
       </label>
@@ -61,7 +65,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
             <div className="space-y-1.5">
               <Label>
                 ID Prefix{' '}
-                <span className="text-xs font-normal text-gray-400">(Optional, for example REG or VIP)</span>
+                <span className="text-xs font-normal text-gray-400">(Required, for example REG or VIP)</span>
               </Label>
               <div className="relative">
                 <Hash className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -69,13 +73,13 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
                   className="pl-9 uppercase"
                   placeholder="e.g. REG"
                   value={data.unique_id_prefix}
-                  onChange={(e) => onChange({ unique_id_prefix: e.target.value.toUpperCase() })}
+                  onChange={(e) => onChange({ unique_id_prefix: e.target.value.toUpperCase().replace(/\s+/g, '') })}
                   maxLength={8}
                 />
               </div>
               {data.unique_id_prefix && (
                 <p className="text-xs text-gray-500">
-                  IDs will look like <span className="font-mono font-medium text-green-700">{data.unique_id_prefix}0001</span> and <span className="font-mono font-medium text-green-700">{data.unique_id_prefix}0002</span>.
+                  IDs will look like <span className="font-mono font-medium text-green-700">{data.unique_id_prefix}-001</span> and <span className="font-mono font-medium text-green-700">{data.unique_id_prefix}-002</span>.
                 </p>
               )}
             </div>
@@ -83,9 +87,9 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
 
           {(isTiered || isTicketTiered) && data.pricing_tiers.length > 0 && (
             <div className="space-y-3">
-              <p className="text-sm font-medium text-gray-700">Per-tier ID prefix (optional)</p>
+              <p className="text-sm font-medium text-gray-700">Per-tier ID prefix</p>
               <p className="text-xs text-gray-500">
-                Add a prefix only to the tiers that should generate IDs.
+                Add a prefix to each tier that should generate IDs. At least one tier needs a prefix.
               </p>
 
               {data.pricing_tiers.map((tier, index) => (
@@ -114,7 +118,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
                 <div className="space-y-1 pl-1 text-xs text-gray-500">
                   {data.pricing_tiers.filter((tier) => tier.prefix).map((tier) => (
                     <p key={tier.id}>
-                      <span className="font-medium">{tier.name || 'Unnamed'}</span>: <span className="font-mono text-green-700">{tier.prefix}0001</span>, <span className="font-mono text-green-700">{tier.prefix}0002</span>
+                      <span className="font-medium">{tier.name || 'Unnamed'}</span>: <span className="font-mono text-green-700">{tier.prefix}-001</span>, <span className="font-mono text-green-700">{tier.prefix}-002</span>
                     </p>
                   ))}
                 </div>
@@ -126,9 +130,9 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               <p className="mb-1 font-medium">How ticket IDs work</p>
               <ul className="list-disc space-y-1 pl-4 text-xs text-gray-500">
-                <li>Each ticket gets its own ID only when you add a prefix</li>
-                <li>No prefix means tickets are issued without generated IDs</li>
-                <li>If a buyer purchases 3 tickets, each ticket gets its own ID only when enabled and configured</li>
+                <li>Each ticket gets its own ID once a prefix is set above</li>
+                <li>No prefix means tickets are issued without generated IDs, even with this enabled</li>
+                <li>If a buyer purchases 3 tickets, each ticket gets its own sequential ID</li>
               </ul>
             </div>
           )}

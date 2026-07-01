@@ -8,13 +8,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import WithdrawForm from './WithdrawForm';
-import { toast } from 'sonner';
+import { toast } from "@/lib/toast";
 import { useWithdrawalStore } from '@/store';
 import { useAuthStore } from '@/store';
 import { useActivities } from '@/store/useDashboard';
 import { axiosInstance } from '@/utils/axios';
 import { Link } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 
 interface WithdrawFundsDialogProps {
   open: boolean;
@@ -143,19 +145,12 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
         setTimeout(runRefreshes, 0);
       }
     } catch (error: any) {
-      // Surface the actual error from the backend instead of a generic
-      // "Please try again later" message. createWithdrawal already shows a
-      // toast with the specific reason; we only fire a fallback toast here
-      // if the inner call somehow didn't (e.g. non-axios error).
+      // createWithdrawal already shows a cleaned toast; this is a fallback
+      // for unexpected non-store failures.
       console.error('Withdrawal error:', error);
-      const backendMessage =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        error?.message;
-      if (backendMessage && !String(backendMessage).includes('Network')) {
-        // The store-level toast already showed this — no need to double-toast.
-      } else {
-        toast.error('Failed to process withdrawal request. Please try again later.');
+      const message = toFriendlyErrorMessage(error, 'We could not send the withdrawal request. Please try again.');
+      if (message.includes('Unable to connect')) {
+        toast.error(message);
       }
     } finally {
       setIsLoading(false);
@@ -202,7 +197,11 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
 
         {step === 1 ? (
           loadingCols ? (
-            <div className="py-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="space-y-2 py-3">
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+              <Skeleton className="h-16 rounded-lg" />
+            </div>
           ) : collections.length === 0 ? (
             <p className="text-gray-500 py-8 text-center text-sm">No collections with available funds to withdraw.</p>
           ) : (
