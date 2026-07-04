@@ -78,6 +78,17 @@ export async function setupAmbassadorPin(email: string, ambassadorCode: string, 
   return data;
 }
 
+// Lightweight session re-validation — hits verifyAmbassador, which re-checks
+// ambassador_profiles.status live against the DB (not just the JWT's own
+// claims). Used by the portal route guard on mount so a suspended/rejected
+// account with a still-unexpired token gets caught immediately, instead of
+// waiting for a data page's own fetch to eventually 403.
+export async function getAmbassadorMe() {
+  const { data } = await axiosInstance.get("/ambassadors/me", { headers: ambassadorHeaders() });
+  if (data?.ambassador) updateStoredAmbassadorProfile(data.ambassador);
+  return data;
+}
+
 export async function getAmbassadorOverview() {
   const { data } = await axiosInstance.get("/ambassadors/overview", { headers: ambassadorHeaders() });
   if (data?.profile) updateStoredAmbassadorProfile(data.profile);

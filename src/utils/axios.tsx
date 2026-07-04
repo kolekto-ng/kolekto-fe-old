@@ -23,6 +23,7 @@ const API_BASE_URL =
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15_000, // 15 s — fail fast instead of hanging when backend is down
   withCredentials: true, // CRUCIAL: This sends cookies cross-domain
 });
 
@@ -77,6 +78,19 @@ axiosInstance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Ambassador public endpoints that don't require authentication.
+// 401s from these are normal credential failures, not session expiry.
+const AMBASSADOR_PUBLIC_ENDPOINTS = [
+  "/ambassadors/apply",
+  "/ambassadors/auth/signin",
+  "/ambassadors/auth/setup-pin",
+];
+
+function isAmbassadorPublicUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return AMBASSADOR_PUBLIC_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+}
+
 // Public auth endpoints — a 401 from these is a normal credential failure
 // (e.g. wrong password on /auth/signin) and must NOT trigger a hard logout.
 const AUTH_PUBLIC_ENDPOINTS = [
@@ -125,6 +139,7 @@ let signingOutPromise: Promise<void> | null = null;
 // Track and rate-limit 401s on non-/auth/me endpoints. If we see a *sustained*
 // stream (>=5 401s within 10s) we conclude the session really is dead and
 // trigger the logout, rather than a transient refresh race.
+// NOTE: ambassador endpoint 401s are handled separately and excluded here.
 const recent401s: number[] = [];
 const STALE_SESSION_THRESHOLD = 5;
 const STALE_SESSION_WINDOW_MS = 10_000;
@@ -137,6 +152,36 @@ function looksLikeDeadSession(): boolean {
     recent401s.shift();
   }
   return recent401s.length >= STALE_SESSION_THRESHOLD;
+}
+
+// Ambassador endpoints use a separate JWT system. When a 401 is received for
+// an ambassador protected route, we clear the ambassador session and redirect
+// to the ambassador login — without touching the main organizer session.
+const AMBASSADOR_TOKEN_KEY = "kolekto-ambassador-token";
+const AMBASSADOR_PROFILE_KEY = "kolekto-ambassador-profile";
+// Read once by the ambassador login page on mount to explain a forced
+// logout (e.g. "Your ambassador account has been temporarily suspended...").
+// A plain login failure never touches this — only a session that was valid
+// and got kicked out mid-use sets it.
+export const AMBASSADOR_LOGOUT_NOTICE_KEY = "kolekto-ambassador-logout-notice";
+let ambassadorRedirectPending = false;
+function handleAmbassadorUnauthorized(message?: string) {
+  if (ambassadorRedirectPending) return;
+  ambassadorRedirectPending = true;
+  localStorage.removeItem(AMBASSADOR_TOKEN_KEY);
+  localStorage.removeItem(AMBASSADOR_PROFILE_KEY);
+  if (message) {
+    sessionStorage.setItem(AMBASSADOR_LOGOUT_NOTICE_KEY, message);
+  }
+  // Defer to allow the current request's error to propagate first.
+  setTimeout(() => {
+    ambassadorRedirectPending = false;
+    const current = window.location.pathname;
+    if (!current.startsWith("/ambassador/login")) {
+      window.history.replaceState(null, "", "/ambassador/login");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  }, 0);
 }
 
 async function performSignOutAndRedirect() {
@@ -169,6 +214,22 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const status = error.response?.status;
     const url = error.config?.url;
+
+    // Ambassador endpoints use a dedicated JWT + live status check
+    // (verifyAmbassador re-validates ambassador_profiles.status on every
+    // request). A 403 there means the token is still cryptographically
+    // valid but the account is no longer 'accepted' (suspended/rejected) —
+    // that must force an immediate logout exactly like a 401 does, so this
+    // is checked independently of, and before, the organizer/admin 401
+    // handling below (which must never react to ambassador 403s).
+    if (
+      (status === 401 || status === 403) &&
+      url?.includes("/ambassadors/") &&
+      !isAmbassadorPublicUrl(url)
+    ) {
+      handleAmbassadorUnauthorized(error.response?.data?.error);
+      return Promise.reject(error);
+    }
 
     if (status === 401 && !isPublicAuthCall(url)) {
       if (shouldAutoLogout(url)) {
