@@ -361,4 +361,87 @@ export const useCollectionStore = create((set, get: any) => ({
       throw err;
     }
   },
+
+  // ── Collection ownership transfer ───────────────────────────────────────────
+  transferStep: "idle" as "idle" | "requesting" | "otp-sent" | "verifying" | "link-sent" | "error",
+  transferError: null as string | null,
+  pendingTransferEmail: null as string | null,
+  otpSentToEmail: null as string | null,
+  transferStatus: null as { to_email: string; status: string; created_at: string } | null,
+  transferStatusLoading: false,
+
+  fetchCollectionTransferStatus: async (collectionId: string) => {
+    set({ transferStatusLoading: true });
+    try {
+      const { data } = await axiosInstance.get(`/collections/${collectionId}/transfer/status`);
+      set({ transferStatus: data?.pending || null, transferStatusLoading: false });
+      return data?.pending || null;
+    } catch (err) {
+      set({ transferStatusLoading: false });
+      return null;
+    }
+  },
+
+  requestCollectionTransfer: async (collectionId: string, recipientEmail: string) => {
+    set({ transferStep: "requesting", transferError: null });
+    try {
+      const { data } = await axiosInstance.post(`/collections/${collectionId}/transfer/request`, {
+        recipientEmail,
+      });
+      set({
+        transferStep: "otp-sent",
+        pendingTransferEmail: recipientEmail,
+        otpSentToEmail: data?.email || null,
+        transferError: null,
+      });
+      return true;
+    } catch (err: any) {
+      const msg = toFriendlyErrorMessage(err, "Could not start transfer. Please try again.");
+      set({ transferStep: "error", transferError: msg });
+      return false;
+    }
+  },
+
+  verifyCollectionTransferOTP: async (collectionId: string, otp: string) => {
+    set({ transferStep: "verifying", transferError: null });
+    try {
+      await axiosInstance.post(`/collections/${collectionId}/transfer/verify`, { otp });
+      set({ transferStep: "link-sent", transferError: null });
+      return true;
+    } catch (err: any) {
+      const msg = toFriendlyErrorMessage(err, "Could not verify OTP. Please try again.");
+      set({ transferStep: "error", transferError: msg });
+      return false;
+    }
+  },
+
+  cancelCollectionTransfer: async (collectionId: string) => {
+    try {
+      await axiosInstance.post(`/collections/${collectionId}/transfer/cancel`);
+      set({ transferStatus: null });
+      return true;
+    } catch (err: any) {
+      return false;
+    }
+  },
+
+  resetTransferState: () => {
+    set({
+      transferStep: "idle",
+      transferError: null,
+      pendingTransferEmail: null,
+      otpSentToEmail: null,
+    });
+  },
+
+  // Standalone — used by the recipient's accept/decline page, independent of
+  // the request/verify state above.
+  respondToCollectionTransfer: async (token: string, action: "accept" | "decline") => {
+    try {
+      const { data } = await axiosInstance.post(`/collection-transfer/respond`, { token, action });
+      return { success: true, status: data?.status };
+    } catch (err: any) {
+      return { success: false, error: toFriendlyErrorMessage(err, "Could not respond to this transfer.") };
+    }
+  },
 }));

@@ -58,6 +58,26 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // KYC gate — unverified users may create only one collection.
+    const { data: kyc } = await supabase
+      .from("kyc_verifications")
+      .select("status")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (kyc?.status !== "verified") {
+      const { count } = await supabase
+        .from("collections")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .neq("status", "deleted");
+      if ((count ?? 0) >= 1) {
+        return json(
+          { error: "Complete KYC verification to create more than one collection." },
+          403
+        );
+      }
+    }
+
     const {
       collection_type = "fixed",
       title,

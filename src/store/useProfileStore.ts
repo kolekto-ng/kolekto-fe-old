@@ -47,6 +47,12 @@ interface ProfileState {
   passwordStep: "idle" | "requesting" | "otp-sent" | "verifying" | "success" | "error";
   passwordError: string | null;
   otpEmail: string | null;
+  emailChangeStep: "idle" | "requesting" | "otp-sent" | "verifying" | "link-sent" | "error";
+  emailChangeError: string | null;
+  pendingNewEmail: string | null;
+  otpSentToEmail: string | null;
+  confirmStep: "idle" | "confirming" | "success" | "error";
+  confirmError: string | null;
   activeSection: string;
   setActiveSection: (section: string) => void;
   fetchProfile: () => Promise<void>;
@@ -55,6 +61,10 @@ interface ProfileState {
   requestPasswordOTP: () => Promise<boolean>;
   verifyOTPAndChangePassword: (otp: string, newPassword: string, confirmPassword: string) => Promise<boolean>;
   resetPasswordState: () => void;
+  requestEmailChangeOTP: (newEmail: string) => Promise<boolean>;
+  verifyEmailChangeOTP: (otp: string) => Promise<boolean>;
+  resetEmailChangeState: () => void;
+  confirmEmailChange: (token: string) => Promise<boolean>;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -68,6 +78,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   passwordStep: "idle",
   passwordError: null,
   otpEmail: null,
+  emailChangeStep: "idle",
+  emailChangeError: null,
+  pendingNewEmail: null,
+  otpSentToEmail: null,
+  confirmStep: "idle",
+  confirmError: null,
   activeSection: "personal",
 
   setActiveSection: (section: string) => set({ activeSection: section }),
@@ -272,5 +288,57 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   resetPasswordState: () => {
     set({ passwordStep: "idle", passwordError: null, otpEmail: null });
+  },
+
+  requestEmailChangeOTP: async (newEmail: string) => {
+    set({ emailChangeStep: "requesting", emailChangeError: null });
+    try {
+      const res = await axiosInstance.post("/settings/security/request-email-change-otp", { newEmail });
+      set({
+        emailChangeStep: "otp-sent",
+        pendingNewEmail: newEmail,
+        otpSentToEmail: res.data?.email || null,
+        emailChangeError: null,
+      });
+      toast.success("OTP sent");
+      return true;
+    } catch (error: any) {
+      const msg = toFriendlyErrorMessage(error, "Could not send OTP. Please try again.");
+      set({ emailChangeStep: "error", emailChangeError: msg });
+      toast.error(msg);
+      return false;
+    }
+  },
+
+  verifyEmailChangeOTP: async (otp: string) => {
+    set({ emailChangeStep: "verifying", emailChangeError: null });
+    try {
+      await axiosInstance.post("/settings/security/verify-email-change-otp", { otp });
+      set({ emailChangeStep: "link-sent", emailChangeError: null });
+      toast.success("Confirmation link sent");
+      return true;
+    } catch (error: any) {
+      const msg = toFriendlyErrorMessage(error, "Could not verify OTP. Please try again.");
+      set({ emailChangeStep: "error", emailChangeError: msg });
+      toast.error(msg);
+      return false;
+    }
+  },
+
+  resetEmailChangeState: () => {
+    set({ emailChangeStep: "idle", emailChangeError: null, pendingNewEmail: null, otpSentToEmail: null });
+  },
+
+  confirmEmailChange: async (token: string) => {
+    set({ confirmStep: "confirming", confirmError: null });
+    try {
+      await axiosInstance.post("/settings/security/confirm-email-change", { token });
+      set({ confirmStep: "success", confirmError: null });
+      return true;
+    } catch (error: any) {
+      const msg = toFriendlyErrorMessage(error, "Could not confirm email change. The link may have expired.");
+      set({ confirmStep: "error", confirmError: msg });
+      return false;
+    }
   },
 }));
