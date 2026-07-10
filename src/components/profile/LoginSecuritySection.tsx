@@ -14,6 +14,8 @@ import {
   ArrowRight,
   ArrowLeft,
   AlertCircle,
+  Mail,
+  MailCheck,
 } from 'lucide-react';
 import { useProfileStore } from '@/store/useProfileStore';
 
@@ -56,6 +58,15 @@ const PasswordStrengthBar: React.FC<{ password: string }> = ({ password }) => {
 
 const LoginSecuritySection: React.FC = () => {
   const { passwordStep, passwordError, otpEmail, requestPasswordOTP, verifyOTPAndChangePassword, resetPasswordState } = useProfileStore();
+  const {
+    emailChangeStep,
+    emailChangeError,
+    pendingNewEmail,
+    otpSentToEmail,
+    requestEmailChangeOTP,
+    verifyEmailChangeOTP,
+    resetEmailChangeState,
+  } = useProfileStore();
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [newPassword, setNewPassword] = useState('');
@@ -64,6 +75,11 @@ const LoginSecuritySection: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [localError, setLocalError] = useState('');
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const [newEmail, setNewEmail] = useState('');
+  const [emailOtp, setEmailOtp] = useState(['', '', '', '', '', '']);
+  const [emailLocalError, setEmailLocalError] = useState('');
+  const emailOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Reset local state when passwordStep resets
   useEffect(() => {
@@ -106,6 +122,72 @@ const LoginSecuritySection: React.FC = () => {
   const handleRequestOTP = async () => {
     await requestPasswordOTP();
   };
+
+  // Reset local email-change state when emailChangeStep resets
+  useEffect(() => {
+    if (emailChangeStep === 'idle') {
+      setEmailOtp(['', '', '', '', '', '']);
+      setEmailLocalError('');
+    }
+  }, [emailChangeStep]);
+
+  const handleEmailOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const next = [...emailOtp];
+    next[index] = value.slice(-1);
+    setEmailOtp(next);
+    if (value && index < 5) {
+      emailOtpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleEmailOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !emailOtp[index] && index > 0) {
+      emailOtpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleEmailOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const next = [...emailOtp];
+    paste.split('').forEach((char, i) => {
+      next[i] = char;
+    });
+    setEmailOtp(next);
+    const focusIndex = Math.min(paste.length, 5);
+    emailOtpRefs.current[focusIndex]?.focus();
+  };
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const handleRequestEmailOTP = async () => {
+    setEmailLocalError('');
+    if (!EMAIL_RE.test(newEmail)) {
+      setEmailLocalError('Enter a valid email address');
+      return;
+    }
+    await requestEmailChangeOTP(newEmail);
+  };
+
+  const handleVerifyEmailOTP = async () => {
+    setEmailLocalError('');
+    const otpString = emailOtp.join('');
+    if (otpString.length !== 6) {
+      setEmailLocalError('Please enter the complete 6-digit OTP');
+      return;
+    }
+    await verifyEmailChangeOTP(otpString);
+  };
+
+  const handleResetEmail = () => {
+    resetEmailChangeState();
+    setNewEmail('');
+    setEmailOtp(['', '', '', '', '', '']);
+    setEmailLocalError('');
+  };
+
+  const currentEmailError = emailLocalError || emailChangeError;
 
   const handleVerifyAndChange = async () => {
     setLocalError('');
@@ -361,6 +443,180 @@ const LoginSecuritySection: React.FC = () => {
               </div>
               <Button
                 onClick={handleReset}
+                variant="outline"
+                className="border-gray-200"
+              >
+                Done
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Change Email Card */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Mail className="w-4 h-4 text-[#1B5E20]" />
+            Change Email
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-6">
+            {[
+              { label: 'New Email', step: 1 },
+              { label: 'Verify Code', step: 2 },
+              { label: 'Confirm', step: 3 },
+            ].map(({ label, step: s }, i) => {
+              const isActive =
+                (s === 1 && (emailChangeStep === 'idle' || emailChangeStep === 'requesting')) ||
+                (s === 2 && emailChangeStep === 'otp-sent') ||
+                (s === 3 && (emailChangeStep === 'verifying' || emailChangeStep === 'link-sent'));
+              const isComplete =
+                (s === 1 && emailChangeStep !== 'idle' && emailChangeStep !== 'requesting') ||
+                (s === 2 && (emailChangeStep === 'verifying' || emailChangeStep === 'link-sent')) ||
+                (s === 3 && emailChangeStep === 'link-sent');
+
+              return (
+                <React.Fragment key={s}>
+                  {i > 0 && (
+                    <div className={`flex-1 h-0.5 rounded-full transition-colors ${isComplete ? 'bg-[#1B5E20]' : 'bg-gray-200'}`} />
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                        isComplete
+                          ? 'bg-[#1B5E20] text-white'
+                          : isActive
+                          ? 'bg-[#1B5E20] text-white ring-4 ring-[#E8F5E9]'
+                          : 'bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      {isComplete ? '✓' : s}
+                    </div>
+                    <span className={`text-xs hidden sm:inline ${isActive ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{label}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          {/* Error Display */}
+          {currentEmailError && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-100 mb-4">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <p className="text-sm text-red-600">{currentEmailError}</p>
+            </div>
+          )}
+
+          {/* Step 1: Enter new email */}
+          {(emailChangeStep === 'idle' || emailChangeStep === 'requesting' || emailChangeStep === 'error') && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                <p className="text-sm text-gray-600">
+                  Enter your new email address. We'll send a verification code to your current email to confirm it's you, then a confirmation link to the new address.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">New Email Address</Label>
+                <Input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="border-gray-200 focus:border-[#1B5E20] focus:ring-[#1B5E20]/20"
+                />
+              </div>
+              <Button
+                onClick={handleRequestEmailOTP}
+                disabled={emailChangeStep === 'requesting' || !newEmail}
+                className="w-full bg-[#1B5E20] hover:bg-[#2E7D32] text-white h-11"
+              >
+                {emailChangeStep === 'requesting' ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                {emailChangeStep === 'requesting' ? 'Sending OTP...' : 'Send Verification Code'}
+              </Button>
+            </div>
+          )}
+
+          {/* Step 2: Enter OTP */}
+          {(emailChangeStep === 'otp-sent' || emailChangeStep === 'verifying') && (
+            <div className="space-y-5">
+              <div className="p-4 rounded-xl bg-[#E8F5E9]/50 border border-[#E8F5E9]">
+                <p className="text-sm text-gray-600">
+                  A 6-digit code has been sent to <span className="font-semibold text-gray-900">{otpSentToEmail || 'your current email'}</span> to confirm it's you.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Verification Code</Label>
+                <div className="flex gap-2 justify-center" onPaste={handleEmailOtpPaste}>
+                  {emailOtp.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={(el) => (emailOtpRefs.current[index] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleEmailOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleEmailOtpKeyDown(index, e)}
+                      className="w-11 h-12 text-center text-lg font-bold border-2 border-gray-200 rounded-lg focus:border-[#1B5E20] focus:ring-2 focus:ring-[#1B5E20]/20 outline-none transition-all"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleResetEmail}
+                  className="flex-1 border-gray-200"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <Button
+                  onClick={handleVerifyEmailOTP}
+                  disabled={emailChangeStep === 'verifying' || emailOtp.join('').length !== 6}
+                  className="flex-1 bg-[#1B5E20] hover:bg-[#2E7D32] text-white"
+                >
+                  {emailChangeStep === 'verifying' ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4 mr-2" />
+                  )}
+                  Verify
+                </Button>
+              </div>
+
+              <button
+                onClick={handleRequestEmailOTP}
+                className="text-xs text-[#1B5E20] hover:underline w-full text-center"
+              >
+                Didn't receive the code? Resend OTP
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Confirmation link sent */}
+          {emailChangeStep === 'link-sent' && (
+            <div className="text-center py-8 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-[#E8F5E9] flex items-center justify-center mx-auto">
+                <MailCheck className="w-8 h-8 text-[#1B5E20]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Check your new inbox</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  We've sent a confirmation link to <span className="font-semibold text-gray-900">{pendingNewEmail}</span>. Click it to finish changing your email — your account won't update until you do.
+                </p>
+              </div>
+              <Button
+                onClick={handleResetEmail}
                 variant="outline"
                 className="border-gray-200"
               >

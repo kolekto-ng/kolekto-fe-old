@@ -27,7 +27,7 @@ import {
   Wallet, Share2, Edit, ScanLine, Download, Search, ChevronDown,
   ArrowLeft, Users, Calendar, Clock, TrendingUp,
   CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
-  Link2, Tag, Flag, MessageCircle,
+  Link2, Tag, Flag, MessageCircle, ArrowLeftRight, UserPlus,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
@@ -42,6 +42,8 @@ import {
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import TransferCollectionDialog from '@/components/collections/TransferCollectionDialog';
+import ManageAccessDialog from '@/components/collections/ManageAccessDialog';
 import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 import {
   ActivityListSkeleton,
@@ -145,6 +147,8 @@ const CollectionDetailsPage: React.FC = () => {
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isManageAccessOpen, setIsManageAccessOpen] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [scanInput, setScanInput] = useState('');
   const [scannedTicket, setScannedTicket] = useState<any>(null);
@@ -654,6 +658,13 @@ const CollectionDetailsPage: React.FC = () => {
                   <X className="w-4 h-4 mr-2 text-gray-600" /> Close Collection
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsManageAccessOpen(true)}>
+                <UserPlus className="w-4 h-4 mr-2 text-gray-600" /> Manage Access
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsTransferOpen(true)}>
+                <ArrowLeftRight className="w-4 h-4 mr-2 text-gray-600" /> Transfer Ownership
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600"
@@ -1436,6 +1447,22 @@ const CollectionDetailsPage: React.FC = () => {
           // The dialog already shows the "Collection updated" success toast on
           // save — don't fire a second one here (one action = one toast).
         }}
+      />
+
+      {/* Transfer Ownership */}
+      <TransferCollectionDialog
+        open={isTransferOpen}
+        onOpenChange={setIsTransferOpen}
+        collectionId={id!}
+        collectionTitle={col.title || ''}
+      />
+
+      {/* Manage Access */}
+      <ManageAccessDialog
+        open={isManageAccessOpen}
+        onOpenChange={setIsManageAccessOpen}
+        collectionId={id!}
+        collectionTitle={col.title || ''}
       />
 
       {/* QR / Ticket Scanner (Ticket type only) */}

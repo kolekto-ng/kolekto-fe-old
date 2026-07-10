@@ -142,8 +142,11 @@ html {
 .safe-left   { padding-left: env(safe-area-inset-left); }
 .safe-right  { padding-right: env(safe-area-inset-right); }
 
-/* Touch-friendly minimum tap target */
-button, a, [role="button"] {
+/* Touch-friendly minimum tap target. Excludes [role="switch"]/[role="checkbox"] —
+   Radix renders both as a <button>, and forcing 44px height on them stretches
+   the 24px toggle track into a near-square blob, and the 16px checkbox
+   square into a tall thin rectangle, instead of their intended small shapes. */
+button:not([role="switch"]):not([role="checkbox"]), a, [role="button"] {
   min-height: 44px;
 }
 

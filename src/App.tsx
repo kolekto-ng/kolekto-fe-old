@@ -26,6 +26,11 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
 const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
+const ConfirmEmailChangePage = lazy(() => import("./pages/ConfirmEmailChangePage"));
+const CollectionTransferPage = lazy(() => import("./pages/CollectionTransferPage"));
+const CollectionAccessPage = lazy(() => import("./pages/CollectionAccessPage"));
+const SharedCollectionsPage = lazy(() => import("./pages/dashboard/SharedCollectionsPage"));
+const SharedCollectionDetailPage = lazy(() => import("./pages/dashboard/SharedCollectionDetailPage"));
 import { useAuthStore } from "@/store/useAuthStore";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
@@ -148,6 +153,9 @@ const AuthenticatedApp = () => {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/help" element={<HelpCenterPage />} />
       <Route path="/payment/verify" element={<PaymentCallback />} />
+      <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
+      <Route path="/collection-transfer" element={<CollectionTransferPage />} />
+      <Route path="/collection-access" element={<CollectionAccessPage />} />
       <Route path="/pwa/*" element={<LegacyPwaRedirect />} />
 
       {/* Protected Dashboard Routes */}
@@ -164,6 +172,8 @@ const AuthenticatedApp = () => {
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<DashboardCreateCollectionPage />} />
         <Route path="settings" element={<UserProfilePage />} />
+        <Route path="shared-with-me" element={<SharedCollectionsPage />} />
+        <Route path="shared-with-me/:id" element={<SharedCollectionDetailPage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="activities" element={<ActivitiesPage />} />
       </Route>
