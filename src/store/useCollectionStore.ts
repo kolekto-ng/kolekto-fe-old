@@ -4,6 +4,7 @@ import { Collection, FormField, PriceTier } from "@/types";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 import { axiosInstance } from "@/utils/axios";
+import { getCreateCollectionPath } from "@/lib/featureFlags";
 
 // `supabase.functions.invoke` surfaces a generic FunctionsHttpError
 // ("Edge Function returned a non-2xx status code") and hides the real reason
@@ -201,7 +202,12 @@ export const useCollectionStore = create((set, get: any) => ({
     }
   },
 
-  // ── Create collection via Edge Function ─────────────────────────────────────
+  // ── Create collection ───────────────────────────────────────────────────────
+  // Canary-switched between the legacy Edge function (default, today's prod
+  // behavior) and the new Express CollectionService (single write authority).
+  // The switch is a runtime feature flag (see @/lib/featureFlags) so enabling
+  // the Express path — and rolling back — needs no redeploy. Both paths accept
+  // the same flat payload and return { data: collection }.
   createCollection: async (collectionData: any) => {
     set({ isLoading: true, error: null });
     try {
@@ -215,23 +221,42 @@ export const useCollectionStore = create((set, get: any) => ({
         }
       } catch {}
 
-      const { data, error } = await supabase.functions.invoke(
-        "create-collection",
-        {
-          body: { ...collectionData, user_id: userId },
-          headers: authHeaders(),
+      let collectionRow: any;
+
+      if (getCreateCollectionPath() === "express") {
+        // Express CollectionService. Auth is the Bearer token on axiosInstance;
+        // the user_id in the body is ignored server-side (taken from the JWT).
+        const res = await axiosInstance.post("/create-collection", {
+          ...collectionData,
+          user_id: userId,
+        });
+        const body = res?.data;
+        if (body?.error) throw new Error(body.error);
+        if (!body?.data?.id) {
+          throw new Error("Collection was not created. Please try again.");
         }
-      );
+        collectionRow = body.data;
+      } else {
+        // Legacy Supabase Edge function (default production path).
+        const { data, error } = await supabase.functions.invoke(
+          "create-collection",
+          {
+            body: { ...collectionData, user_id: userId },
+            headers: authHeaders(),
+          }
+        );
 
-      if (error) {
-        throw new Error(await extractFunctionError(error, "Could not create collection. Please try again."));
-      }
-      if (data?.error) throw new Error(data.error);
-      if (!data?.data?.id) {
-        throw new Error("Collection was not created. Please try again.");
+        if (error) {
+          throw new Error(await extractFunctionError(error, "Could not create collection. Please try again."));
+        }
+        if (data?.error) throw new Error(data.error);
+        if (!data?.data?.id) {
+          throw new Error("Collection was not created. Please try again.");
+        }
+        collectionRow = data.data;
       }
 
-      const newCollection = formatCollection(data.data);
+      const newCollection = formatCollection(collectionRow);
 
       set((state: any) => ({
         collections: [newCollection, ...state.collections],
