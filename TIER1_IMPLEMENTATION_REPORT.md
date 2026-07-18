@@ -44,9 +44,8 @@ The only `deposits` writer is `deposit.initializePayment` (`POST /api/payments/i
 - Live payment/webhook/reconciliation validation is the **soak period** (per the task) — not run here.
 
 ## Git commit
-- be-old: `<HASH_BE>` (deposit.js).
-- fe-old: `<HASH_FE>` (_shared1.ts + docs).
-(Hashes appended after commit.)
+- **be-old: `d0e3954824674a62cdeae53d6084c6f37c5af75a`** (`d0e3954`) — deposit.js.
+- **fe-old: `c8ff9b1251d79fc73b336522b831d8f2ac163c54`** (`c8ff9b1`) — _shared1.ts + Tier 1 docs.
 
 ## Rollback
 `git revert` the two commits (deposit.js + _shared1.ts). The pre-edit `deposit.js` is also backed up at `/tmp/deposit.js.tier1bak` this session. No DB change was made, so nothing to reverse there.
