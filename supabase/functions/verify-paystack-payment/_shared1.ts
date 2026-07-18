@@ -550,23 +550,16 @@ export async function attemptDeterministicCollectionRecovery(
   const { reference, customerEmail, grossAmountPaid } = params;
 
   // ── Strategy C: exact payment_reference match in a sibling table ──────────
-  const [{ data: depositRow }, { data: contributionRow }] = await Promise.all([
-    supabase
-      .from("deposits")
-      .select("collection_id")
-      .eq("payment_reference", reference)
-      .not("collection_id", "is", null)
-      .maybeSingle(),
-    supabase
-      .from("contributions")
-      .select("collection_id")
-      .eq("payment_reference", reference)
-      .not("collection_id", "is", null)
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  // Tier 1: the legacy `deposits` sibling lookup was removed (always empty).
+  // `contributions` is the canonical payment_reference source.
+  const { data: contributionRow } = await supabase
+    .from("contributions")
+    .select("collection_id")
+    .eq("payment_reference", reference)
+    .not("collection_id", "is", null)
+    .limit(1)
+    .maybeSingle();
   const strategyCMatch =
-    (depositRow as Record<string, unknown> | null)?.collection_id ||
     (contributionRow as Record<string, unknown> | null)?.collection_id;
   if (strategyCMatch) {
     return { collectionId: String(strategyCMatch), strategy: "strategy_c_reference_match" };
@@ -577,28 +570,16 @@ export async function attemptDeterministicCollectionRecovery(
   const cutoffIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const amountTolerance = Math.max(1, grossAmountPaid * 0.02); // ±2%, min ₦1
 
-  const [{ data: pendingDeposits }, { data: pendingContributions }] = await Promise.all([
-    supabase
-      .from("deposits")
-      .select("collection_id, amount, created_at")
-      .ilike("email", customerEmail)
-      .eq("status", "pending")
-      .gte("created_at", cutoffIso),
-    supabase
-      .from("contributions")
-      .select("collection_id, amount, gross_amount, created_at")
-      .ilike("email", customerEmail)
-      .eq("status", "pending")
-      .is("payment_reference", null)
-      .gte("created_at", cutoffIso),
-  ]);
+  // Tier 1: the legacy `deposits` sibling lookup was removed (always empty).
+  const { data: pendingContributions } = await supabase
+    .from("contributions")
+    .select("collection_id, amount, gross_amount, created_at")
+    .ilike("email", customerEmail)
+    .eq("status", "pending")
+    .is("payment_reference", null)
+    .gte("created_at", cutoffIso);
 
   const candidateCollectionIds = new Set<string>();
-  for (const row of (pendingDeposits || []) as Array<Record<string, unknown>>) {
-    if (Math.abs(Number(row.amount || 0) - grossAmountPaid) <= amountTolerance && row.collection_id) {
-      candidateCollectionIds.add(String(row.collection_id));
-    }
-  }
   for (const row of (pendingContributions || []) as Array<Record<string, unknown>>) {
     const rowAmount = Number(row.gross_amount || row.amount || 0);
     if (Math.abs(rowAmount - grossAmountPaid) <= amountTolerance && row.collection_id) {
