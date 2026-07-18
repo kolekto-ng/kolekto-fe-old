@@ -35,9 +35,9 @@ Re-verified **zero runtime callers** (grep across backend/frontend/edge/SQL/cron
 - Details in `TIER0_VALIDATION_REPORT.md`.
 
 ## Git commit
-- fe-old: `<HASH_FE>` (edge source deletion + Tier 0 docs).
+- **fe-old: `e9944f32acba25c0087dd550ce79d9044afc46e3`** (`e9944f3`) — edge source deletion + Tier 0 docs.
 - No be-old code commit (Tier 0 made no backend code change).
-- (Hash filled in after commit — see repo log; the SQL/cron removals live in the database, recorded here + in `TIER0_REMOVAL_LOG.md`.)
+- The SQL function drops + cron removals live in the database (project `lpeeckqsltxohppheucz`), recorded here + in `TIER0_REMOVAL_LOG.md` (with rollback definitions).
 
 ## Rollback
 Per `TIER0_REMOVAL_LOG.md`: re-create the two functions + two crons from the captured definitions and `git revert` the edge deletion. **Not recommended** — these are the corruptor + landmine.
