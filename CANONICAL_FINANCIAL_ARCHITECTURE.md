@@ -1,41 +1,40 @@
-# CANONICAL_FINANCIAL_ARCHITECTURE (TASK 5)
+# CANONICAL_FINANCIAL_ARCHITECTURE (Phase 2.1C-2 — "exactly one?" verification)
 
-The target: **exactly one implementation** of each financial computation, all derived from the canonical source. Design only — no code.
+Post-settlement state. For each concern the task requires **exactly one** implementation. Below is the honest count; duplicates are **listed, not removed** (per stop condition). Read-only.
 
-## Principles
-1. **Single source of truth:** `contributions` (status=`paid`) + `withdrawals`. `wallets.*` is a **derived projection** (a cache), never authoritative.
-2. **One writer per concern.** Every wallet write goes through **one** service method.
-3. **One runtime owns balance math** (Node/Express — the write authority from Phase 1). Edge/SQL do not re-implement it.
-4. **Ledger-ready:** the projection is rebuildable from source at any time (already true — that's why the incident is recoverable).
+| Concern | Exactly one? | Implementations (live) |
+|---------|:---:|------------------------|
+| **Financial source of truth** | ✅ **1** | `contributions` (paid) + `withdrawals` |
+| **Withdrawal computation** | ✅ **1** | `withdrawal.js` (`refreshWallet`/`getEligibleCollections`, Node `computeWalletBalances`) |
+| **Settlement implementation (active)** | ✅ **1 active** | `settlement_recompute_wallets()` (SQL). Legacy `settle_pending_balances`/`process_deposit_settlements` exist but **disabled** |
+| **Settlement scheduler (active)** | ✅ **1 active** | pg_cron `settlement-recompute-wallets` (cron 7). Node cron delegates to same fn; set `RUN_SETTLEMENT_CRON=false` |
+| **Wallet projection implementation** | ❌ **3** | Node `computeWalletBalances` (`financial.js`) · Deno `refreshCollectionAndWallets` (`_shared2.ts`) · SQL `settlement_recompute_wallets` |
+| **Settlement cutoff** | ❌ **3** | Node `getSettlementCutoff` · Deno copy (`_shared1.ts`) · SQL `settlement_cutoff()` |
+| **Contribution normalization / fees** | ❌ **3** | Node `normalizeContributions`/`calculateFees` · Deno copies · SQL inline (in `settlement_recompute_wallets`) |
 
-## The one-and-only implementations
+## Summary
+- **Achieved single-source:** source of truth, withdrawal computation, the *active* settlement implementation, and the *active* settlement scheduler.
+- **Still triplicated (Node / Deno / SQL):** the wallet-balance recompute, the settlement cutoff, and normalization/fees. These are the same formula expressed once per runtime because the event paths run in Deno (edge) and Node (Express) while settlement runs in SQL (pg_cron). They currently **agree** (verified: reconciliation 0 drift), so they are a *consolidation* item, not a defect.
 
-| Concern | Canonical owner | Replaces (today) |
-|---------|-----------------|------------------|
-| **Wallet computation** (net/gross/pending/available/ledger/withdrawn) | `WalletService.recompute(collectionId)` → `computeWalletBalances` (single copy) | Deno `refreshCollectionAndWallets`, SQL `settle_pending_balances`, SQL `process_deposit_settlements`, Node `updateWalletStats` |
-| **Balance computation** (the formula) | `utils/financial.js computeWalletBalances` (the sole definition, imported everywhere) | 4 divergent copies |
-| **Fee computation** | `PricingService.feeFor()` / `netOf()` (single `calculateFees`) | Node + Deno hardcoded copies |
-| **Settlement** (T+1 pending→available) | `SettlementService` — one cutoff (`getSettlementCutoff`), one scheduled job that calls `WalletService.recompute` for due collections | Node cron + 2 SQL functions + implicit recompute-on-verify |
-| **Withdrawal eligibility** | `WithdrawalService.eligible()` / `withdrawableCap()` (available − pending requests, from `WalletService`) | `getWithdrawableSnapshot` + `getEligibleCollections` (already 1 formula, 2 entry points) |
-| **Ledger projection** | `WalletService` reads/writes the `wallets` projection; (future) `LedgerService` posts append-only entries and `wallets = SUM(ledger)` | denormalized columns recomputed ad hoc |
+## Path to literally one (Phase 2.1 — NOT this phase)
+Unify the three recompute copies behind a single **WalletService.recompute(collectionId)**:
+- the edge verify path calls the service (edge → Express API), instead of its own Deno copy;
+- settlement calls the same service (or the service and the SQL function are proven bit-identical and the SQL becomes a thin generated mirror);
+- one `getSettlementCutoff`, one `normalizeContributions`/`calculateFees`, imported everywhere.
+This removes the Deno and SQL duplicates. It is a behavior-sensitive migration (touches the live edge verify path) and belongs to Phase 2.1, canaried like the Collection cutover.
 
-## Target write flow
-
+## Target diagram (post Phase 2.1)
 ```
-payment verified  ─┐
-withdrawal change  ─┼─►  WalletService.recompute(collectionId)  ──►  wallets (projection)
-settlement (daily) ─┘        │ uses computeWalletBalances (ONE copy)
-                             │ reads contributions + withdrawals (SOURCE)
-                             └─ emits WalletRecomputed event  ──► activity/audit/monitor
+contributions + withdrawals  (SOURCE OF TRUTH)
+        │
+        ▼
+WalletService.recompute()  ← ONE implementation (one cutoff, one normalization, one fee calc)
+        ▲            ▲               ▲
+  edge verify   withdrawal     SettlementService (scheduled)
+        │
+        ▼
+wallets (projection)  →  dashboards / admin / withdrawal cap
 ```
 
-- **Edge functions** either call `WalletService` (via the API) or are demoted to read-only; they stop writing wallets with their own math.
-- **SQL functions** that compute balances are **retired** (a DB function may exist only as a thin `refresh` that mirrors the Node formula, if a DB-side recompute is ever required — but not a second definition).
-- **Settlement** becomes: one daily job → `WalletService.recompute` for collections with due pending balances. No `deposits`. No second cutoff.
-
-## Migration alignment
-- This is the Phase 2.1 (WalletService/PaymentService) consolidation. The drift repair (Phase 2.1B-B) is the *first* concrete step: recompute all wallets via the canonical path, then make it the *only* path.
-- `deposits` and its settlement functions are removed (see `DEPOSITS_REMOVAL_PLAN.md`) — they are the "second model" that must not survive consolidation.
-
-## Invariant to enforce forever (monitor)
-`available_balance + pending_balance = ledger_balance`, and `wallets.* == computeWalletBalances(source)` within ₦0.01, for every collection — checked by the scheduled reconciliation (`scripts/reconcileFinancials.js`). Any deviation = alert. This is what would have caught the incident on night one.
+## This phase's contribution
+Phase 2.1C established **one active settlement + one scheduler + one cutoff for settlement** and disabled all competitors. The remaining triplication is documented here for Phase 2.1.
