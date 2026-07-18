@@ -28,7 +28,7 @@
 Full `CREATE TABLE` + constraints + grants captured in `DEPOSITS_TABLE_RETIREMENT_REPORT.md` (table was empty → schema recreate fully reverts).
 
 ## Git commit
-- fe-old: `<HASH_FE>` (Tier 2 docs). The DROP lives in the database (recorded here + rollback DDL). No code changed this tier.
+- **fe-old: `6dff71327261fd949670dbd6d14275e2db77a226`** (`6dff713`) — Tier 2 docs. The `DROP TABLE` lives in the database (project `lpeeckqsltxohppheucz`), recorded here with full rollback DDL. No code changed this tier.
 
 ## Rules honored
 Did NOT: start the Financial Projection Engine, consolidate WalletService, change settlement, refactor financial math, touch payment behavior, optimize code, remove `deposit.js`, or modify webhook/verify/reconciliation. **Only** the deposits table was retired.
