@@ -1,0 +1,27 @@
+{
+  "name": "kolekto-shared-financial",
+  "version": "0.1.0",
+  "description": "Kolekto Financial Projection Engine (FPE) — the single, dependency-free, pure-TypeScript source of truth for every monetary computation. Imported by Node and Deno; mirrored by SQL under golden-vector conformance.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
+    "test:node-harness": "node --experimental-strip-types test/node.harness.ts",
+    "test:parity": "node --experimental-strip-types --test test/parity.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "vendor:backend": "node scripts/vendor-backend.mjs",
+    "bundle:edge": "node scripts/bundle-edge.mjs",
+    "guard": "node scripts/guard-financial-duplication.mjs",
+    "conformance": "node --experimental-strip-types --test \"test/*.test.ts\" && npm run guard"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

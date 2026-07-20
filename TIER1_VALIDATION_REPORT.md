@@ -27,7 +27,7 @@
 Settlement/wallets/withdrawals were not touched, so balances are provably unchanged.
 
 ## Behavioral-equivalence argument (why payment behavior is unchanged)
-Every removed `deposits` branch was **unreachable**: `deposits` is empty and its only writer (`deposit.initializePayment`) is dead (proof in `TIER1_IMPLEMENTATION_REPORT.md`). Therefore `existingDeposit`/`deposit` were always null and the code always executed the fallback/recovery path. I removed the dead branches and made the always-executing path unconditional; the retained bodies do not reference the removed variables. HMAC signature verification, F1 already-paid check, edge-verify recovery, retry (500→Paystack retries), admin reconcile (`invokeVerifyEdgeFunction`), and receipts are byte-for-byte unchanged.
+Every removed `deposits` branch was **unreachable**: `deposits` is empty and its only writer (`deposit.initializePayment`) is dead (proof in `TIER1_IMPLEMENTATION_REPORT.md`). Therefore `existingDeposit`/`deposit` were always null and the code always executed the fallback/recovery path. I removed the dead branches and made the always-executing path unconditional; the retained bodies do not reference [text](vscode-webview://08k0nmju8koobobb10tihiih64gqumlfh54fcqeuu08r7f1dk7rc/TIER1_VALIDATION_REPORT.md)the removed variables. HMAC signature verification, F1 already-paid check, edge-verify recovery, retry (500→Paystack retries), admin reconcile (`invokeVerifyEdgeFunction`), and receipts are byte-for-byte unchanged.
 
 ## Runtime "never queries deposits" proof
 - During **payment/verify/webhook**: the code paths contain **no** `deposits` query (grep = 0).

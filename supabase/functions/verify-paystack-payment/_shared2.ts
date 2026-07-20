@@ -3,7 +3,7 @@
 // deployed file a manageable size — no behavior change.
 export * from "./_shared1.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { normalizePaymentRequest, roundCurrency, getSettlementCutoff, COMPLETED_WITHDRAWAL_STATUSES, buildTierAvailability, getPriceTiers, hasAnyConfiguredPrefix } from "./_shared1.ts";
+import { normalizePaymentRequest, roundCurrency, computeWalletBalances, buildTierAvailability, getPriceTiers, hasAnyConfiguredPrefix } from "./_shared1.ts";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 export function buildContributionUnits(
@@ -51,43 +51,27 @@ export async function refreshCollectionAndWallets(
   if (totalError) { console.error("Error recalculating totals:", totalError); return; }
 
   const paidContributions = paidRows || [];
-  const settlementCutoff = getSettlementCutoff();
 
-  // Total Raised = sum of contribution net amounts (NEVER totalPayable / gross)
-  const netPayment = roundCurrency(
-    paidContributions.reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
-  );
-
-  // Gross = what contributors actually paid (gross_amount column, fallback to amount)
-  const grossPayment = roundCurrency(
-    paidContributions.reduce((sum: number, row: Record<string, unknown>) => {
-      return sum + Number(row.gross_amount || row.amount || 0);
-    }, 0)
-  );
-
-  // Pending = net from today's payments (not yet available for withdrawal)
-  const pendingBalance = roundCurrency(
-    paidContributions
-      .filter((row: Record<string, unknown>) => {
-        const ts = row.created_at ? new Date(String(row.created_at)) : null;
-        return ts !== null && ts >= settlementCutoff;
-      })
-      .reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
-  );
-
-  const settledNet = roundCurrency(netPayment - pendingBalance);
-
+  // Withdrawals (the second source of truth) — fetched before projecting balances.
   const { data: withdrawals } = await supabase
     .from("withdrawals").select("amount, status").eq("collection_id", collectionId);
 
-  const completedWithdrawals = roundCurrency(
-    (withdrawals || [])
-      .filter((row: Record<string, unknown>) => COMPLETED_WITHDRAWAL_STATUSES.has(String(row.status || "")))
-      .reduce((sum: number, row: Record<string, unknown>) => sum + Number(row.amount || 0), 0)
+  // Wallet projection is DELEGATED to the Financial Projection Engine. This is
+  // the identical net/gross/pending/settled/available/ledger math the edge did
+  // inline, now sourced from the single canonical implementation. The only
+  // difference is the canonical completed-withdrawal set (adds success/approved)
+  // — the one sanctioned Wave 2 behaviour change. DB reads/writes and the
+  // tier-sold side-effect below remain here in the adapter; the engine is pure.
+  const balances = computeWalletBalances(
+    paidContributions as Array<Record<string, unknown>>,
+    (withdrawals || []) as Array<Record<string, unknown>>
   );
-
-  const availableBalance = roundCurrency(Math.max(0, settledNet - completedWithdrawals));
-  const ledgerBalance = roundCurrency(availableBalance + pendingBalance);
+  const netPayment = balances.netPayment;
+  const grossPayment = balances.grossPayment;
+  const pendingBalance = balances.pendingBalance;
+  const availableBalance = balances.availableBalance;
+  const ledgerBalance = balances.ledgerBalance;
+  const completedWithdrawals = balances.completedWithdrawals;
 
   // total_contributions = count of paid contributions (one per ticket for ticket collections)
   const totalContributions = paidContributions.length;

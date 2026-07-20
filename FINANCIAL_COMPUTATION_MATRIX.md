@@ -1,5 +1,14 @@
 # FINANCIAL_COMPUTATION_MATRIX (Phase 2.2 — Deliverable 2)
 
+> ✅ **ACHIEVED (Phase 2.2 complete, all 4 waves).** The canonical targets below
+> are now live: one TypeScript engine (`kolekto-shared-financial`) imported by
+> Node (vendored `utils/fpe/`) and Edge (inlined via `bundle:edge`), plus one SQL
+> mirror proven equivalent by golden vectors (16/16 + 57/57 live wallets, 0
+> drift). A CI guardrail forbids new local financial math. See
+> `WAVE1_…`/`WAVE2_…`/`WAVE3_…`/`WAVE4_IMPLEMENTATION_REPORT.md` +
+> `…VALIDATION_REPORT.md`. Open items: R-REV (edge reverse-calc), R-COALESCE
+> (unreachable). Row 15/17 divergences are resolved to the canonical superset.
+
 One row per financial rule; one column per runtime. Cell = the concrete implementation there today. **Canonical?** names the single implementation everything should converge on (target state — not yet built).
 
 Legend: ✅ present · ✅✅ present twice (duplicated within that runtime) · — absent.
