@@ -20,6 +20,26 @@ export const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── PHONE NORMALIZATION ──────────────────────────────────────────────────────
+// contributions.phone is varchar(20). Un-normalized Paystack contact phones
+// (formatting, or long international numbers) can overflow it, failing the insert
+// with "value too long for type character varying(20)" — which stranded recovered
+// payments and stuck the orphan-recovery loop in production. Keep at most one
+// leading '+', strip other non-digits, cap at maxLen. A valid E.164 number is at
+// most 16 chars, so the cap only ever trims garbage.
+// Keep in sync with kolekto-be-old/utils/normalizePhone.js (authoritative tests).
+export function normalizePhone(raw: unknown, maxLen = 20): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const hasPlus = s.startsWith("+");
+  const digits = s.replace(/\D/g, "");
+  if (!digits) return null;
+  let out = (hasPlus ? "+" : "") + digits;
+  if (out.length > maxLen) out = out.slice(0, maxLen);
+  return out;
+}
+
 // ─── SHARED TYPES ─────────────────────────────────────────────────────────────
 export type FeeBearer = "contributor" | "organizer";
 
@@ -1087,7 +1107,7 @@ export function normalizePaymentRequest(input: {
   const contact = {
     name: String(contactSource.name || "").trim(),
     email: String(contactSource.email || "").trim(),
-    phone: String(contactSource.phone || "").trim(),
+    phone: normalizePhone(contactSource.phone) ?? "",
   };
 
   const allTiers = buildTierAvailability(getPriceTiers(collection), paidRows);

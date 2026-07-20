@@ -12,6 +12,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── PHONE NORMALIZATION ──────────────────────────────────────────────────────
+// Normalize the contact phone before it enters Paystack metadata so it can never
+// later overflow contributions.phone (varchar(20)) at verification/recovery time.
+// Keep in sync with kolekto-be-old/utils/normalizePhone.js (authoritative tests).
+function normalizePhone(raw: unknown, maxLen = 20): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const hasPlus = s.startsWith("+");
+  const digits = s.replace(/\D/g, "");
+  if (!digits) return null;
+  let out = (hasPlus ? "+" : "") + digits;
+  if (out.length > maxLen) out = out.slice(0, maxLen);
+  return out;
+}
+
 // ─── SHARED TYPES ─────────────────────────────────────────────────────────────
 type FeeBearer = "contributor" | "organizer";
 
@@ -992,7 +1008,7 @@ function normalizePaymentRequest(input: {
   const contact = {
     name: String(contactSource.name || "").trim(),
     email: String(contactSource.email || "").trim(),
-    phone: String(contactSource.phone || "").trim(),
+    phone: normalizePhone(contactSource.phone) ?? "",
   };
 
   const allTiers = buildTierAvailability(getPriceTiers(collection), paidRows);
