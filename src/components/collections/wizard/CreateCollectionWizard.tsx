@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "@/lib/toast";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
+import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import {
   CollectionType,
@@ -271,6 +272,10 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   const location = useLocation();
   const { user } = useAuthStore();
   const { createCollection } = useCollectionStore();
+  // Single-source creation-limit gate. Every entry point converges on this
+  // wizard, so enforcing here gives identical early UX everywhere; the backend
+  // remains the authority and independently returns 403.
+  const { limitReached: createLimitReached, message: createLimitMessage } = useCanCreateCollection();
   const {
     data,
     stepIndex,
@@ -434,6 +439,16 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
       return;
     }
 
+    // Early, uniform enforcement of the unverified one-collection limit. The
+    // backend still rejects with 403 if this is somehow bypassed.
+    if (createLimitReached) {
+      toast.error(createLimitMessage ?? 'You have reached your collection limit.', {
+        id: 'collection-publish',
+      });
+      autoPublishTriggeredRef.current = false;
+      return;
+    }
+
     clearPublishIntent();
     setIsSubmitting(true);
 
@@ -548,6 +563,19 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   return (
     <>
       <div className="mx-auto max-w-2xl">
+        {createLimitReached && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="flex-1 text-xs leading-relaxed text-amber-700">
+              {createLimitMessage}{' '}
+              <Link to="/dashboard/settings" className="font-semibold underline underline-offset-2">
+                Complete KYC verification
+              </Link>{' '}
+              to create more.
+            </p>
+          </div>
+        )}
+
         <div className="mb-8">
           <WizardStepper steps={steps} currentIndex={stepIndex} />
         </div>

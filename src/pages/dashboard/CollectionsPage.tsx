@@ -11,7 +11,7 @@ import { ListFilter, RotateCcw, Search, ShieldCheck, SlidersHorizontal, X } from
 
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useAuthStore } from '@/store';
-import { useProfileStore } from '@/store/useProfileStore';
+import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
 import { supabase } from '@/integrations/supabase/client';
 import { getCollectionStatusMeta } from '@/utils/collectionStatus';
@@ -40,14 +40,13 @@ const CollectionsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { collections, isLoading, error, fetchCollections } = useCollectionStore();
-  const { kycData, fetchKYCStatus } = useProfileStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | (typeof STATUS_OPTIONS)[number]['value']>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | (typeof TYPE_OPTIONS)[number]['value']>('all');
   const userId = user?.id;
   const hasCachedCollections = collections.length > 0;
-  const isKycVerified = kycData?.overallStatus === 'verified';
-  const collectionLimitReached = !isKycVerified && collections.length >= 1;
+  // Single source of truth for the creation limit (shared with the wizard).
+  const { limitReached: collectionLimitReached } = useCanCreateCollection();
 
   useEffect(() => {
     if (userId) {
@@ -59,10 +58,6 @@ const CollectionsPage: React.FC = () => {
       });
     }
   }, [userId, hasCachedCollections, fetchCollections]);
-
-  useEffect(() => {
-    if (userId) fetchKYCStatus(userId);
-  }, [userId, fetchKYCStatus]);
 
   // Live-update the list when any of the user's collections changes (status
   // flips to closed/paused, a new collection is created, target/limit edited).
