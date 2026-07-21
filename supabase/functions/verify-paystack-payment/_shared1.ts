@@ -1053,11 +1053,21 @@ export function normalizePaymentRequest(input: {
   metadata: Record<string, unknown>;
   paidRows?: Array<Record<string, unknown>>;
   paystackVerifiedTotal?: number;
+  // H1: when true, skip the 5 CAPACITY-based throws below (tier_sold_out,
+  // insufficient_ticket_capacity x2, collection_full x2) — every other
+  // validation (tier existence, amount, minimum, ticket selection,
+  // multiple-quantity-disabled) still throws exactly as before. Used only by
+  // the atomic RPC path (claim_payment_contributions), which re-checks
+  // capacity itself against a FRESH, locked read — so a stale `paidRows`
+  // snapshot (taken before this call) can never wrongly reject an
+  // already-successful reference. Defaults to false: unchanged behavior.
+  deferCapacityChecks?: boolean;
 }) {
   const collection = input.collection;
   const metadata = input.metadata || {};
   const paidRows = input.paidRows || [];
   const paystackVerifiedTotal = input.paystackVerifiedTotal ?? 0;
+  const deferCapacityChecks = input.deferCapacityChecks ?? false;
 
   const collectionId = String(metadata.collectionId || metadata.collection_id || collection.id || "").trim();
   if (!collectionId) throw new PaymentValidationError("A valid collection ID is required.", 400, "missing_collection_id");
@@ -1144,7 +1154,7 @@ export function normalizePaymentRequest(input: {
         400, "amount_below_minimum", { collectionId, effectiveAmount, minimumAmount }
       );
     }
-    if (remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
+    if (!deferCapacityChecks && remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
       throw new PaymentValidationError("This collection has reached its contribution limit.", 400, "collection_full", { collectionId, paidCount, maxContributions });
     }
     contributionAmount = effectiveAmount;
@@ -1174,7 +1184,7 @@ export function normalizePaymentRequest(input: {
         const requestedQuantity = asPositiveInt(selection.quantity);
         if (!tier) throw new PaymentValidationError("One of the selected ticket tiers is no longer available.", 404, "ticket_tier_not_found", { collectionId, selection });
         if (requestedQuantity < 1) return null;
-        if (tier.remainingCapacity !== null && requestedQuantity > Number(tier.remainingCapacity)) {
+        if (!deferCapacityChecks && tier.remainingCapacity !== null && requestedQuantity > Number(tier.remainingCapacity)) {
           throw new PaymentValidationError(
             `${tier.tierName} does not have enough tickets left.`,
             400, "insufficient_ticket_capacity",
@@ -1199,7 +1209,7 @@ export function normalizePaymentRequest(input: {
 
     } else {
       quantity = asPositiveInt(metadata.quantity) || 1;
-      if (remainingContributionCapacity !== null && quantity > remainingContributionCapacity) {
+      if (!deferCapacityChecks && remainingContributionCapacity !== null && quantity > remainingContributionCapacity) {
         throw new PaymentValidationError("Not enough tickets remain for this order.", 400, "insufficient_ticket_capacity", { collectionId, quantity, remainingContributionCapacity });
       }
       if (String(collection.allow_multiple_quantity) === "false" && quantity > 1) {
@@ -1259,7 +1269,7 @@ export function normalizePaymentRequest(input: {
         400, "invalid_selected_tier", { collectionId, selectedTier: metadata.selectedTier }
       );
     }
-    if (tier.remainingCapacity !== null && Number(tier.remainingCapacity) < 1) {
+    if (!deferCapacityChecks && tier.remainingCapacity !== null && Number(tier.remainingCapacity) < 1) {
       throw new PaymentValidationError(`${tier.tierName} is sold out.`, 400, "tier_sold_out", { collectionId, tierId: tier.tierId, tierName: tier.tierName });
     }
     contributionAmount = roundCurrency(asNumber(tier.price));
@@ -1269,7 +1279,7 @@ export function normalizePaymentRequest(input: {
 
   } else {
     // fixed (default)
-    if (remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
+    if (!deferCapacityChecks && remainingContributionCapacity !== null && remainingContributionCapacity < 1) {
       throw new PaymentValidationError("This collection has reached its contribution limit.", 400, "collection_full", { collectionId, paidCount, maxContributions });
     }
     contributionAmount = roundCurrency(asNumber(collection.amount));

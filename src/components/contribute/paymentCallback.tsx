@@ -6,6 +6,30 @@ import PaymentSuccessful from "./PaymentSuccessful";
 import { Button } from "@/components/ui/button";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 
+// H1/Phase 8: cross-tab, cross-mount dedupe. Reduces (does NOT guarantee
+// against — the backend's claim_payment_contributions RPC is the actual
+// safety net) redundant verify calls for the same reference when a second
+// mount happens close to the first: browser back/forward, a duplicate tab
+// from the Paystack redirect, or the user re-opening the receipt link. This
+// is purely an optimization to cut needless network/edge-function load; it
+// is never relied on for correctness. localStorage is used (not sessionStorage)
+// because it's the one storage shared across tabs in the same origin.
+const VERIFY_LOCK_TTL_MS = 15_000;
+const VERIFY_LOCK_WAIT_MS = 5_000;
+const VERIFY_LOCK_POLL_MS = 300;
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null; // Safari private mode / storage disabled — fail open.
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const PaymentCallback = () => {
   const [searchParams] = useSearchParams();
   const transactionRef = searchParams.get("reference") || searchParams.get("trxref");
@@ -29,6 +53,41 @@ const PaymentCallback = () => {
 
     setLoading(true);
     setErrorMsg(null);
+
+    const storage = safeLocalStorage();
+    const lockKey = `kolekto:verify-lock:${transactionRef}`;
+    const resultKey = `kolekto:verify-result:${transactionRef}`;
+
+    if (storage) {
+      try {
+        const existingLock = Number(storage.getItem(lockKey) || 0);
+        const lockIsRecent = existingLock > 0 && Date.now() - existingLock < VERIFY_LOCK_TTL_MS;
+        if (lockIsRecent) {
+          // Another mount (a different tab/window, or a fast remount) started
+          // verifying this exact reference moments ago — wait briefly for its
+          // result instead of firing a second network call ourselves.
+          const deadline = Date.now() + VERIFY_LOCK_WAIT_MS;
+          while (Date.now() < deadline) {
+            await sleep(VERIFY_LOCK_POLL_MS);
+            const cached = storage.getItem(resultKey);
+            if (cached) {
+              try {
+                const parsed = JSON.parse(cached);
+                if (parsed?.receiptData) {
+                  setReceiptData(parsed.receiptData);
+                  setLoading(false);
+                  return;
+                }
+              } catch { /* fall through to firing our own call */ }
+            }
+          }
+          // No result showed up in time — proceed and call it ourselves
+          // (safe: the backend is idempotent regardless of how many callers
+          // arrive).
+        }
+        storage.setItem(lockKey, String(Date.now()));
+      } catch { /* storage unavailable — proceed without the guard */ }
+    }
 
     try {
       // The edge function is the source of truth for payment verification.
@@ -54,6 +113,11 @@ const PaymentCallback = () => {
 
       if (data?.receiptData) {
         setReceiptData(data.receiptData);
+        if (storage) {
+          try {
+            storage.setItem(resultKey, JSON.stringify({ receiptData: data.receiptData }));
+          } catch { /* non-fatal — this is an optimization, not a requirement */ }
+        }
         return;
       }
 
@@ -63,6 +127,9 @@ const PaymentCallback = () => {
         setErrorMsg(toFriendlyErrorMessage(err, "Could not verify payment. Please try again."));
     } finally {
       setLoading(false);
+      if (storage) {
+        try { storage.removeItem(lockKey); } catch { /* non-fatal */ }
+      }
     }
   }, [transactionRef]);
 
