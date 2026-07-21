@@ -333,19 +333,21 @@ serve(async (req: Request) => {
 
         // verifiedTotal is computed right before the mismatch check below
         const verifiedTotalEarly = roundCurrency(Number(transaction.amount || 0) / 100);
-        // H1: flag-gated atomic verification. OFF by default — zero behavior
-        // change until explicitly enabled per environment. When on, the 5
-        // capacity-based throws inside normalizePaymentRequest are deferred
-        // (see deferCapacityChecks) and the authoritative capacity + insert
-        // decision is made atomically by claim_payment_contributions instead
-        // of the read-then-insert sequence below. See
-        // database/h1_atomic_payment_verification.sql for the full rationale.
-        const useAtomicRpc = Deno.env.get("VERIFY_USE_ATOMIC_RPC") === "true";
+        // H2: claim_payment_contributions is now the ONLY persistence path
+        // (see below) — it makes idempotency, capacity, contributor-code
+        // allocation, and insert one atomic operation. The 5 capacity-based
+        // throws inside normalizePaymentRequest are always deferred to it
+        // (see deferCapacityChecks) so a stale `paidRows` snapshot taken
+        // here can never wrongly reject an already-successful reference.
+        // See database/h1_atomic_payment_verification.sql (the original
+        // atomicity fix) and database/h2_atomic_contributor_code_allocation.sql
+        // (this change: moves contributor-code allocation inside the same
+        // atomic RPC instead of minting it here beforehand).
         try {
           normalizedPayment = normalizePaymentRequest({
             collection,
             metadata,
-            deferCapacityChecks: useAtomicRpc,
+            deferCapacityChecks: true,
             paidRows: (paidRows || []) as Array<Record<string, unknown>>,
             paystackVerifiedTotal: verifiedTotalEarly,
           });
@@ -437,28 +439,13 @@ serve(async (req: Request) => {
         const allocatedGatewayFees = allocateAmounts(normalizedPayment.gatewayFee, unitAmounts);
         const allocatedTotals = allocateAmounts(normalizedPayment.totalPayable, unitAmounts);
 
-        // Fix #7: Per-prefix sequential IDs — each tier prefix counts independently.
-        // Build a map of how many paid contributions already exist for each prefix.
-        const existingCountByPrefix = new Map<string, number>();
-        for (const row of (paidRows || [])) {
-          const code = String((row as Record<string, unknown>).contributor_unique_code || "");
-          // Optional hyphen tolerates both the current "PREFIX-001" format
-          // and legacy "PREFIX001" codes minted before the separator was
-          // added, so counts stay accurate across the format change.
-          const match = code.match(/^([A-Za-z]+)-?\d+$/);
-          if (match) {
-            const p = match[1].toUpperCase();
-            existingCountByPrefix.set(p, (existingCountByPrefix.get(p) || 0) + 1);
-          }
-        }
-        // Track how many units in the CURRENT batch have used each prefix
-        const batchCountByPrefix = new Map<string, number>();
-
-        // Build the fully-formed row payload for every unit first (unique
-        // code assignment, fee allocation, contributor_information, receipt
-        // metadata) — IDENTICAL construction regardless of which path below
-        // actually persists the rows. Only "what happens with these payloads"
-        // differs between the atomic-RPC path and the default path.
+        // H2: contributor-code allocation no longer happens in this loop —
+        // it moved inside claim_payment_contributions, atomically with the
+        // insert (database/h2_atomic_contributor_code_allocation.sql). This
+        // loop only resolves WHICH prefix applies to each unit (unchanged
+        // resolution logic) and passes it through; the RPC mints the code,
+        // uppercases it, and strips internal whitespace itself — this
+        // function is now the single source of truth for code construction.
         const builtRows: Array<Record<string, unknown>> = [];
 
         for (let index = 0; index < contributionUnits.length; index++) {
@@ -466,60 +453,8 @@ serve(async (req: Request) => {
           // A configured prefix — this unit's tier/ticket prefix, falling
           // back to the collection-level code_prefix — is what drives
           // generation; unique_id_enabled is NOT checked here (see
-          // hasAnyConfiguredPrefix above for why). Internal whitespace is
-          // stripped too — organizers sometimes type a tier prefix like
-          // "VIP 1" (label-style) rather than a code-style "VIP1"; a unique
-          // code should be a short, clean token. This never touches the
-          // stored prefix value, only the code built from it.
-          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "")
-            .trim().toUpperCase().replace(/\s+/g, "");
-          let uniqueCode: string | null = null;
-
-          if (prefix) {
-            // C-1: atomic per-(collection, prefix) counter via Postgres RPC.
-            // The previous approach derived the sequence number from a
-            // COUNT taken once at the start of the request — two payments
-            // to the same collection/prefix arriving concurrently could
-            // both read the same count and mint the identical code. The
-            // RPC is a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING,
-            // which Postgres serialises automatically per row.
-            let sequenceNumber: number | null = null;
-            try {
-              const { data: rpcData, error: rpcError } = await supabase.rpc(
-                "next_contribution_code_number",
-                { p_collection_id: collectionId, p_prefix: prefix }
-              );
-              if (!rpcError && rpcData != null) {
-                const num = typeof rpcData === "number" ? rpcData : Number(rpcData);
-                if (Number.isFinite(num) && num > 0) sequenceNumber = num;
-              }
-              if (rpcError) {
-                console.warn(
-                  `[verify ref=${reference}] next_contribution_code_number RPC unavailable — ` +
-                  "falling back to in-memory count (apply database/c1_per_prefix_code_counters.sql " +
-                  "to remove this fallback and its race-condition risk).",
-                  { code: rpcError.code, message: rpcError.message }
-                );
-              }
-            } catch (rpcErr) {
-              console.warn(
-                `[verify ref=${reference}] next_contribution_code_number RPC threw — falling back:`,
-                (rpcErr as Error)?.message
-              );
-            }
-
-            if (sequenceNumber == null) {
-              // Fallback: count existing + count in this batch so far. Still
-              // racy across concurrent requests — only used if the migration
-              // above hasn't been applied yet.
-              const existingForPrefix = existingCountByPrefix.get(prefix) || 0;
-              const batchForPrefix = batchCountByPrefix.get(prefix) || 0;
-              sequenceNumber = existingForPrefix + batchForPrefix + 1;
-              batchCountByPrefix.set(prefix, batchForPrefix + 1);
-            }
-
-            uniqueCode = `${prefix}-${String(sequenceNumber).padStart(3, "0")}`;
-          }
+          // hasAnyConfiguredPrefix above for why).
+          const prefix = String(unit.prefix || normalizedPayment.codePrefix || "").trim();
 
           // Fix #1: When organizer absorbs fees, contributions.amount = net the host receives.
           // When contributor pays fees, contributions.amount = base contribution amount.
@@ -564,7 +499,11 @@ serve(async (req: Request) => {
               paid_at: transaction.paid_at,
               payment_channel: transaction.channel,
               collection_title: collection.title || null,
-              unique_code: uniqueCode,
+              // H2: filled in server-side by claim_payment_contributions
+              // (jsonb_set on contributor_information[0]._receipt.unique_code)
+              // once the code is actually allocated — this function no
+              // longer knows the code at build time.
+              unique_code: null,
               name: payerName,
               line_item_amount: unit.amount,
               line_item_net_amount: netAmount,
@@ -608,7 +547,10 @@ serve(async (req: Request) => {
             gross_amount: lineItemGross,
             status: "paid",
             payment_reference: String(transaction.reference),
-            contributor_unique_code: uniqueCode,
+            // H2: no contributor_unique_code here — claim_payment_contributions
+            // allocates and sets it atomically with the insert. `prefix` is
+            // the only input this function supplies for code construction.
+            prefix,
             contributor_information: [infoWithReceipt],
             // F3: per-unit line index. Combined with (collection_id,
             // payment_reference) this is unique (enforced by the constraint
@@ -624,231 +566,101 @@ serve(async (req: Request) => {
           builtRows.push(contributorPayload);
         }
 
-        if (useAtomicRpc) {
-          // ── H1: atomic path — one call, one row lock, authoritative ───────
-          // idempotency + capacity + insert. See
-          // database/h1_atomic_payment_verification.sql for the function.
-          // tier_id/tier_name/tier_quantity let the function re-verify
-          // capacity live (never trusting this request's earlier, possibly
-          // stale, paidRows snapshot).
-          const rpcRows = builtRows.map((row, index) => ({
-            ...row,
-            tier_id: contributionUnits[index].tierId || null,
-            tier_name: contributionUnits[index].tierName || null,
-            tier_quantity: 1,
-          }));
+        // H2: claim_payment_contributions is now the ONLY persistence path —
+        // one call, one row lock, authoritative idempotency + capacity +
+        // contributor-code allocation + insert, all in one transaction. See
+        // database/h2_atomic_contributor_code_allocation.sql. The previous
+        // flag-gated default (per-unit insert with client-side minting) is
+        // retired — it could not provide this guarantee without duplicating
+        // the same atomic logic a second time.
+        // tier_id/tier_name/tier_quantity let the function re-verify
+        // capacity live (never trusting this request's earlier, possibly
+        // stale, paidRows snapshot). `prefix` (from builtRows) is the only
+        // code-related input — the function allocates and returns the code.
+        const rpcRows = builtRows.map((row, index) => ({
+          ...row,
+          tier_id: contributionUnits[index].tierId || null,
+          tier_name: contributionUnits[index].tierName || null,
+          tier_quantity: 1,
+        }));
 
-          console.log(`[verify ref=${reference}] payment.verify.started mode=atomic units=${rpcRows.length}`);
+        console.log(`[verify ref=${reference}] payment.verify.started mode=atomic units=${rpcRows.length}`);
 
-          const { data: claimResult, error: claimError } = await supabase.rpc(
-            "claim_payment_contributions",
-            {
-              p_collection_id: collectionId,
-              p_payment_reference: String(transaction.reference),
-              p_rows: rpcRows,
-            }
+        const { data: claimResult, error: claimError } = await supabase.rpc(
+          "claim_payment_contributions",
+          {
+            p_collection_id: collectionId,
+            p_payment_reference: String(transaction.reference),
+            p_rows: rpcRows,
+          }
+        );
+
+        if (claimError) {
+          console.error(`[verify ref=${reference}] payment.verify.claim_rpc_failed`, claimError.message);
+          await logAttempt({
+            reference, collectionId, success: false,
+            errorCode: "claim_rpc_failed", errorMessage: claimError.message, metadataSource,
+          });
+          return new Response(
+            JSON.stringify({
+              error: "Failed to record contribution. The payment is recorded on Paystack — please retry; this is safe.",
+              code: "claim_rpc_failed",
+              details: claimError.message,
+            }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
+        }
 
-          if (claimError) {
-            console.error(`[verify ref=${reference}] payment.verify.claim_rpc_failed`, claimError.message);
-            await logAttempt({
-              reference, collectionId, success: false,
-              errorCode: "claim_rpc_failed", errorMessage: claimError.message, metadataSource,
-            });
-            return new Response(
-              JSON.stringify({
-                error: "Failed to record contribution. The payment is recorded on Paystack — please retry; this is safe.",
-                code: "claim_rpc_failed",
-                details: claimError.message,
-              }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        const outcome = String((claimResult as Record<string, unknown>)?.outcome || "");
 
-          const outcome = String((claimResult as Record<string, unknown>)?.outcome || "");
+        if (outcome === "capacity_exceeded") {
+          const isCollectionFull = Boolean((claimResult as Record<string, unknown>)?.collection_full);
+          const failedTierName = (claimResult as Record<string, unknown>)?.failed_tier_name as string | null;
+          const errorCode = isCollectionFull ? "collection_full" : "tier_sold_out";
+          const errorMessage = isCollectionFull
+            ? "This collection has reached its contribution limit."
+            : `${failedTierName || "Selected tier"} is sold out.`;
+          console.warn(
+            `[verify ref=${reference}] payment.verify.capacity_rejected collectionFull=${isCollectionFull} tier=${failedTierName || ""}`
+          );
+          await logAttempt({
+            reference, collectionId, success: false,
+            errorCode, errorMessage, metadataSource, note: "capacity_exceeded_atomic",
+          });
+          return new Response(
+            JSON.stringify({ error: errorMessage, code: errorCode }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
 
-          if (outcome === "capacity_exceeded") {
-            const isCollectionFull = Boolean((claimResult as Record<string, unknown>)?.collection_full);
-            const failedTierName = (claimResult as Record<string, unknown>)?.failed_tier_name as string | null;
-            const errorCode = isCollectionFull ? "collection_full" : "tier_sold_out";
-            const errorMessage = isCollectionFull
-              ? "This collection has reached its contribution limit."
-              : `${failedTierName || "Selected tier"} is sold out.`;
-            console.warn(
-              `[verify ref=${reference}] payment.verify.capacity_rejected collectionFull=${isCollectionFull} tier=${failedTierName || ""}`
-            );
-            await logAttempt({
-              reference, collectionId, success: false,
-              errorCode, errorMessage, metadataSource, note: "capacity_exceeded_atomic",
-            });
-            return new Response(
-              JSON.stringify({ error: errorMessage, code: errorCode }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        processedContributions = ((claimResult as Record<string, unknown>)?.contributions as Record<string, unknown>[]) || [];
+        isNewPayment = outcome === "inserted";
 
-          processedContributions = ((claimResult as Record<string, unknown>)?.contributions as Record<string, unknown>[]) || [];
-          isNewPayment = outcome === "inserted";
-
-          if (outcome === "idempotent") {
-            // Reaching this atomic branch at all means the EARLY idempotency
-            // check (top of the request) found nothing yet — so if the
-            // authoritative, locked check now finds an existing contribution,
-            // a concurrent caller for this exact reference won the race while
-            // we were mid-flight. This is the direct, provable "lost" signal.
-            console.log(
-              `[verify ref=${reference}] payment.verify.duplicate_race_lost count=${processedContributions.length} attemptNumber=${attemptNumber}`
-            );
-            await logAttempt({
-              reference, collectionId, success: true, metadataSource,
-              note: `idempotent_hit_atomic existing=${processedContributions.length}`,
-            });
-          } else {
-            // attemptNumber > 1 means an earlier payment_recovery_log entry
-            // already exists for this reference (a prior concurrent attempt
-            // logged first) — this insert won a genuine race. attemptNumber
-            // === 1 is the uncontested, ordinary-success case.
-            const raceWon = attemptNumber > 1;
-            console.log(
-              `[verify ref=${reference}] payment.verify.${raceWon ? "duplicate_race_won" : "success"} mode=atomic count=${processedContributions.length} attemptNumber=${attemptNumber}`
-            );
-            await logAttempt({
-              reference, collectionId, success: true, metadataSource,
-              note: `new_contribution_recorded_atomic count=${processedContributions.length}${raceWon ? " race_won" : ""}`,
-            });
-          }
-        } else {
-          // ── Default (flag off) path — unchanged: per-unit insert with ──────
-          // duplicate-race recovery via the DB unique constraint.
-          // F2: bookkeeping for fail-fast + rollback semantics.
-          //   insertedIds  — rows WE inserted this call. Used for rollback if a
-          //                  later unit's insert hits a real error.
-          //   insertErrors — non-duplicate insert errors. Presence triggers
-          //                  rollback + 500 (instead of the old silent `continue`).
-          const insertedIds: string[] = [];
-          const insertErrors: Array<{ index: number; error: unknown }> = [];
-
-          for (let index = 0; index < builtRows.length; index++) {
-            const contributorPayload = builtRows[index];
-            const { data: contribution, error: contribError } = await supabase
-              .from("contributions").insert(contributorPayload).select("*").single();
-
-            if (contribError) {
-              // F2: classify the error.
-              //
-              // Duplicate (23505 / "duplicate" / "unique") → a concurrent verify
-              // call inserted the rows for this same payment_reference. Fetch
-              // EVERY existing row for this reference (not just [0] — the old
-              // code did that and ended up registering only one row for a
-              // multi-ticket order during a race). Set processedContributions
-              // to the full set and break out of the loop — the concurrent
-              // call has already covered all units.
-              //
-              // Non-duplicate → a real DB / FK / RLS error. Stop the loop and
-              // roll back any rows WE inserted, so the FE/webhook can retry
-              // cleanly. Silently `continue`-ing on these errors is what made
-              // partial-failed inserts hard to detect in production.
-              const isDuplicate =
-                contribError.code === "23505" || // unique_violation
-                String(contribError.message).toLowerCase().includes("duplicate") ||
-                String(contribError.message).toLowerCase().includes("unique");
-              if (isDuplicate) {
-                const { data: existing } = await supabase
-                  .from("contributions")
-                  .select("*")
-                  .eq("payment_reference", String(transaction.reference))
-                  .eq("collection_id", collectionId)
-                  .order("created_at", { ascending: true });
-                processedContributions = existing || [];
-                console.log(
-                  `[verify ref=${reference}] VERIFY_INSERT_RACE_RECOVERED rows=${processedContributions.length}`
-                );
-                // Durable record of every duplicate-insert race the DB unique
-                // constraint (uq_contributions_collection_ref_line) catches —
-                // console.log alone is how a prior production double-credit
-                // incident went undetected until contributors/hosts reported
-                // mismatched totals. This is a caught-and-handled race, not a
-                // failure, so success=true; the note/context make it visible
-                // in payment_recovery_log for monitoring.
-                await logAttempt({
-                  reference, collectionId, success: true, metadataSource,
-                  note: `duplicate_insert_race_recovered index=${index} existing_rows=${processedContributions.length}`,
-                  context: { lineIndex: index, errorCode: contribError.code },
-                });
-                break;
-              }
-
-              console.error(
-                `[verify ref=${reference}] VERIFY_INSERT_FAILED index=${index}`,
-                {
-                  code: contribError.code,
-                  message: contribError.message,
-                  details: (contribError as any).details,
-                  hint: (contribError as any).hint,
-                }
-              );
-              insertErrors.push({ index, error: contribError });
-              break;
-            }
-            insertedIds.push(String((contribution as Record<string, unknown>).id));
-            processedContributions.push(contribution);
-          }
-
-          // F2: if any non-duplicate insert error occurred, roll back the rows
-          // we DID insert this call (don't touch rows inserted by concurrent
-          // callers — they aren't in `insertedIds`). Returning 500 here makes
-          // the FE's PaymentCallback render the "Try Again" screen and makes
-          // the webhook retry. The verify edge function is idempotent so retry
-          // is safe.
-          if (insertErrors.length > 0) {
-            if (insertedIds.length > 0) {
-              console.warn(
-                `[verify ref=${reference}] ROLLING_BACK partial_inserts=${insertedIds.length}`
-              );
-              const { error: rollbackErr } = await supabase
-                .from("contributions")
-                .delete()
-                .in("id", insertedIds);
-              if (rollbackErr) {
-                console.error(
-                  `[verify ref=${reference}] ROLLBACK_FAILED — partial data may remain`,
-                  rollbackErr
-                );
-              }
-            }
-            const firstErr = insertErrors[0].error as Record<string, unknown>;
-            console.error(
-              `[verify ref=${reference}] VERIFY_FAILED_AFTER_ROLLBACK code=${String(firstErr.code || "")}`
-            );
-            await logAttempt({
-              reference, collectionId, success: false,
-              errorCode: String(firstErr.code || "contribution_insert_failed"),
-              errorMessage: String(firstErr.message || firstErr), metadataSource,
-              note: "rolled_back_partial_inserts",
-            });
-            return new Response(
-              JSON.stringify({
-                error:
-                  "Failed to record contribution. The payment is recorded on Paystack — please retry; this is safe.",
-                code: String(firstErr.code || "contribution_insert_failed"),
-                details: String(firstErr.message || firstErr),
-              }),
-              {
-                status: 500,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-
-          // Flag as a fresh (non-idempotent) payment so the receipt email is sent below
-          isNewPayment = processedContributions.length > 0;
-          // F4: fresh inserts complete
+        if (outcome === "idempotent") {
+          // Reaching this branch at all means the EARLY idempotency check
+          // (top of the request) found nothing yet — so if the
+          // authoritative, locked check now finds an existing contribution,
+          // a concurrent caller for this exact reference won the race while
+          // we were mid-flight. This is the direct, provable "lost" signal.
           console.log(
-            `[verify ref=${reference}] VERIFY_CONTRIBS_INSERTED count=${processedContributions.length}`
+            `[verify ref=${reference}] payment.verify.duplicate_race_lost count=${processedContributions.length} attemptNumber=${attemptNumber}`
           );
           await logAttempt({
             reference, collectionId, success: true, metadataSource,
-            note: `new_contribution_recorded count=${processedContributions.length}`,
+            note: `idempotent_hit_atomic existing=${processedContributions.length}`,
+          });
+        } else {
+          // attemptNumber > 1 means an earlier payment_recovery_log entry
+          // already exists for this reference (a prior concurrent attempt
+          // logged first) — this insert won a genuine race. attemptNumber
+          // === 1 is the uncontested, ordinary-success case.
+          const raceWon = attemptNumber > 1;
+          console.log(
+            `[verify ref=${reference}] payment.verify.${raceWon ? "duplicate_race_won" : "success"} mode=atomic count=${processedContributions.length} attemptNumber=${attemptNumber}`
+          );
+          await logAttempt({
+            reference, collectionId, success: true, metadataSource,
+            note: `new_contribution_recorded_atomic count=${processedContributions.length}${raceWon ? " race_won" : ""}`,
           });
         }
       }
