@@ -247,21 +247,24 @@ const App = () => {
       });
   }, []);
 
-  // NOTE: this component used to subscribe to supabase.auth.onAuthStateChange
-  // and overwrite `kolekto-auth-token` with the Supabase session shape on
-  // every event. That re-introduced the exact dual-writer bug commit B-16
-  // (src/integrations/supabase/client.ts) tried to eliminate by giving
-  // Supabase its own storage key. Symptoms: random "logged out" mid-session,
-  // ghost SIGNED_OUT events triggering a hard navigate to /login, and the
-  // 401-interceptor wiping the token before useAuthStore noticed.
+  // Auth rehydration is owned entirely by useAuthStore (see the
+  // module-level `checkAuth()` trigger in store/useAuthStore.ts): on load,
+  // a valid stored token is verified against the backend before
+  // ProtectedRoute/DashboardLayout make a redirect decision. This used to
+  // also be done here via a mount-effect ("AuthSessionWatcher") that called
+  // `checkAuth()` and re-subscribed to Supabase's own auth events — that
+  // duplicated the rehydration path and, worse, re-introduced the B-16
+  // dual-writer bug (both this watcher and the Supabase client fighting
+  // over session state), causing random "logged out" mid-session and ghost
+  // SIGNED_OUT-triggered navigations. It has been removed entirely rather
+  // than re-enabled, so there is exactly one place that ever calls
+  // `checkAuth()` on load.
   //
-  // Source-of-truth split is now:
+  // Source-of-truth split:
   //   - `kolekto-auth-token`            → useAuthStore (custom backend JWT)
   //   - `kolekto-supabase-session`      → supabase client (RLS queries)
   // useAuthStore mirrors into the Supabase client via
-  // `mirrorSetSessionOnSupabase` on signIn/signUp/signOut. No reverse mirror
-  // is needed: nothing else should be invalidating the user's session
-  // out-of-band from a non-user event.
+  // `mirrorSetSessionOnSupabase` on signIn/signUp/signOut.
 
   return (
     <TooltipProvider>
@@ -276,52 +279,8 @@ const App = () => {
         </Suspense>
       )}
       {shouldShowWhatsAppButton && <WhatsAppButton />}
-      {/* <AuthSessionWatcher /> */}
     </TooltipProvider>
   );
 };
 
 export default App;
-
-// export function AuthSessionWatcher() {
-//   const { user, checkAuth, signOut } = useAuthStore() as any;
-//   console.log("auth watcher FaRunning...");
-
-
-//   useEffect(() => {
-//     // Check authentication status on app load
-//     checkAuth();
-//   }, [checkAuth]);
-
-//   useEffect(() => {
-//     const onFocus = () => {
-//       // Check auth status when window regains focus
-//       if (user) {
-//         checkAuth();
-//       }
-//     };
-
-//     const onStorageChange = (e: StorageEvent) => {
-//       // Listen for changes to auth token in other tabs
-//       if (e.key === "kolekto-auth-token") {
-//         if (!e.newValue) {
-//           // Token was removed, sign out
-//           signOut();
-//         } else {
-//           // Token was updated, check auth
-//           checkAuth();
-//         }
-//       }
-//     };
-
-//     window.addEventListener("focus", onFocus);
-//     window.addEventListener("storage", onStorageChange);
-
-//     return () => {
-//       window.removeEventListener("focus", onFocus);
-//       window.removeEventListener("storage", onStorageChange);
-//     };
-//   }, [user, checkAuth, signOut]);
-
-//   return null;
-// }

@@ -47,15 +47,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
             ? 'Please check your email and verify your account before signing in.'
             : toFriendlyErrorMessage(error, 'Sign in failed. Please check your details and try again.');
         setError(message);
-        toast.error(message);
       } else {
-        toast.success('Login successful');
+        // Fires exactly once, only on a fresh, user-initiated successful
+        // login — never on session rehydration (that lives entirely in
+        // useAuthStore/checkAuth and never toasts) and never duplicated by
+        // the store (signIn() itself shows no toast).
+        toast.success('Welcome back');
         navigate(resolvedRedirect);
       }
     } catch (err: any) {
       const message = toFriendlyErrorMessage(err, 'Sign in failed. Please try again.');
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -77,14 +79,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
       if (error) {
         const message = toFriendlyErrorMessage(error, 'Could not send magic link. Please try again.');
         setError(message);
-        toast.error(message);
       } else {
+        // Success toast is owned by the auth store (sendMagicLink). Here we
+        // just switch to the "check your email" confirmation panel.
         setIsMagicLinkSent(true);
-        toast.success('Magic link sent');
       }
     } catch (err: any) {
       setError(toFriendlyErrorMessage(err, 'Could not send magic link. Please try again.'));
-      toast.error('Could not send magic link');
     } finally {
       setIsMagicLinkLoading(false);
     }

@@ -1368,9 +1368,9 @@ const CollectionDetailsPage: React.FC = () => {
           // Re-fetch the wallet row + stats so the "Available", "Pending
           // approval" annotation, and "Withdrawn" tile reflect the new
           // pending request without requiring a manual reload.
+          // Success toast is owned by the withdrawal store (createWithdrawal).
           loadWallet();
           loadBalanceStats();
-          toast.success('Withdrawal request sent');
         }}
       />
 

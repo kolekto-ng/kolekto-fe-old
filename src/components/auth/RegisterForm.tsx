@@ -172,16 +172,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       if (error) {
         const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
         setError(message);
-        toast.error(message);
       } else {
         setIsSignupComplete(true);
-        toast.success("Account created");
       }
     } catch (error: any) {
       console.log(error, 'error');
       const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -294,23 +291,18 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       if (error) {
         const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
         setError(message);
-        toast.error(message);
       } else {
         if (session?.access_token) {
-          toast.success("Account created");
           navigate(resolvedRedirect);
         } else if (verificationRequired) {
           setIsSignupComplete(true);
-          toast.success("Check your email");
         } else {
           setIsSignupComplete(true);
-          toast.success("Registration successful");
         }
       }
     } catch (err: any) {
       const message = toFriendlyErrorMessage(err, "Registration failed. Please try again.");
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -606,15 +598,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
             sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}
           />
-        </div>
-      )}
-
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4">
-          <div className="flex max-w-[calc(100vw-2rem)] items-center rounded-2xl bg-white p-4 shadow-lg">
-            <Loader2 className="mr-3 h-5 w-5 animate-spin text-kolekto" />
-            <span className="font-medium text-kolekto">Creating Account...</span>
-          </div>
         </div>
       )}
     </form>

@@ -28,7 +28,6 @@ const ForgotPasswordForm: React.FC = () => {
       if (error) {
         const message = toFriendlyErrorMessage(error, 'Could not send the reset link. Please try again.');
         setError(message);
-        toast.error(message);
       } else {
         setIsSubmitted(true);
         toast.success('Password reset link sent');
@@ -36,7 +35,6 @@ const ForgotPasswordForm: React.FC = () => {
     } catch (err: any) {
       const message = toFriendlyErrorMessage(err, 'Could not send the reset link. Please try again.');
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }

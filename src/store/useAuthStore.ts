@@ -41,55 +41,75 @@ async function mirrorSignOutOnSupabase() {
   }
 }
 
-interface SessionData {
-  user: any;
-  expires_at: number;
-  token: string;
-}
-
-function getValidSessionFromStorage(): SessionData | null {
-  return getValidAuthSessionFromStorage() as SessionData | null;
-}
-
-// Initial state from localStorage if valid
-const initialSession = getValidSessionFromStorage();
-const user = initialSession ? initialSession.user : null;
+// The value stored under AUTH_STORAGE_KEY (see utils/authSession.ts) is the
+// backend session ITSELF — a flat object such as
+// { access_token, refresh_token, expires_at, kolekto_expires_at, ... } — not
+// a { user, session } wrapper. `signIn`/`signUp` below write exactly that
+// shape (`localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(timedSession))`),
+// and `getValidAuthSessionFromStorage()` returns it unwrapped. There is no
+// `user` on this object, so it must never be read as `initialSession.user`.
+//
+// Rehydration authority: on module load, if a valid (unexpired) session
+// exists in storage, we do NOT know who the user is yet — only that a token
+// exists — so `user` starts `null` and `isLoading` starts `true` until
+// `checkAuth()` (triggered once, below) confirms the token against the
+// backend and resolves the real user. If no stored session exists, there is
+// nothing to verify: `isLoading` starts `false` immediately.
+//
+// This is the single authoritative rehydration path. Nothing else should
+// call `checkAuth()` on mount — see the removed AuthSessionWatcher note in
+// App.tsx. Calling it from more than one place would race two auth checks
+// against each other.
+const initialStoredSession = getValidAuthSessionFromStorage();
 
 export const useAuthStore = create((set, get) => ({
-  user: user,
+  user: null,
   profile: null,
-  session: initialSession?.session,
-  isLoading: !!initialSession?.session, // loading if no session yet
+  session: initialStoredSession,
+  isLoading: !!initialStoredSession, // true only while a stored token is being verified
   error: null,
 
-  // Check authentication status on app load
+  // Check authentication status on app load (also the rehydration entry
+  // point — see the module-level trigger below the store definition).
   checkAuth: async () => {
     set({ isLoading: true });
     try {
-      const userData = await axiosInstance.get("/auth/me");
+      const res = await axiosInstance.get("/auth/me");
+      // axiosInstance resolves to the raw axios Response. UNLIKE /auth/signin
+      // (which wraps its payload as res.data.data — see signIn below), the
+      // backend's GET /auth/me (controllers/auth.js getCurrentUser) returns
+      // the payload flat: res.data = { user, profile }, no extra wrapper.
+      // Confirmed by executing the real controller function directly
+      // (stubbed Supabase client, no network) — its JSON body top-level keys
+      // are exactly ['user', 'profile']. Reading res.data.data here (as a
+      // previous version of this fix did) is always undefined, which made
+      // every successful rehydration look like "no user" and wiped a valid
+      // session on every page refresh.
+      const payload = res?.data;
+      const nextUser = payload?.user ?? null;
 
-      console.log(userData, "auth/me");
-
-      if (userData) {
-        // User is authenticated, get session from storage
-        const session = getValidSessionFromStorage();
-        console.log(userData);
-
-        set({ user: userData, session, isLoading: false });
+      if (nextUser) {
+        const session = getValidAuthSessionFromStorage();
+        set({ user: nextUser, profile: payload?.profile ?? get().profile, session, isLoading: false });
       } else {
-        // No valid session
+        // Backend responded but confirmed no authenticated user.
         set({ user: null, session: null, isLoading: false });
         clearAuthSessionStorage();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth check error:", error);
       if (error?.response?.status === 401) {
+        // Genuine auth failure: the token is invalid/expired server-side.
         set({ user: null, session: null, isLoading: false });
         clearAuthSessionStorage();
       } else {
+        // Transient network/server error: do NOT clear the stored token or
+        // force a logout. The session in storage may still be perfectly
+        // valid — we just couldn't confirm it right now. Leave `session` as
+        // whatever is currently in state and let the user retry (refresh,
+        // refocus) once the backend is reachable again.
         toast.error(toFriendlyErrorMessage(error, "Unable to connect. Check your internet and try again."));
         set({ isLoading: false });
-        // Don't clear user/session for non-auth errors
       }
     }
   },
@@ -282,3 +302,13 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 }));
+
+// Authoritative startup rehydration. Runs exactly once per page load (this
+// is plain module top-level code, not a React effect, so React 18
+// StrictMode's double-invoke behavior does not apply to it). If a valid,
+// unexpired token was found in storage above, `isLoading` is already `true`
+// so ProtectedRoute/DashboardLayout render their skeleton instead of
+// bouncing to /login while this resolves.
+if (initialStoredSession) {
+  void useAuthStore.getState().checkAuth();
+}
