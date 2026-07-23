@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "@/lib/toast";
-import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
@@ -385,6 +385,13 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     }
   };
 
+  const goToStep = (stepId: StepId) => {
+    const idx = steps.indexOf(stepId);
+    if (idx >= 0) {
+      setStepIndex(idx);
+    }
+  };
+
   const publishCollection = async () => {
     let finalStoryImageUrls: string[] = storyImages;
     let finalVerificationDocs: VerificationDocPayload[] = verificationFiles.map((file) => ({
@@ -537,6 +544,7 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
             onSubmit={() => void handlePublish()}
             onBack={goPrev}
             onCancel={() => navigate(cancelPath)}
+            onEditStep={goToStep}
           />
         );
       default:
@@ -576,6 +584,20 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
           </div>
         )}
 
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => navigate(cancelPath)}
+            aria-label="Close and exit collection creation"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <span className="text-xs font-medium text-gray-400">
+            Step {stepIndex + 1} of {steps.length}
+          </span>
+        </div>
+
         <div className="mb-8">
           <WizardStepper steps={steps} currentIndex={stepIndex} />
         </div>
@@ -583,28 +605,22 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
         <div className="min-h-[400px]">{renderStep()}</div>
 
         {currentStepId !== 'review' && (
-          <div className="mt-8 flex items-center justify-between gap-4 border-t border-gray-100 pt-6">
+          <div className="mt-8 flex items-center gap-3 border-t border-gray-100 pt-6">
             <Button
               type="button"
               variant="outline"
               onClick={goPrev}
               disabled={isFirst}
-              className="flex items-center gap-1.5"
+              className="flex shrink-0 items-center gap-1.5"
             >
               <ChevronLeft className="h-4 w-4" />
               Back
             </Button>
 
-            <div className="flex-1 text-center">
-              <span className="text-xs text-gray-400">
-                Step {stepIndex + 1} of {steps.length}
-              </span>
-            </div>
-
             <Button
               type="button"
               onClick={goNext}
-              className="flex items-center gap-1.5 bg-green-700 text-white hover:bg-green-800"
+              className="flex flex-1 items-center justify-center gap-1.5 bg-green-700 text-white hover:bg-green-800 sm:ml-auto sm:flex-none"
             >
               {stepIndex === steps.length - 2 ? 'Review' : 'Continue'}
               <ChevronRight className="h-4 w-4" />
