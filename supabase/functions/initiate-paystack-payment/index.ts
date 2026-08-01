@@ -172,13 +172,23 @@ function matchTier(
     ? String(selection.name)
     : null;
 
-  return (
-    tiers.find((tier) => {
-      if (requestedTierId && tier.tierId === requestedTierId) return true;
-      if (requestedTierName && tier.tierName === requestedTierName) return true;
-      return false;
-    }) || null
-  );
+  // Tier ID is authoritative and unique — always resolve by it FIRST, across
+  // ALL tiers, before considering the display name. A collection may legitimately
+  // have several tiers that share the same name (e.g. "UI/UX — first payment"
+  // ₦50,000 vs "UI/UX — full payment" ₦80,000). The previous single-pass
+  // `id || name` match returned whichever tier came first in the array, so a
+  // name-collision on an earlier (cheaper) tier hijacked the selection and every
+  // choice collapsed to that first tier's price. Name is a legacy fallback only,
+  // used when the client never sent an id.
+  if (requestedTierId) {
+    const byId = tiers.find((tier) => tier.tierId === requestedTierId);
+    if (byId) return byId;
+  }
+  if (requestedTierName) {
+    const byName = tiers.find((tier) => tier.tierName === requestedTierName);
+    if (byName) return byName;
+  }
+  return null;
 }
 
 function ensureCollectionIsPayable(

@@ -211,11 +211,22 @@ export function matchTier(
 ) {
   const requestedTierId = selection.tierId ? String(selection.tierId) : selection.id ? String(selection.id) : null;
   const requestedTierName = selection.tierName ? String(selection.tierName) : selection.name ? String(selection.name) : null;
-  return tiers.find((tier) => {
-    if (requestedTierId && tier.tierId === requestedTierId) return true;
-    if (requestedTierName && tier.tierName === requestedTierName) return true;
-    return false;
-  }) || null;
+  // Tier ID is authoritative and unique — resolve by it FIRST, across ALL tiers,
+  // before falling back to the display name. Collections can legitimately have
+  // several tiers sharing one name (e.g. "UI/UX — first payment" vs "full
+  // payment"); the old single-pass `id || name` match let a name-collision on an
+  // earlier tier hijack the selection. Name is a legacy fallback for metadata
+  // that never carried an id. Keeping verify in lock-step with initiate ensures
+  // the recorded contribution matches exactly what was charged.
+  if (requestedTierId) {
+    const byId = tiers.find((tier) => tier.tierId === requestedTierId);
+    if (byId) return byId;
+  }
+  if (requestedTierName) {
+    const byName = tiers.find((tier) => tier.tierName === requestedTierName);
+    if (byName) return byName;
+  }
+  return null;
 }
 
 /**
