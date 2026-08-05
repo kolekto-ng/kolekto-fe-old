@@ -62,7 +62,10 @@ const BankDetailsSection: React.FC = () => {
     useSettings() as any;
   const { user } = useAuthStore() as any;
   const { kycData, fetchKYCStatus, setActiveSection } = useProfileStore();
-  const isKycVerified = kycData?.overallStatus === 'verified';
+  // Backend-computed (featureAccessService.canManageBankAccount), not
+  // re-derived from overallStatus here — this is what actually gates the
+  // save/delete calls server-side, so the UI can never drift from it.
+  const isKycVerified = kycData?.canManageBankAccount ?? false;
 
   useEffect(() => {
     getPayoutAccounts();

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "@/lib/toast";
 import { ChevronLeft, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
+import { useProfileStore } from '@/store/useProfileStore';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
 import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
@@ -576,9 +577,16 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <p className="flex-1 text-xs leading-relaxed text-amber-700">
               {createLimitMessage}{' '}
-              <Link to="/dashboard/settings" className="font-semibold underline underline-offset-2">
+              <button
+                type="button"
+                onClick={() => {
+                  useProfileStore.getState().setActiveSection('kyc');
+                  navigate('/dashboard/settings');
+                }}
+                className="font-semibold underline underline-offset-2"
+              >
                 Complete KYC verification
-              </Link>{' '}
+              </button>{' '}
               to create more.
             </p>
           </div>

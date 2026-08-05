@@ -7,6 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
+function log(event: string, meta: Record<string, unknown>) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), event, path: "edge", ...meta }));
+}
+
 // Soft delete only — never removes a collection or its contributions/wallets/
 // withdrawals. `collections.status` already has a first-class "deleted" value
 // (see src/utils/collectionStatus.ts) with its own label; this just makes
@@ -17,6 +21,8 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
+
+  const requestId = crypto.randomUUID();
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -30,8 +36,36 @@ serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── AUTHENTICATION ──────────────────────────────────────────────────
+    // Ownership can ONLY be established from a cryptographically verified
+    // access token — never from a client-supplied `user_id`. The previous
+    // version of this function read `user_id` from the request body and
+    // only checked ownership `if (user_id && ...)` — omitting the field
+    // entirely skipped the check, and even supplying it required no proof
+    // the caller actually was that user. Both holes are closed here: there
+    // is no body-supplied identity at all, and the check is unconditional.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      log('collection.delete.rejected', { requestId, reason: 'no_token' });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData?.user?.id) {
+      log('collection.delete.rejected', { requestId, reason: 'token_invalid' });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    const userId = authData.user.id;
+
     const body = await req.json();
-    const { id, user_id } = body;
+    const { id } = body;
 
     if (!id) {
       return new Response(
@@ -53,7 +87,8 @@ serve(async (req: Request) => {
       );
     }
 
-    if (user_id && existing.user_id !== user_id) {
+    if (existing.user_id !== userId) {
+      log('collection.delete.rejected', { requestId, userId, collectionId: id, reason: 'not_owner' });
       return new Response(
         JSON.stringify({ error: 'Unauthorized: you do not own this collection' }),
         { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -89,6 +124,7 @@ serve(async (req: Request) => {
     }
     await supabase.from('notifications').delete().or(orConditions.join(','));
 
+    log('collection.delete.succeeded', { requestId, userId, collectionId: id });
     return new Response(
       JSON.stringify({ data: { archived: true } }),
       { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }

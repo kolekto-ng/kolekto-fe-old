@@ -1,5 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { KycRequiredModal } from "@/components/kyc/KycRequiredModal";
+import { useKycFocusRefetch } from "@/hooks/useKycFocusRefetch";
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -247,6 +249,12 @@ const App = () => {
       });
   }, []);
 
+  // Part 5 (KYC realtime sync): complements the Supabase channel subscription
+  // in useProfileStore with a throttled refetch-on-focus fallback — see
+  // hooks/useKycFocusRefetch.ts for why the realtime channel alone isn't
+  // fully reliable on mobile.
+  useKycFocusRefetch();
+
   // Auth rehydration is owned entirely by useAuthStore (see the
   // module-level `checkAuth()` trigger in store/useAuthStore.ts): on load,
   // a valid stored token is verified against the backend before
@@ -272,6 +280,7 @@ const App = () => {
       <PwaUpdatePrompt />
       <ScrollToTop />
       <SessionTimeoutGuard />
+      <KycRequiredModal />
       <AuthenticatedApp />
       {shouldShowWhatsAppButton && (
         <Suspense fallback={null}>

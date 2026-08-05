@@ -159,9 +159,13 @@ export interface ContributionState {
   error: string | null;
   
   // Actions
+  //
+  // Read-only by design: contributions are a financial resource and are
+  // written exclusively by the payment pipeline (POST
+  // /api/payments/initialize-payment, then verify-paystack-payment). The
+  // former createContribution / updateContributionStatus members were dead and
+  // have been removed — see useContributionStore.ts.
   fetchContributions: (collectionId?: string) => Promise<Contribution[]>;
-  createContribution: (contributionData: Partial<Contribution>) => Promise<Contribution>;
-  updateContributionStatus: (id: string, status: string, reference?: string) => Promise<Contribution>;
 }
 
 export interface WithdrawalState {

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialog";
+import { KycEnforcementBanner } from "@/components/kyc/KycEnforcementBanner";
 import { useAuthStore } from "@/store/useAuthStore";
 import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
 import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
@@ -230,6 +231,7 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-8">
+      <KycEnforcementBanner />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

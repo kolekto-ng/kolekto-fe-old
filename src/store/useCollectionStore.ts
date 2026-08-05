@@ -5,30 +5,43 @@ import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 import { axiosInstance } from "@/utils/axios";
 import { getCreateCollectionPath } from "@/lib/featureFlags";
+import { useKycGateStore } from "@/store/useKycGateStore";
 
 // `supabase.functions.invoke` surfaces a generic FunctionsHttpError
 // ("Edge Function returned a non-2xx status code") and hides the real reason
 // inside `error.context` (the raw Response). Without reading that body, a real
 // failure (e.g. a DB column/type error on the fundraising insert) looks like a
 // silent "nothing happened". This pulls the actual `{ error }` message out.
-async function extractFunctionError(error: unknown, fallback: string): Promise<string> {
+//
+// Also extracts `code` (e.g. "KYC_REQUIRED") — this matters because
+// supabase.functions.invoke() never goes through axiosInstance, so the
+// global KYC_REQUIRED interceptor in utils/axios.tsx CANNOT see edge-function
+// responses at all. Every call site that hits an edge function directly must
+// check this `code` itself and open useKycGateStore, or the same block that
+// correctly opens the "Identity verification required" modal on the Express
+// path silently falls through to a generic error toast on the edge path —
+// which is the DEFAULT production path today (see lib/featureFlags.ts).
+async function extractFunctionError(
+  error: unknown,
+  fallback: string
+): Promise<{ message: string; code?: string }> {
   const ctx = (error as { context?: unknown })?.context;
   if (ctx && typeof (ctx as Response).clone === "function") {
     try {
       const body = await (ctx as Response).clone().json();
-      if (body?.error) return String(body.error);
-      if (body?.message) return String(body.message);
+      if (body?.error) return { message: String(body.error), code: body?.code };
+      if (body?.message) return { message: String(body.message), code: body?.code };
     } catch {
       try {
         const text = await (ctx as Response).clone().text();
-        if (text) return text;
+        if (text) return { message: text };
       } catch {
         /* fall through */
       }
     }
   }
   const message = (error as { message?: string })?.message;
-  return message && !/non-2xx status code/i.test(message) ? message : fallback;
+  return { message: message && !/non-2xx status code/i.test(message) ? message : fallback };
 }
 
 // ─── Auth token helper ────────────────────────────────────────────────────────
@@ -247,9 +260,22 @@ export const useCollectionStore = create((set, get: any) => ({
         );
 
         if (error) {
-          throw new Error(await extractFunctionError(error, "Could not create collection. Please try again."));
+          const extracted = await extractFunctionError(error, "Could not create collection. Please try again.");
+          if (extracted.code === "KYC_REQUIRED") {
+            useKycGateStore.getState().open(extracted.message);
+          }
+          const thrown = new Error(extracted.message) as Error & { code?: string };
+          thrown.code = extracted.code;
+          throw thrown;
         }
-        if (data?.error) throw new Error(data.error);
+        if (data?.error) {
+          if (data?.code === "KYC_REQUIRED") {
+            useKycGateStore.getState().open(data.error);
+          }
+          const thrown = new Error(data.error) as Error & { code?: string };
+          thrown.code = data?.code;
+          throw thrown;
+        }
         if (!data?.data?.id) {
           throw new Error("Collection was not created. Please try again.");
         }
@@ -294,7 +320,8 @@ export const useCollectionStore = create((set, get: any) => ({
       );
 
       if (error) {
-        throw new Error(await extractFunctionError(error, "Could not update collection. Please try again."));
+        const extracted = await extractFunctionError(error, "Could not update collection. Please try again.");
+        throw new Error(extracted.message);
       }
       if (data?.error) throw new Error(data.error);
 
@@ -351,7 +378,8 @@ export const useCollectionStore = create((set, get: any) => ({
     });
 
     if (error) {
-      throw new Error(await extractFunctionError(error, "Could not delete collection. Please try again."));
+      const extracted = await extractFunctionError(error, "Could not delete collection. Please try again.");
+      throw new Error(extracted.message);
     }
     if (data?.error) throw new Error(data.error);
 

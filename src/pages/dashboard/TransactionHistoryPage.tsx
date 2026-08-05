@@ -20,6 +20,7 @@ import {
 } from '@/utils/withdrawalStatus';
 import { TableRowsSkeleton } from '@/components/ui/page-skeletons';
 import { toast } from "@/lib/toast";
+import { KycEnforcementBanner } from '@/components/kyc/KycEnforcementBanner';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
@@ -313,6 +314,7 @@ const TransactionHistoryPage: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-6">
+      <KycEnforcementBanner />
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <section className="min-w-0 overflow-hidden rounded-[22px] bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-800 text-white shadow-[0_12px_24px_rgba(4,120,87,0.18)]">
           <div className="relative p-4 sm:p-5">

@@ -66,88 +66,18 @@ export const useContributionStore = create((set, get) => ({
     }
   },
 
-  createContribution: async (contributionData) => {
-    set({ isLoading: true, error: null });
-    try {
-      const { data, error } = await supabase
-        .from("contributions")
-        .insert({
-          collection_id: contributionData.collection_id!,
-          contributor_id: contributionData.contributor_id!,
-          contributor_name: contributionData.contributor_name!,
-          contributor_email: contributionData.contributor_email!,
-          contributor_phone: contributionData.contributor_phone,
-          amount: contributionData.amount!,
-          payment_method: contributionData.payment_method || "card",
-          status: contributionData.status || "pending",
-          receipt_details: contributionData.receipt_details || {},
-          contact_info: contributionData.contact_info || {},
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Add the new contribution to the state
-      set((state) => ({
-        contributions: [
-          {
-            ...data,
-            formattedAmount: formatCurrency(data.amount),
-            formattedDate: formatDate(data.created_at),
-          } as Contribution,
-          ...state.contributions,
-        ],
-        isLoading: false,
-      }));
-
-      return data as Contribution;
-    } catch (error: any) {
-      set({ error: toFriendlyErrorMessage(error), isLoading: false });
-      throw error;
-    }
-  },
-
-  updateContributionStatus: async (id, status, reference) => {
-    set({ isLoading: true, error: null });
-    try {
-      const updates: {
-        status: string;
-        payment_reference?: string;
-      } = { status };
-
-      if (reference) {
-        updates.payment_reference = reference;
-      }
-
-      const { data, error } = await supabase
-        .from("contributions")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update the contribution in the state
-      set((state) => ({
-        contributions: state.contributions.map((contribution) =>
-          contribution.id === id
-            ? {
-                ...contribution,
-                ...data,
-                formattedAmount: formatCurrency(data.amount),
-                formattedDate: formatDate(data.created_at),
-              }
-            : contribution
-        ),
-        isLoading: false,
-      }));
-
-      return data as Contribution;
-    } catch (error: any) {
-      set({ error: toFriendlyErrorMessage(error), isLoading: false });
-      throw error;
-    }
-  },
+  // ── REMOVED: createContribution / updateContributionStatus ────────────────
+  //
+  // Both wrote to `contributions` — a financial table — directly from the
+  // browser with supabase-js, and both were verified DEAD: nothing in src/
+  // ever called them (ContributionForm.tsx destructured `createContribution`
+  // but never invoked it). Contributions are created and transitioned solely
+  // by the payment pipeline: POST /api/payments/initialize-payment inserts the
+  // pending row, and verify-paystack-payment marks it paid after independently
+  // re-verifying the amount with Paystack.
+  //
+  // Keeping them would have forced an INSERT/UPDATE grant on `contributions`
+  // for the `authenticated` role, which is exactly the privilege that let
+  // anyone holding the public anon key forge and mutate contribution rows
+  // while RLS was disabled. See database/c1_rls_lockdown.sql.
 }));

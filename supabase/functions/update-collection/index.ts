@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
+function log(event: string, meta: Record<string, unknown>) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), event, path: "edge", ...meta }));
+}
+
 // price_tiers carries two kinds of fields: ones the host edits (name, price,
 // quantity, description, prefix) and ones only the payment verifier computes
 // (sold_quantity, remaining_quantity — written by refreshCollectionAndWallets
@@ -37,6 +41,8 @@ serve(async (req: Request) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID();
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -49,11 +55,35 @@ serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── AUTHENTICATION ──────────────────────────────────────────────────
+    // Same fix as create-collection/delete-collection: ownership can ONLY
+    // come from a verified access token. The previous version trusted a
+    // client-supplied `user_id` and only checked it `if (user_id && ...)` —
+    // omitting the field skipped the check entirely.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      log('collection.update.rejected', { requestId, reason: 'no_token' });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData?.user?.id) {
+      log('collection.update.rejected', { requestId, reason: 'token_invalid' });
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+    const userId = authData.user.id;
+
     const body = await req.json();
 
     const {
       id,
-      user_id,
       collectionType,
       collection_type,
       title,
@@ -83,14 +113,22 @@ serve(async (req: Request) => {
 
     // Fetch the existing row once — needed for the ownership check below and
     // to preserve sold_quantity/remaining_quantity on price_tiers further down.
-    const { data: existing } = await supabase
+    const { data: existing, error: fetchError } = await supabase
       .from('collections')
       .select('user_id, price_tiers')
       .eq('id', id)
       .single();
 
-    // Verify ownership when user_id is provided
-    if (user_id && existing && existing.user_id !== user_id) {
+    if (fetchError || !existing) {
+      return new Response(
+        JSON.stringify({ error: 'Collection not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
+    // Ownership check — unconditional, always against the verified userId.
+    if (existing.user_id !== userId) {
+      log('collection.update.rejected', { requestId, userId, collectionId: id, reason: 'not_owner' });
       return new Response(
         JSON.stringify({ error: 'Unauthorized: you do not own this collection' }),
         { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
@@ -150,6 +188,7 @@ serve(async (req: Request) => {
       );
     }
 
+    log('collection.update.succeeded', { requestId, userId, collectionId: id });
     return new Response(
       JSON.stringify({ data }),
       { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }

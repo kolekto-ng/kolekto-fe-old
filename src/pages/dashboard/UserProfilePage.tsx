@@ -7,6 +7,7 @@ import LoginSecuritySection from '@/components/profile/LoginSecuritySection';
 import KYCSection from '@/components/profile/KYCSection';
 import BankDetailsSection from '@/components/profile/BankDetailsSection';
 import PushNotificationSettings from '@/components/profile/PushNotificationSettings';
+import { KycEnforcementBanner } from '@/components/kyc/KycEnforcementBanner';
 import {
   ArrowLeft,
   ChevronRight,
@@ -81,6 +82,7 @@ const ProfilePage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto pb-24">
+      <KycEnforcementBanner />
       {isPersonalView ? (
         <div className="space-y-5">
           <PersonalInfoSection />

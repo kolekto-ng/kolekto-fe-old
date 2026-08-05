@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store';
 import { useCollectionStore } from '@/store/useCollectionStore';
-import { useProfileStore } from '@/store/useProfileStore';
+import { useKycAccess } from '@/hooks/useKycAccess';
 
 export interface CanCreateCollection {
   /** KYC-verified users have no limit. */
@@ -16,19 +16,22 @@ export interface CanCreateCollection {
 }
 
 const LIMIT_MESSAGE =
-  'Unverified accounts can create only one collection. Complete KYC verification to create more.';
+  'Unverified accounts can create only one collection. Complete identity verification to create more.';
 
 /**
- * SINGLE frontend source of truth for the "unverified users may own at most one
- * collection" rule. The BACKEND is the authority (both the Express
- * CollectionService and the create-collection edge function return 403); this
- * hook only drives consistent *early* UX so the restriction behaves identically
- * at every creation entry point instead of only on the Collections page.
+ * Frontend gate for "unverified users may own at most one collection".
  *
- * Mirrors the backend gate: verified ⇒ unlimited; otherwise blocked once the
- * user already owns ≥ 1 collection. It self-fetches the backing data so it works
- * even when a wizard route is opened directly (deep link) rather than via the
- * Collections page.
+ * The BACKEND is the authority — both the Express CollectionService (behind
+ * requireVerifiedOrganizer) and the create-collection edge function reject
+ * independently with `KYC_REQUIRED`. This hook only drives consistent *early*
+ * UX so the restriction behaves identically at every creation entry point
+ * rather than only on the Collections page.
+ *
+ * The access decision itself now comes from useKycAccess — the single reader
+ * of /settings/kyc/access-status — instead of this hook re-reading kycData and
+ * re-deriving the rule. The local collection-count derivation below survives
+ * only as a fallback for the brief window before that payload arrives, so a
+ * deep link straight into the wizard isn't blank.
  */
 export function useCanCreateCollection(): CanCreateCollection {
   const { user } = useAuthStore() as { user?: { id?: string } };
@@ -36,10 +39,7 @@ export function useCanCreateCollection(): CanCreateCollection {
     collections: unknown[];
     fetchCollections: (userId?: string, opts?: { silent?: boolean }) => Promise<unknown>;
   };
-  const { kycData, fetchKYCStatus } = useProfileStore() as {
-    kycData?: { overallStatus?: string };
-    fetchKYCStatus: (userId: string) => void;
-  };
+  const { isVerified, canCreateCollection, isLoading } = useKycAccess();
 
   const userId = user?.id;
 
@@ -48,13 +48,17 @@ export function useCanCreateCollection(): CanCreateCollection {
     if (!Array.isArray(collections) || collections.length === 0) {
       void Promise.resolve(fetchCollections?.(userId, { silent: true })).catch(() => {});
     }
-    fetchKYCStatus?.(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  const isVerified = kycData?.overallStatus === 'verified';
   const collectionCount = Array.isArray(collections) ? collections.length : 0;
-  const limitReached = Boolean(userId) && !isVerified && collectionCount >= 1;
+
+  // Prefer the backend-computed flag — it is the actual authority and also
+  // correctly accounts for legacy users. Fall back to the local derivation
+  // only while the access payload hasn't loaded yet.
+  const limitReached = isLoading
+    ? Boolean(userId) && !isVerified && collectionCount >= 1
+    : Boolean(userId) && !canCreateCollection;
 
   return {
     isVerified,

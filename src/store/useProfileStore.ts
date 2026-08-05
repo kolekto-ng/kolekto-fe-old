@@ -171,13 +171,21 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     });
 
     try {
-      const [res, kycVerificationRes] = await Promise.all([
+      const [res, kycVerificationRes, accessStatusRes] = await Promise.all([
         axiosInstance.get(`/settings/kyc/${userId}`),
         supabase
           .from("kyc_verifications")
           .select("status, nin_verified, identity_verified, address_verified, selfie_verified")
           .eq("user_id", userId)
           .maybeSingle(),
+        // Backend is the single source of truth for what this user is
+        // allowed to do (legacy-user KYC enforcement). Never re-derive
+        // canCreateCollection/canManageBankAccount/showBanner on the client —
+        // read them here and have every gate/banner consume kycData instead.
+        axiosInstance.get(`/settings/kyc/access-status`).catch((err) => {
+          console.error("Failed to fetch KYC access status:", err);
+          return null;
+        }),
       ]);
 
       const documents = res.data?.documents || [];
@@ -204,6 +212,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         }));
 
       const kycVerification = kycVerificationRes.data;
+      const accessStatus = accessStatusRes?.data || null;
 
       set({
         kycData: {
@@ -219,6 +228,20 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
             status: addressDocs.length > 0 ? addressDocs[0].status : "notStarted",
             documents: addressDocs,
           },
+
+          // Legacy-user KYC enforcement — all backend-computed, never
+          // re-derived here. See GET /settings/kyc/access-status
+          // (controllers/settings/kyc.js -> featureAccessService).
+          isLegacyUser: accessStatus?.isLegacyUser ?? false,
+          group: accessStatus?.group ?? null,
+          canCreateCollection: accessStatus?.canCreateCollection ?? true,
+          canManageBankAccount: accessStatus?.canManageBankAccount ?? false,
+          canWithdraw: accessStatus?.canWithdraw ?? true,
+          showBanner: accessStatus?.showBanner ?? false,
+          banner: accessStatus?.banner ?? null,
+          // Guided-onboarding data (progress checklist, phase copy, what's
+          // locked/unlocked) — see featureAccessService.getAccessStatus().
+          journey: accessStatus?.journey ?? null,
         },
         kycLoading: false,
       });

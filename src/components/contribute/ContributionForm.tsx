@@ -23,7 +23,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ArrowRight, Check, Loader2, CreditCard, User, DollarSign } from "lucide-react";
 import { usePaystackStore } from "@/store/usePaystackStore";
-import { useContributionStore } from "@/store/useContributionStore";
 import { toast } from "@/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { axiosInstance } from "@/utils/axios";
@@ -120,7 +119,10 @@ const ContributionForm: React.FC<ContributionFormProps> = (props) => {
   const [fundraisingAmount, setFundraisingAmount] = useState<number>(0);
   // Store hooks
   const { initializePayment, initiatePayment, verifyPayment } = usePaystackStore();
-  const { createContribution } = useContributionStore();
+  // NOTE: this component no longer pulls a contribution writer from the store.
+  // The contribution row is created server-side by
+  // POST /api/payments/initialize-payment and transitioned to paid by
+  // verify-paystack-payment — the client never writes `contributions`.
 
   // Clear interval on unmount
   useEffect(() => {

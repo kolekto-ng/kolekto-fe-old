@@ -15,6 +15,8 @@ import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
 import { supabase } from '@/integrations/supabase/client';
 import { getCollectionStatusMeta } from '@/utils/collectionStatus';
+import { KycEnforcementBanner } from '@/components/kyc/KycEnforcementBanner';
+import { useProfileStore } from '@/store/useProfileStore';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All statuses' },
@@ -156,6 +158,7 @@ const CollectionsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <KycEnforcementBanner />
       <div className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
@@ -209,9 +212,16 @@ const CollectionsPage: React.FC = () => {
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <p className="flex-1 text-xs leading-relaxed text-amber-700">
               Unverified accounts can create only one collection.{' '}
-              <Link to="/dashboard/settings" className="font-semibold underline underline-offset-2">
+              <button
+                type="button"
+                onClick={() => {
+                  useProfileStore.getState().setActiveSection('kyc');
+                  navigate('/dashboard/settings');
+                }}
+                className="font-semibold underline underline-offset-2"
+              >
                 Complete KYC verification
-              </Link>{' '}
+              </button>{' '}
               to create more.
             </p>
           </div>

@@ -131,7 +131,9 @@ Deno.serve(async (req: Request) => {
       } else {
         const [campRes, profRes, kycRes, docsRes, imgRes, donRes, contRes] = await Promise.all([
           supabase.from("campaigns").select("*").in("id", ids),
-          creatorIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", creatorIds) : { data: [] },
+          // PII: this is a PUBLIC, unauthenticated endpoint — select only
+          // full_name, never email, for a campaign creator.
+          creatorIds.length > 0 ? supabase.from("profiles").select("id, full_name").in("id", creatorIds) : { data: [] },
           creatorIds.length > 0 ? supabase.from("kyc_verifications").select("user_id, status").in("user_id", creatorIds) : { data: [] },
           supabase.from("verification_documents").select("*").in("campaign_id", ids),
           supabase.from("campaign_images").select("*").in("campaign_id", ids),
@@ -199,8 +201,7 @@ Deno.serve(async (req: Request) => {
         id: c.id,
         slug: c.slug || null,
         creator_id: c.user_id,
-        creator_name: profile?.full_name || profile?.email || "Unknown",
-        creator_email: profile?.email || "",
+        creator_name: profile?.full_name || "Unknown",
         creator_kyc_status: profile?.kyc_status || "unverified",
         title: c.title,
         summary: c.campaign_summary || camp?.summary || c.description || null,

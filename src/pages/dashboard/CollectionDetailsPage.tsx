@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import {
   getCollectionContributorFields,
@@ -347,12 +348,21 @@ const CollectionDetailsPage: React.FC = () => {
 
   // ── Ticket check-in ─────────────────────────────────────────────────────────
 
+  // Routed through the API rather than writing `contributions` directly with
+  // supabase-js. The direct write required an UPDATE grant on a financial
+  // table for the `authenticated` role, which — with RLS disabled — let anyone
+  // holding the public anon key rewrite any contribution row. The endpoint
+  // re-checks collection ownership server-side and validates the status
+  // against an allowlist.
   const updateCheckIn = async (contributionId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('contributions')
-      .update({ check_in_status: newStatus })
-      .eq('id', contributionId);
-    if (error) { toast.error('Failed to update ticket status'); return; }
+    try {
+      await axiosInstance.patch(`/contributions/${contributionId}/check-in`, {
+        status: newStatus,
+      });
+    } catch (err) {
+      toast.error(toFriendlyErrorMessage(err, 'Failed to update ticket status'));
+      return;
+    }
     setContributions(prev =>
       prev.map(c => c.id === contributionId ? { ...c, check_in_status: newStatus } : c)
     );

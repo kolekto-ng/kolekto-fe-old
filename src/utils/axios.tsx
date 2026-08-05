@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/store";
 import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
+import { useKycGateStore } from "@/store/useKycGateStore";
 import axios from "axios";
 
 // API configuration following the backend pattern.
@@ -10,8 +11,13 @@ import axios from "axios";
 // explicitly overridden. In dev mode, add a `.env.development.local` with
 // VITE_API_URL=http://localhost:<PORT>/api to point at a local backend —
 // see kolekto-fe-old/.env.development.local. The bare fallback below matches
-// the backend's own default port (see kolekto-be-old/app.js: `PORT || 3000`)
-// so a fresh checkout with no env file still points somewhere that exists.
+// the backend's own default port. NOTE: app.js actually defaults to
+// `PORT || 5050`, not 3000 — this comment previously claimed 3000, and the
+// fallback below still says 3000. Left as-is deliberately rather than
+// "corrected" to 5050: changing the dev fallback is a behaviour change for
+// anyone already running a local proxy on 3000. Set VITE_API_BASE_URL in
+// .env.development.local to point at your local backend (default
+// http://localhost:5050/api) instead of relying on this fallback.
 const API_BASE_URL =
   import.meta.env.MODE === "production"
     ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
@@ -228,6 +234,23 @@ axiosInstance.interceptors.response.use(
       !isAmbassadorPublicUrl(url)
     ) {
       handleAmbassadorUnauthorized(error.response?.data?.error);
+      return Promise.reject(error);
+    }
+
+    // Backend-first KYC enforcement (legacy-user migration): ANY endpoint
+    // that blocks an action for lack of identity verification returns
+    // { code: "KYC_REQUIRED" } alongside its 403. Catching it here — once —
+    // means every current and future gated endpoint gets the same
+    // "Identity verification required" modal instead of a generic error,
+    // without each call site needing its own special-case handling.
+    // `message` is the field the backend contract specifies; `error` is the
+    // backwards-compatible alias every older endpoint still sends. Reading
+    // both means the modal shows real copy no matter which path answered
+    // (Express errorHandler, an inline controller response, or an edge
+    // function) — and `feature` lets the modal say WHICH action was blocked.
+    if (error.response?.data?.code === "KYC_REQUIRED") {
+      const data = error.response.data;
+      useKycGateStore.getState().open(data.message || data.error, data.feature);
       return Promise.reject(error);
     }
 
