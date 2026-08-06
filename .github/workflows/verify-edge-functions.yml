@@ -1,0 +1,46 @@
+# Edge Function deployment-consistency check (Phase 2 payment migration
+# follow-up). Read-only: downloads each deployed function's ACTUAL source and
+# SHA-256-diffs it against git HEAD via the existing
+# scripts/verifyEdgeFunctionDeployment.js. Never runs `supabase functions
+# deploy` — deploys stay a human-run CLI command per the existing manual
+# runbook (docs/VERIFY_PAYSTACK_PAYMENT_DEPLOYMENT_RUNBOOK_2026-08-06.md in
+# kolekto-be-old), which moved deploys to manual-only after two prior
+# incidents of bad automated/agent-driven deploys.
+#
+# This exists because the 2026-08-06 tiered-payment incident's root cause was
+# exactly this: production ran a version of initiate-paystack-payment 867
+# lines behind git HEAD for days, undetected, because nothing ever compared
+# deployed source to committed source. See
+# kolekto-be-old/docs/incident_2026-08-06_tiered-payment-amount-regression.md.
+name: verify-edge-functions
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/functions/**"]
+  schedule:
+    # Daily, to catch drift introduced OUTSIDE git (e.g. a direct edit in the
+    # Supabase console — this file's own header notes that's a supported,
+    # if discouraged, deploy path for these functions).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Verify deployed functions match git HEAD
+        env:
+          # Supabase CLI reads this automatically for non-interactive auth —
+          # no `supabase login` step needed.
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/verifyEdgeFunctionDeployment.js --project-ref busfgcmbndleljklrcbd

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { axiosInstance } from '@/utils/axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -688,48 +689,31 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         ...(pending.selectedTierId ? { TierId: pending.selectedTierId } : {}),
       };
 
-      const { data, error: invokeError } = await supabase.functions.invoke(
-        'initiate-paystack-payment',
-        {
-          body: {
+      // Phase 2 payment migration: this used to call the Supabase Edge
+      // Function `initiate-paystack-payment` directly. It now calls this
+      // backend's own POST /payments/initialize-payment — the single
+      // financial write authority per kolekto-be-old's CLAUDE.md — via the
+      // same shared axios client every other backend call in this app uses.
+      // See kolekto-be-old/docs/incident_2026-08-06_tiered-payment-amount-regression.md.
+      // A non-2xx response throws straight into the catch block below;
+      // toFriendlyErrorMessage already reads err.response.data.message/.error,
+      // which is exactly this backend's error shape — no manual body parsing
+      // needed here anymore.
+      const { data } = await axiosInstance.post('/payments/initialize-payment', {
+        email: contactEmail,
+        callback_url: `${window.location.origin}/payment/verify`,
+        metadata: {
+          ...pending,
+          amount,
+          totalPayable: total,
+          contact: {
+            name: contactName,
             email: contactEmail,
-            callback_url: `${window.location.origin}/payment/verify`,
-            metadata: {
-              ...pending,
-              amount,
-              totalPayable: total,
-              contact: {
-                name: contactName,
-                email: contactEmail,
-                phone: contactPhone,
-              },
-              formData: hostFormData,
-            },
+            phone: contactPhone,
           },
-        }
-      );
-
-      // supabase-js wraps non-2xx responses in a FunctionsHttpError. The real
-      // server-side error message lives in the response body, which we have to
-      // read manually — otherwise we only see "Edge Function returned a non-2xx status code".
-      if (invokeError) {
-        let serverMessage = invokeError.message || 'Failed to initiate payment';
-        try {
-          const ctx = (invokeError as any)?.context;
-          if (ctx && typeof ctx.json === 'function') {
-            const body = await ctx.json();
-            if (body?.error) serverMessage = body.error;
-            console.error('[initiate-paystack-payment] edge function error body:', body);
-          } else if (ctx && typeof ctx.text === 'function') {
-            const text = await ctx.text();
-            if (text) serverMessage = text;
-            console.error('[initiate-paystack-payment] edge function error text:', text);
-          }
-        } catch (readErr) {
-          console.error('[initiate-paystack-payment] failed to read error body:', readErr);
-        }
-        throw new Error(serverMessage);
-      }
+          formData: hostFormData,
+        },
+      });
 
       const authorizationUrl = data?.authorization_url || data?.authorizationUrl;
       if (!authorizationUrl) {
