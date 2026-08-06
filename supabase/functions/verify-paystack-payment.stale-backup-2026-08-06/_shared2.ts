@@ -112,7 +112,7 @@ export async function refreshCollectionAndWallets(
   }).eq("id", collectionId);
   if (colUpdateErr) console.error("[verify] ❌ collections update failed:", colUpdateErr);
 
-  // ── Wallet: SELECT-then-UPDATE or INSERT ────────────────────────────────
+  // ── Wallet: SELECT-then-UPDATE or INSERT ──────────────────────────────────
   // We do NOT use upsert({ onConflict: "collection_id" }) because that requires
   // a UNIQUE constraint on wallets.collection_id. Instead we explicitly check
   // existence and branch, which works regardless of DB constraint state.
@@ -296,7 +296,7 @@ export function stripStandardFields(data: Record<string, unknown>) {
   }, {});
 }
 
-// ─── PREMIUM RECEIPT EMAIL TEMPLATE ──────────────────────────────────
+// ─── PREMIUM RECEIPT EMAIL TEMPLATE ─────────────────────────────────────────────
 //
 // Brand system (sourced from the frontend tailwind.config.ts `kolekto` palette):
 //   primary  #1B5E20 (deep green)   light    #E8F5E9
@@ -603,7 +603,7 @@ export function renderReceiptEmail(d: ReceiptEmailData): string {
 </html>`;
 }
 
-// ─── RECEIPT EMAIL SENDER ────────────────────────────────────────────────────────────────
+// ─── RECEIPT EMAIL SENDER ───────────────────────────────────────────────────────
 /**
  * Sends the premium HTML receipt to the payer via ZeptoMail's HTTP API.
  * Requires ZEPTOMAIL_API_TOKEN env var. Fails gracefully if not configured.

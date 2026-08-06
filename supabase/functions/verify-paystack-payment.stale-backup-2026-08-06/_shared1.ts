@@ -14,13 +14,13 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ─── CORS ───────────────────────────────────────────────────────────────
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ─── PHONE NORMALIZATION ───────────────────────────────────────────────────
+// ─── PHONE NORMALIZATION ──────────────────────────────────────────────────────
 // contributions.phone is varchar(20). Un-normalized Paystack contact phones
 // (formatting, or long international numbers) can overflow it, failing the insert
 // with "value too long for type character varying(20)" — which stranded recovered
@@ -40,7 +40,7 @@ export function normalizePhone(raw: unknown, maxLen = 20): string | null {
   return out;
 }
 
-// ─── SHARED TYPES ──────────────────────────────────────────────────────────────
+// ─── SHARED TYPES ─────────────────────────────────────────────────────────────
 export type FeeBearer = "contributor" | "organizer";
 
 export interface TicketSelection {
@@ -72,7 +72,7 @@ export class PaymentValidationError extends Error {
   }
 }
 
-// ─── FINANCIAL PROJECTION ENGINE (delegated) ───────────────────────────────
+// ─── FINANCIAL PROJECTION ENGINE (delegated) ─────────────────────────────────
 //
 // All financial math is delegated to the Financial Projection Engine (FPE),
 // inlined below as a GENERATED block from the ONE canonical source
@@ -84,7 +84,7 @@ export class PaymentValidationError extends Error {
 // deno-lint-ignore-file
 // Canonical source: kolekto-fe-old/kolekto-shared-financial/src — regenerate with `npm run bundle:edge`.
 const FPE = (() => {
-  // ─────────────────────── src/types.ts ───────────────────────
+  // ───────────────────────────── src/types.ts ─────────────────────────────
   /**
    * types.ts — L0 type contracts for the Financial Projection Engine.
    *
@@ -221,7 +221,7 @@ const FPE = (() => {
     remainingCapacity: number | null;
   }
 
-  // ─────────────────────── src/constants.ts ───────────────────────
+  // ───────────────────────────── src/constants.ts ─────────────────────────────
   /**
    * constants.ts — L0 canonical financial constants.
    *
@@ -327,7 +327,7 @@ const FPE = (() => {
     FEE_BEARERS,
   } as const;
 
-  // ─────────────────────── src/primitives.ts ───────────────────────
+  // ───────────────────────────── src/primitives.ts ─────────────────────────────
   /**
    * primitives.ts — L1 pure financial primitives.
    *
@@ -576,7 +576,7 @@ const FPE = (() => {
     });
   }
 
-  // ─────────────────────── src/projections.ts ───────────────────────
+  // ───────────────────────────── src/projections.ts ─────────────────────────────
   /**
    * projections.ts — L2 pure projections.
    *
@@ -1321,7 +1321,7 @@ export function normalizePaymentRequest(input: {
   };
 }
 
-// ─── SETTLEMENT HELPERS ─────────────────────────────────────────
+// ─── SETTLEMENT HELPERS ──────────────────────────────────────────────────────
 // COMPLETED_WITHDRAWAL_STATUSES and getSettlementCutoff are delegated to the
 // engine (bound near the top). The completed-withdrawal set is now the canonical
 // superset {completed, successful, success, approved} — previously the edge used
@@ -1357,18 +1357,9 @@ export async function attemptDeterministicCollectionRecovery(
 ): Promise<{ collectionId: string; strategy: string } | null> {
   const { reference, customerEmail, grossAmountPaid } = params;
 
-  // ── Strategy C: exact payment_reference match in a sibling table ────────────
-  // `contributions` is the canonical, current-generation payment_reference
-  // source and is checked first. `deposits` is the pre-migration legacy table
-  // (frozen — process_deposit_settlements()/the old settlement cron have had
-  // no new rows in 7+ weeks per the 2026-08-05 settlement migration audit) but
-  // is NOT dropped, and this lookup is kept as an additional, harmless
-  // fallback so a payment_reference that predates the contributions-only
-  // migration can still be recovered instead of falling through to manual
-  // admin reconciliation. Merge-preservation note: this restores PROD's
-  // original `deposits` lookup (removed in TEST) as a strict superset —
-  // contributions is tried first (it is always the more likely and more
-  // current match), deposits is consulted only if contributions finds nothing.
+  // ── Strategy C: exact payment_reference match in a sibling table ──────────
+  // Tier 1: the legacy `deposits` sibling lookup was removed (always empty).
+  // `contributions` is the canonical payment_reference source.
   const { data: contributionRow } = await supabase
     .from("contributions")
     .select("collection_id")
@@ -1382,66 +1373,24 @@ export async function attemptDeterministicCollectionRecovery(
     return { collectionId: String(strategyCMatch), strategy: "strategy_c_reference_match" };
   }
 
-  try {
-    const { data: depositRow } = await supabase
-      .from("deposits")
-      .select("collection_id")
-      .eq("payment_reference", reference)
-      .not("collection_id", "is", null)
-      .maybeSingle();
-    const legacyDepositMatch = (depositRow as Record<string, unknown> | null)?.collection_id;
-    if (legacyDepositMatch) {
-      return { collectionId: String(legacyDepositMatch), strategy: "strategy_c_legacy_deposits_match" };
-    }
-  } catch (depositLookupErr) {
-    // Non-fatal — `deposits` is legacy/frozen; if the table is ever archived
-    // or renamed this lookup must not block the primary contributions-based
-    // recovery path above (which has already been checked and found nothing).
-    console.warn(
-      `[verify ref=${reference}] LEGACY_DEPOSITS_LOOKUP_FAILED (non-fatal, continuing to Strategy E):`,
-      (depositLookupErr as Error)?.message
-    );
-  }
-
-  // ── Strategy E: unambiguous pending-checkout inference ───────────────
+  // ── Strategy E: unambiguous pending-checkout inference ─────────────────────
   if (!customerEmail) return null;
   const cutoffIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const amountTolerance = Math.max(1, grossAmountPaid * 0.02); // ±2%, min ₦1
 
-  // `contributions` is the canonical, current-generation source; `deposits`
-  // is queried in parallel as an additional fallback for the same
-  // merge-preservation reason as Strategy C above — pre-migration pending
-  // checkouts can only ever appear in `deposits`, never in `contributions`.
-  const [{ data: pendingContributions }, legacyPendingResult] = await Promise.all([
-    supabase
-      .from("contributions")
-      .select("collection_id, amount, gross_amount, created_at")
-      .ilike("email", customerEmail)
-      .eq("status", "pending")
-      .is("payment_reference", null)
-      .gte("created_at", cutoffIso),
-    supabase
-      .from("deposits")
-      .select("collection_id, amount, created_at")
-      .ilike("email", customerEmail)
-      .eq("status", "pending")
-      .gte("created_at", cutoffIso)
-      .then(
-        (res) => res,
-        (err) => ({ data: null, error: err })
-      ),
-  ]);
+  // Tier 1: the legacy `deposits` sibling lookup was removed (always empty).
+  const { data: pendingContributions } = await supabase
+    .from("contributions")
+    .select("collection_id, amount, gross_amount, created_at")
+    .ilike("email", customerEmail)
+    .eq("status", "pending")
+    .is("payment_reference", null)
+    .gte("created_at", cutoffIso);
 
   const candidateCollectionIds = new Set<string>();
   for (const row of (pendingContributions || []) as Array<Record<string, unknown>>) {
     const rowAmount = Number(row.gross_amount || row.amount || 0);
     if (Math.abs(rowAmount - grossAmountPaid) <= amountTolerance && row.collection_id) {
-      candidateCollectionIds.add(String(row.collection_id));
-    }
-  }
-  const legacyPendingDeposits = (legacyPendingResult as { data: Array<Record<string, unknown>> | null })?.data;
-  for (const row of (legacyPendingDeposits || []) as Array<Record<string, unknown>>) {
-    if (Math.abs(Number(row.amount || 0) - grossAmountPaid) <= amountTolerance && row.collection_id) {
       candidateCollectionIds.add(String(row.collection_id));
     }
   }
@@ -1589,3 +1538,4 @@ export async function logRecoveryAttempt(
     );
   }
 }
+
