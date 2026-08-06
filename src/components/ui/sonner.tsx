@@ -20,11 +20,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       offset={16}
       mobileOffset={12}
       icons={{
-        success: <CheckCircle2 className="h-5 w-5" />,
-        error: <XCircle className="h-5 w-5" />,
-        warning: <AlertTriangle className="h-5 w-5" />,
-        info: <Info className="h-5 w-5" />,
-        loading: <Loader2 className="h-5 w-5 animate-spin" />,
+        success: <CheckCircle2 className="h-4 w-4" />,
+        error: <XCircle className="h-4 w-4" />,
+        warning: <AlertTriangle className="h-4 w-4" />,
+        info: <Info className="h-4 w-4" />,
+        loading: <Loader2 className="h-4 w-4 animate-spin" />,
       }}
       toastOptions={{
         classNames: {

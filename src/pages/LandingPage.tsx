@@ -4276,6 +4276,7 @@ const FooterSection = () => {
         { label: "Careers", href: "/contact" },
         { label: "Partnerships", href: "/contact" },
         { label: "Press", href: "/about" },
+        { label: "Ambassador", href: "/ambassadors" },
       ],
     },
     {

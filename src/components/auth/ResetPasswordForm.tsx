@@ -56,7 +56,6 @@ const ResetPasswordForm: React.FC = () => {
       if (error) {
         const message = toFriendlyErrorMessage(error, 'Could not reset your password. Please try again.');
         setError(message);
-        toast.error(message);
       } else {
         toast.success('Password reset successfully');
         // Give the toast time to be seen
@@ -67,7 +66,6 @@ const ResetPasswordForm: React.FC = () => {
     } catch (err: any) {
       const message = toFriendlyErrorMessage(err, 'Could not reset your password. Please try again.');
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }

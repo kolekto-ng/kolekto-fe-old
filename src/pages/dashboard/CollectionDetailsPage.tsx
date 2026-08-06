@@ -27,10 +27,11 @@ import {
   Wallet, Share2, Edit, ScanLine, Download, Search, ChevronDown,
   ArrowLeft, Users, Calendar, Clock, TrendingUp,
   CheckCircle2, AlertCircle, LogIn, LogOut, MoreVertical, Copy, X,
-  Link2, Tag, Flag, MessageCircle,
+  Link2, Tag, Flag, MessageCircle, ArrowLeftRight, UserPlus,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
+import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import { useCollectionStore } from '@/store/useCollectionStore';
 import {
   getCollectionContributorFields,
@@ -42,6 +43,8 @@ import {
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import QRCodeDisplay from '@/components/collections/QRCodeDisplay';
 import EditCollectionDialog from '@/components/collections/EditCollectionDialog';
+import TransferCollectionDialog from '@/components/collections/TransferCollectionDialog';
+import ManageAccessDialog from '@/components/collections/ManageAccessDialog';
 import FundraisingShareDialog from '@/components/collections/FundraisingShareDialog';
 import {
   ActivityListSkeleton,
@@ -145,6 +148,8 @@ const CollectionDetailsPage: React.FC = () => {
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isManageAccessOpen, setIsManageAccessOpen] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [scanInput, setScanInput] = useState('');
   const [scannedTicket, setScannedTicket] = useState<any>(null);
@@ -343,12 +348,21 @@ const CollectionDetailsPage: React.FC = () => {
 
   // ── Ticket check-in ─────────────────────────────────────────────────────────
 
+  // Routed through the API rather than writing `contributions` directly with
+  // supabase-js. The direct write required an UPDATE grant on a financial
+  // table for the `authenticated` role, which — with RLS disabled — let anyone
+  // holding the public anon key rewrite any contribution row. The endpoint
+  // re-checks collection ownership server-side and validates the status
+  // against an allowlist.
   const updateCheckIn = async (contributionId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('contributions')
-      .update({ check_in_status: newStatus })
-      .eq('id', contributionId);
-    if (error) { toast.error('Failed to update ticket status'); return; }
+    try {
+      await axiosInstance.patch(`/contributions/${contributionId}/check-in`, {
+        status: newStatus,
+      });
+    } catch (err) {
+      toast.error(toFriendlyErrorMessage(err, 'Failed to update ticket status'));
+      return;
+    }
     setContributions(prev =>
       prev.map(c => c.id === contributionId ? { ...c, check_in_status: newStatus } : c)
     );
@@ -654,6 +668,13 @@ const CollectionDetailsPage: React.FC = () => {
                   <X className="w-4 h-4 mr-2 text-gray-600" /> Close Collection
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsManageAccessOpen(true)}>
+                <UserPlus className="w-4 h-4 mr-2 text-gray-600" /> Manage Access
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsTransferOpen(true)}>
+                <ArrowLeftRight className="w-4 h-4 mr-2 text-gray-600" /> Transfer Ownership
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600"
@@ -1357,9 +1378,9 @@ const CollectionDetailsPage: React.FC = () => {
           // Re-fetch the wallet row + stats so the "Available", "Pending
           // approval" annotation, and "Withdrawn" tile reflect the new
           // pending request without requiring a manual reload.
+          // Success toast is owned by the withdrawal store (createWithdrawal).
           loadWallet();
           loadBalanceStats();
-          toast.success('Withdrawal request sent');
         }}
       />
 
@@ -1436,6 +1457,22 @@ const CollectionDetailsPage: React.FC = () => {
           // The dialog already shows the "Collection updated" success toast on
           // save — don't fire a second one here (one action = one toast).
         }}
+      />
+
+      {/* Transfer Ownership */}
+      <TransferCollectionDialog
+        open={isTransferOpen}
+        onOpenChange={setIsTransferOpen}
+        collectionId={id!}
+        collectionTitle={col.title || ''}
+      />
+
+      {/* Manage Access */}
+      <ManageAccessDialog
+        open={isManageAccessOpen}
+        onOpenChange={setIsManageAccessOpen}
+        collectionId={id!}
+        collectionTitle={col.title || ''}
       />
 
       {/* QR / Ticket Scanner (Ticket type only) */}

@@ -58,41 +58,11 @@ export const handleApiResponse = async (response: Response) => {
   return response.json();
 };
 
-// Collection API functions
-export const collectionAPI = {
-  create: async (collectionData: any) => {
-    const response = await authenticatedFetch('/create-collection', {
-      method: 'POST',
-      body: JSON.stringify({ collectionData }),
-    });
-    return handleApiResponse(response);
-  },
-
-  getAll: async () => {
-    const response = await authenticatedFetch('/collections');
-    return handleApiResponse(response);
-  },
-
-  getById: async (id: string) => {
-    const response = await authenticatedFetch(`/collections/${id}`);
-    return handleApiResponse(response);
-  },
-
-  update: async (id: string, data: any) => {
-    const response = await authenticatedFetch(`/collections/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    return handleApiResponse(response);
-  },
-
-  delete: async (id: string) => {
-    const response = await authenticatedFetch(`/collections/${id}`, {
-      method: 'DELETE',
-    });
-    return handleApiResponse(response);
-  },
-};
+// NOTE: the former `collectionAPI` (a third, unused collection-creation path via
+// authenticatedFetch('/create-collection')) was removed as part of Task 1
+// consolidation. All collection creation now flows through the wizard →
+// useCollectionStore.createCollection → backend (single authority). Do not
+// reintroduce a parallel create path here.
 
 // Transaction API functions
 export const transactionAPI = {

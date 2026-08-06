@@ -94,7 +94,7 @@ const ContactPage: React.FC = () => {
       {/* Contact Channels */}
       <section style={{ padding: "72px 24px 48px", background: "white" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24, marginBottom: 64 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: 24, marginBottom: 64 }}>
             {channels.map((c, i) => (
               <a
                 key={i}
@@ -123,13 +123,13 @@ const ContactPage: React.FC = () => {
           </div>
 
           {/* Contact Form + Info */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "start" }}>
+          <div className="grid gap-8 lg:grid-cols-2 lg:gap-12" style={{ alignItems: "start" }}>
             {/* Form */}
-            <div style={{ background: "#FAFAFA", borderRadius: 20, padding: "36px 32px", border: "1.5px solid #E5E7EB" }}>
+            <div className="p-6 sm:p-8 lg:p-9" style={{ background: "#FAFAFA", borderRadius: 20, border: "1.5px solid #E5E7EB" }}>
               <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1A1A2E", margin: "0 0 6px" }}>Send us a message</h2>
               <p style={{ fontSize: 14, color: "#6B7280", margin: "0 0 28px", lineHeight: 1.6 }}>Fill in the form and we'll get back to you within 24 hours on business days.</p>
               <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label style={{ fontSize: 13, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>Name *</label>
                     <input

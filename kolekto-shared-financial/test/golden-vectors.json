@@ -1,0 +1,219 @@
+{
+  "meta": {
+    "name": "kolekto-shared-financial golden vectors",
+    "purpose": "Language-agnostic conformance fixture. Every runtime harness (Node, Deno, SQL) evaluates the same inputs and must produce the same expected outputs. If all three match, the SQL mirror is proven equivalent to the TS engine.",
+    "determinism": "All timestamps are absolute UTC ISO strings and every wallet vector carries an explicit `now`, so results never depend on the wall clock. Settlement cutoff = 04:00 UTC (5am WAT) on the day of `now` (or the prior day if `now` < 04:00 UTC).",
+    "clock": {
+      "now": "2026-01-15T12:00:00.000Z",
+      "cutoff": "2026-01-15T04:00:00.000Z",
+      "settledExample": "2026-01-14T10:00:00.000Z",
+      "pendingExample": "2026-01-15T06:00:00.000Z"
+    },
+    "currency": "NGN (kobo precision, 2dp)"
+  },
+
+  "fees": [
+    { "name": "fixed 5000 organizer — fees separate, payable=amount",
+      "amount": 5000, "collectionType": "fixed", "feeBearer": "organizer",
+      "expected": { "platformFee": 25, "gatewayFee": 75, "totalFees": 100, "totalPayable": 5000 } },
+    { "name": "fixed 5000 contributor — payable=amount+fees",
+      "amount": 5000, "collectionType": "fixed", "feeBearer": "contributor",
+      "expected": { "platformFee": 25, "gatewayFee": 75, "totalFees": 100, "totalPayable": 5100 } },
+    { "name": "fundraising 10000 contributor — 1% platform",
+      "amount": 10000, "collectionType": "fundraising", "feeBearer": "contributor",
+      "expected": { "platformFee": 100, "gatewayFee": 150, "totalFees": 250, "totalPayable": 10250 } },
+    { "name": "fixed 500000 organizer — both fees capped at 2000",
+      "amount": 500000, "collectionType": "fixed", "feeBearer": "organizer",
+      "expected": { "platformFee": 2000, "gatewayFee": 2000, "totalFees": 4000, "totalPayable": 500000 } },
+    { "name": "fixed 500000 contributor — capped fees added to payable",
+      "amount": 500000, "collectionType": "fixed", "feeBearer": "contributor",
+      "expected": { "platformFee": 2000, "gatewayFee": 2000, "totalFees": 4000, "totalPayable": 504000 } },
+    { "name": "unknown type falls back to 0.5% platform",
+      "amount": 1000, "collectionType": "mystery", "feeBearer": "organizer",
+      "expected": { "platformFee": 5, "gatewayFee": 15, "totalFees": 20, "totalPayable": 1000 } },
+    { "name": "zero amount → zero fees",
+      "amount": 0, "collectionType": "fixed", "feeBearer": "organizer",
+      "expected": { "platformFee": 0, "gatewayFee": 0, "totalFees": 0, "totalPayable": 0 } },
+    { "name": "tiered 2500 organizer — fractional fees round to 2dp",
+      "amount": 2500, "collectionType": "tiered", "feeBearer": "organizer",
+      "expected": { "platformFee": 12.5, "gatewayFee": 37.5, "totalFees": 50, "totalPayable": 2500 } },
+    { "name": "ticket 3000 contributor",
+      "amount": 3000, "collectionType": "ticket", "feeBearer": "contributor",
+      "expected": { "platformFee": 15, "gatewayFee": 45, "totalFees": 60, "totalPayable": 3060 } },
+    { "name": "open_pool 20000 organizer — 0.5% platform",
+      "amount": 20000, "collectionType": "open_pool", "feeBearer": "organizer",
+      "expected": { "platformFee": 100, "gatewayFee": 300, "totalFees": 400, "totalPayable": 20000 } },
+    { "name": "fundraising 300000 contributor — platform hits 2000 cap",
+      "amount": 300000, "collectionType": "fundraising", "feeBearer": "contributor",
+      "expected": { "platformFee": 2000, "gatewayFee": 2000, "totalFees": 4000, "totalPayable": 304000 } },
+    { "name": "rounding edge: 999.99 fixed organizer",
+      "amount": 999.99, "collectionType": "fixed", "feeBearer": "organizer",
+      "expected": { "platformFee": 5, "gatewayFee": 15, "totalFees": 20, "totalPayable": 999.99 } },
+    { "name": "small: 100 fixed contributor",
+      "amount": 100, "collectionType": "fixed", "feeBearer": "contributor",
+      "expected": { "platformFee": 0.5, "gatewayFee": 1.5, "totalFees": 2, "totalPayable": 102 } }
+  ],
+
+  "deriveNet": [
+    { "name": "organizer-borne gross==net", "gross": 5000, "collectionType": "fixed", "feeBearer": "organizer", "expected": 5000 },
+    { "name": "contributor-borne fixed backs out fees", "gross": 5100, "collectionType": "fixed", "feeBearer": "contributor", "expected": 5000 },
+    { "name": "contributor-borne fundraising backs out fees", "gross": 10250, "collectionType": "fundraising", "feeBearer": "contributor", "expected": 10000 },
+    { "name": "contributor-borne ticket backs out fees", "gross": 3060, "collectionType": "ticket", "feeBearer": "contributor", "expected": 3000 },
+    { "name": "zero gross → 0", "gross": 0, "collectionType": "fixed", "feeBearer": "contributor", "expected": 0 },
+    { "name": "negative gross → 0", "gross": -100, "collectionType": "fixed", "feeBearer": "contributor", "expected": 0 },
+    { "name": "contributor-borne capped-fee gross backs out to 500000", "gross": 504000, "collectionType": "fixed", "feeBearer": "contributor", "expected": 500000 }
+  ],
+
+  "cutoff": [
+    { "name": "noon UTC → today 04:00 UTC", "now": "2026-01-15T12:00:00.000Z", "expectedCutoff": "2026-01-15T04:00:00.000Z" },
+    { "name": "just after cutoff → today 04:00 UTC", "now": "2026-01-15T04:00:00.001Z", "expectedCutoff": "2026-01-15T04:00:00.000Z" },
+    { "name": "exactly at cutoff → today 04:00 UTC", "now": "2026-01-15T04:00:00.000Z", "expectedCutoff": "2026-01-15T04:00:00.000Z" },
+    { "name": "before cutoff → yesterday 04:00 UTC", "now": "2026-01-15T03:00:00.000Z", "expectedCutoff": "2026-01-14T04:00:00.000Z" },
+    { "name": "midnight UTC → yesterday 04:00 UTC", "now": "2026-01-15T00:00:00.000Z", "expectedCutoff": "2026-01-14T04:00:00.000Z" },
+    { "name": "month boundary before cutoff → prior day", "now": "2026-03-01T02:00:00.000Z", "expectedCutoff": "2026-02-28T04:00:00.000Z" }
+  ],
+
+  "isSettled": [
+    { "name": "one second before cutoff is settled", "paymentDate": "2026-01-15T03:59:59.000Z", "now": "2026-01-15T12:00:00.000Z", "expected": true },
+    { "name": "exactly at cutoff is pending", "paymentDate": "2026-01-15T04:00:00.000Z", "now": "2026-01-15T12:00:00.000Z", "expected": false },
+    { "name": "after cutoff is pending", "paymentDate": "2026-01-15T06:00:00.000Z", "now": "2026-01-15T12:00:00.000Z", "expected": false },
+    { "name": "yesterday is settled", "paymentDate": "2026-01-14T10:00:00.000Z", "now": "2026-01-15T12:00:00.000Z", "expected": true }
+  ],
+
+  "allocate": [
+    { "name": "even split of 100 across 2", "total": 100, "weights": [1, 1], "expected": [50, 50] },
+    { "name": "100 across 3 — remainder to last", "total": 100, "weights": [1, 1, 1], "expected": [33.33, 33.33, 33.34] },
+    { "name": "zero total → zeros", "total": 0, "weights": [1, 2], "expected": [0, 0] },
+    { "name": "empty weights → empty", "total": 100, "weights": [], "expected": [] },
+    { "name": "zero weights → zeros", "total": 50, "weights": [0, 0], "expected": [0, 0] },
+    { "name": "weighted 99.99 across [1,3] — sums back exactly", "total": 99.99, "weights": [1, 3], "expected": [25, 74.99] }
+  ],
+
+  "wallet": [
+    { "name": "empty → all zero", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [], "withdrawals": [],
+      "expected": { "gross": 0, "net": 0, "withdrawn": 0, "pending": 0, "available": 0, "ledger": 0 } },
+
+    { "name": "single settled contribution is available", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 5000, "gross_amount": 5100, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [],
+      "expected": { "gross": 5100, "net": 5000, "withdrawn": 0, "pending": 0, "available": 5000, "ledger": 5000 } },
+
+    { "name": "single today's contribution is pending", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 3000, "gross_amount": 3000, "created_at": "2026-01-15T06:00:00.000Z" } ],
+      "withdrawals": [],
+      "expected": { "gross": 3000, "net": 3000, "withdrawn": 0, "pending": 3000, "available": 0, "ledger": 3000 } },
+
+    { "name": "mixed settled+pending, approved withdrawal reduces available only", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [
+        { "amount": 5000, "gross_amount": 5000, "created_at": "2026-01-14T10:00:00.000Z" },
+        { "amount": 2000, "gross_amount": 2000, "created_at": "2026-01-15T06:00:00.000Z" }
+      ],
+      "withdrawals": [ { "amount": 1000, "status": "approved" } ],
+      "expected": { "gross": 7000, "net": 7000, "withdrawn": 1000, "pending": 2000, "available": 4000, "ledger": 6000 } },
+
+    { "name": "over-withdrawn floors available at 0", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 1000, "gross_amount": 1000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [ { "amount": 5000, "status": "completed" } ],
+      "expected": { "gross": 1000, "net": 1000, "withdrawn": 5000, "pending": 0, "available": 0, "ledger": 0 } },
+
+    { "name": "pending/processing withdrawals do NOT reduce available", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 5000, "gross_amount": 5000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [ { "amount": 1000, "status": "pending" }, { "amount": 500, "status": "processing" } ],
+      "expected": { "gross": 5000, "net": 5000, "withdrawn": 0, "pending": 0, "available": 5000, "ledger": 5000 } },
+
+    { "name": "gross falls back to amount when gross_amount missing", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 5000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [],
+      "expected": { "gross": 5000, "net": 5000, "withdrawn": 0, "pending": 0, "available": 5000, "ledger": 5000 } },
+
+    { "name": "boundary: exactly at cutoff is pending", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 4000, "gross_amount": 4000, "created_at": "2026-01-15T04:00:00.000Z" } ],
+      "withdrawals": [],
+      "expected": { "gross": 4000, "net": 4000, "withdrawn": 0, "pending": 4000, "available": 0, "ledger": 4000 } },
+
+    { "name": "boundary: one ms before cutoff is settled", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 4000, "gross_amount": 4000, "created_at": "2026-01-15T03:59:59.999Z" } ],
+      "withdrawals": [],
+      "expected": { "gross": 4000, "net": 4000, "withdrawn": 0, "pending": 0, "available": 4000, "ledger": 4000 } },
+
+    { "name": "multiple withdrawals, mixed statuses — only completed/successful count", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 10000, "gross_amount": 10000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [
+        { "amount": 2000, "status": "completed" },
+        { "amount": 1000, "status": "successful" },
+        { "amount": 500, "status": "pending" },
+        { "amount": 1500, "status": "rejected" }
+      ],
+      "expected": { "gross": 10000, "net": 10000, "withdrawn": 3000, "pending": 0, "available": 7000, "ledger": 7000 } },
+
+    { "name": "fractional amounts preserve ledger identity to the kobo", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [
+        { "amount": 1234.56, "gross_amount": 1234.56, "created_at": "2026-01-14T10:00:00.000Z" },
+        { "amount": 999.99, "gross_amount": 999.99, "created_at": "2026-01-15T06:00:00.000Z" }
+      ],
+      "withdrawals": [ { "amount": 500, "status": "approved" } ],
+      "expected": { "gross": 2234.55, "net": 2234.55, "withdrawn": 500, "pending": 999.99, "available": 734.56, "ledger": 1734.55 } },
+
+    { "name": "several settled contributions with contributor-borne gross", "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [
+        { "amount": 5000, "gross_amount": 5100, "created_at": "2026-01-14T10:00:00.000Z" },
+        { "amount": 3000, "gross_amount": 3060, "created_at": "2026-01-14T11:00:00.000Z" }
+      ],
+      "withdrawals": [],
+      "expected": { "gross": 8160, "net": 8000, "withdrawn": 0, "pending": 0, "available": 8000, "ledger": 8000 } },
+
+    { "name": "before-cutoff `now` shifts the window to prior day", "now": "2026-01-15T03:00:00.000Z",
+      "contributions": [
+        { "amount": 6000, "gross_amount": 6000, "created_at": "2026-01-14T02:00:00.000Z" },
+        { "amount": 2000, "gross_amount": 2000, "created_at": "2026-01-14T10:00:00.000Z" }
+      ],
+      "withdrawals": [],
+      "expected": { "gross": 8000, "net": 8000, "withdrawn": 0, "pending": 2000, "available": 6000, "ledger": 8000 } }
+  ],
+
+  "divergence": [
+    { "name": "APPROVED withdrawal counts as withdrawn (Node superset; edge {completed,successful} would miss it)",
+      "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 10000, "gross_amount": 10000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [ { "amount": 4000, "status": "approved" } ],
+      "expected": { "gross": 10000, "net": 10000, "withdrawn": 4000, "pending": 0, "available": 6000, "ledger": 6000 },
+      "edgeLegacyWouldCompute": { "withdrawn": 0, "available": 10000, "ledger": 10000 } },
+
+    { "name": "SUCCESS withdrawal counts as withdrawn (Node superset; edge {completed,successful} would miss it)",
+      "now": "2026-01-15T12:00:00.000Z",
+      "contributions": [ { "amount": 8000, "gross_amount": 8000, "created_at": "2026-01-14T10:00:00.000Z" } ],
+      "withdrawals": [ { "amount": 3000, "status": "success" } ],
+      "expected": { "gross": 8000, "net": 8000, "withdrawn": 3000, "pending": 0, "available": 5000, "ledger": 5000 },
+      "edgeLegacyWouldCompute": { "withdrawn": 0, "available": 8000, "ledger": 8000 } }
+  ],
+
+  "withdrawalEligibility": [
+    { "name": "cap = available - pending", "available": 10000, "pendingWithdrawals": 3000, "expected": { "withdrawable": 7000, "cap": 7000 } },
+    { "name": "pending exceeds available → 0", "available": 5000, "pendingWithdrawals": 6000, "expected": { "withdrawable": 0, "cap": 0 } },
+    { "name": "zero available → 0", "available": 0, "pendingWithdrawals": 0, "expected": { "withdrawable": 0, "cap": 0 } },
+    { "name": "pending summed from rows (pending+processing only)", "available": 4000,
+      "pendingWithdrawalRows": [ { "amount": 2000, "status": "pending" }, { "amount": 1000, "status": "processing" }, { "amount": 500, "status": "completed" } ],
+      "expected": { "withdrawable": 1000, "cap": 1000 } }
+  ],
+
+  "tiers": [
+    { "name": "two tiers, sold by TierId and by Tier name",
+      "tiers": [
+        { "id": "t1", "name": "VIP", "price": 5000, "quantity": 10 },
+        { "id": "t2", "name": "Regular", "price": 2000, "quantity": 100 }
+      ],
+      "paidRows": [
+        { "contributor_information": [ { "TierId": "t1", "Quantity": 2 } ] },
+        { "contributor_information": [ { "Tier": "Regular", "Quantity": 3 } ] }
+      ],
+      "expected": [
+        { "tierId": "t1", "tierName": "VIP", "sold": 2, "totalCapacity": 10, "remainingCapacity": 8 },
+        { "tierId": "t2", "tierName": "Regular", "sold": 3, "totalCapacity": 100, "remainingCapacity": 97 }
+      ] },
+    { "name": "unlimited tier (null quantity) → null capacity",
+      "tiers": [ { "id": "t1", "name": "GA", "price": 1000, "quantity": null } ],
+      "paidRows": [ { "contributor_information": [ { "TierId": "t1", "Quantity": 5 } ] } ],
+      "expected": [ { "tierId": "t1", "tierName": "GA", "sold": 5, "totalCapacity": null, "remainingCapacity": null } ] }
+  ]
+}

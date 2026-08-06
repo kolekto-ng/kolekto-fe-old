@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/lib/toast";
@@ -52,6 +52,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [ambassadorReferralCode, setAmbassadorReferralCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,11 +66,23 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const [showV2, setShowV2] = useState(false);
   const { signUp } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const { executeRecaptcha } = useGoogleReCaptcha();
   const resolvedRedirect = redirectTo === "/create-collection"
     ? "/create-collection?resumePublish=1"
     : redirectTo;
+
+  useEffect(() => {
+    const codeFromUrl =
+      searchParams.get("ref") ||
+      searchParams.get("ambassador") ||
+      searchParams.get("ambassador_code");
+
+    if (codeFromUrl) {
+      setAmbassadorReferralCode(codeFromUrl.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -152,22 +165,20 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         phoneNumber,
         recaptcherToken,
         recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`
+        `${window.location.origin}${resolvedRedirect}`,
+        ambassadorReferralCode.trim() || undefined
       );
 
       if (error) {
         const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
         setError(message);
-        toast.error(message);
       } else {
         setIsSignupComplete(true);
-        toast.success("Account created");
       }
     } catch (error: any) {
       console.log(error, 'error');
       const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -263,7 +274,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         phoneNumber,
         recaptcherToken,
         recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`
+        `${window.location.origin}${resolvedRedirect}`,
+        ambassadorReferralCode.trim() || undefined
       );
       console.log(user, 'user');
 
@@ -279,23 +291,18 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
       if (error) {
         const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
         setError(message);
-        toast.error(message);
       } else {
         if (session?.access_token) {
-          toast.success("Account created");
           navigate(resolvedRedirect);
         } else if (verificationRequired) {
           setIsSignupComplete(true);
-          toast.success("Check your email");
         } else {
           setIsSignupComplete(true);
-          toast.success("Registration successful");
         }
       }
     } catch (err: any) {
       const message = toFriendlyErrorMessage(err, "Registration failed. Please try again.");
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -436,6 +443,27 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
               />
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ambassadorReferralCode" className="font-medium text-slate-900">
+              Ambassador Referral Code
+            </Label>
+            <div className="relative">
+              <User className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-kolekto" />
+              <Input
+                id="ambassadorReferralCode"
+                type="text"
+                placeholder="GHAZAL"
+                maxLength={6}
+                value={ambassadorReferralCode}
+                onChange={(e) => setAmbassadorReferralCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6))}
+                className="h-14 rounded-2xl border-slate-200 bg-white pl-14 text-base shadow-sm focus-visible:ring-emerald-500/40"
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              Optional. If an ambassador referred you, enter their code so your account is connected to them.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -570,15 +598,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
             sitekey="6Lf9PdorAAAAAJgpPjIMXm8go5stcmatHVUHPUEh"
             onChange={handleV2Change}
           />
-        </div>
-      )}
-
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4">
-          <div className="flex max-w-[calc(100vw-2rem)] items-center rounded-2xl bg-white p-4 shadow-lg">
-            <Loader2 className="mr-3 h-5 w-5 animate-spin text-kolekto" />
-            <span className="font-medium text-kolekto">Creating Account...</span>
-          </div>
         </div>
       )}
     </form>

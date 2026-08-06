@@ -27,10 +27,13 @@ import {
   Building2,
   CreditCard,
   AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import { toast } from "@/lib/toast";
 import { useSettings } from '@/store/useSettings';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useProfileStore } from '@/store/useProfileStore';
 import { axiosInstance } from '@/utils/axios';
 
 function dedupeBanks(list: Array<{ name: string; code: string }> = []) {
@@ -57,10 +60,20 @@ const BankDetailsSection: React.FC = () => {
 
   const { loading, payoutAccounts, getBanks, verifyAccount, getPayoutAccounts, deletePayoutAccount } =
     useSettings() as any;
+  const { user } = useAuthStore() as any;
+  const { kycData, fetchKYCStatus, setActiveSection } = useProfileStore();
+  // Backend-computed (featureAccessService.canManageBankAccount), not
+  // re-derived from overallStatus here — this is what actually gates the
+  // save/delete calls server-side, so the UI can never drift from it.
+  const isKycVerified = kycData?.canManageBankAccount ?? false;
 
   useEffect(() => {
     getPayoutAccounts();
   }, []);
+
+  useEffect(() => {
+    if (user?.id) fetchKYCStatus(user.id);
+  }, [user?.id, fetchKYCStatus]);
 
   useEffect(() => {
     if (showAddDialog) {
@@ -123,6 +136,7 @@ const BankDetailsSection: React.FC = () => {
   };
 
   const handleOpenAdd = () => {
+    if (!isKycVerified) return;
     resetForm();
     setShowAddDialog(true);
   };
@@ -156,20 +170,42 @@ const BankDetailsSection: React.FC = () => {
               <Building2 className="w-4 h-4 text-[#1B5E20]" />
               Bank Accounts
             </CardTitle>
-            <Button
-              onClick={handleOpenAdd}
-              size="sm"
-              className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white h-8 text-xs"
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Add Account
-            </Button>
+            {isKycVerified && (
+              <Button
+                onClick={handleOpenAdd}
+                size="sm"
+                className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white h-8 text-xs"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add Account
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-500 mb-4">
             Manage your bank accounts for receiving withdrawals. Your primary account will be used for all payouts.
           </p>
+
+          {!isKycVerified && (
+            <div className="flex items-start gap-3 p-3 mb-4 rounded-xl bg-amber-50 border border-amber-100">
+              <ShieldCheck className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-800">KYC verification required</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Complete your KYC verification to add a bank account for withdrawals.
+                </p>
+              </div>
+              <Button
+                onClick={() => setActiveSection('kyc')}
+                size="sm"
+                variant="outline"
+                className="border-amber-200 text-amber-800 hover:bg-amber-100 h-8 text-xs shrink-0"
+              >
+                Verify Now
+              </Button>
+            </div>
+          )}
 
           {/* Bank Account Cards */}
           {payoutAccounts && payoutAccounts.length > 0 ? (
@@ -234,13 +270,15 @@ const BankDetailsSection: React.FC = () => {
               <p className="text-xs text-gray-500 mb-4 max-w-xs">
                 Add a bank account to start receiving withdrawals from your collections.
               </p>
-              <Button
-                onClick={handleOpenAdd}
-                className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Your First Account
-              </Button>
+              {isKycVerified && (
+                <Button
+                  onClick={handleOpenAdd}
+                  className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Your First Account
+                </Button>
+              )}
             </div>
           )}
         </CardContent>

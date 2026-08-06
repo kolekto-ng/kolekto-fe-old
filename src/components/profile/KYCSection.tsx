@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Shield,
   FileText,
   Upload,
   Check,
@@ -21,6 +20,7 @@ import {
 import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 import { DocumentUploadForm } from './forms/DocumentUploadForm';
+import { KycJourneyPanel } from './KycJourneyPanel';
 import { axiosInstance } from '@/utils/axios';
 import { toast } from "@/lib/toast";
 import { Skeleton } from '@/components/ui/skeleton';
@@ -87,14 +87,6 @@ const KYCSection: React.FC = () => {
   const identityDocs = kycData?.identityVerification?.documents || [];
   const addressDocs = kycData?.addressVerification?.documents || [];
 
-  // "Progress" should reflect what the user has actually submitted,
-  // not only what has been approved by an admin.
-  const identitySubmitted = identityStatus !== "notStarted";
-  const addressSubmitted = addressStatus !== "notStarted";
-  const submittedSteps = [identitySubmitted, addressSubmitted].filter(Boolean)
-    .length;
-  const totalSteps = 2;
-
   const handleRefresh = () => {
     if (user?.id) fetchKYCStatus(user.id);
   };
@@ -111,65 +103,20 @@ const KYCSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* KYC Progress Overview */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-[#1B5E20]" />
-              Verification Progress
-            </CardTitle>
-            <button
-              onClick={handleRefresh}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#1B5E20] to-[#2E7D32] rounded-full transition-all duration-500"
-                style={{ width: `${(submittedSteps / totalSteps) * 100}%` }}
-              />
-            </div>
-            <span className="text-sm font-semibold text-gray-900">
-              {submittedSteps}/{totalSteps}
-            </span>
-          </div>
+      <div className="flex items-center justify-end -mb-2">
+        <button
+          onClick={handleRefresh}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh status
+        </button>
+      </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-              <div className="flex items-center gap-2">
-                {identitySubmitted ? (
-                  <Check className="w-4 h-4 text-emerald-600" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                )}
-                <p className="text-sm font-medium text-gray-900">
-                  Identity Verification
-                </p>
-              </div>
-              <StatusBadge status={identityStatus} />
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-              <div className="flex items-center gap-2">
-                {addressSubmitted ? (
-                  <Check className="w-4 h-4 text-emerald-600" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                )}
-                <p className="text-sm font-medium text-gray-900">
-                  Address Verification
-                </p>
-              </div>
-              <StatusBadge status={addressStatus} />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Guided KYC journey — phase, real progress checklist, review-time
+          estimate, and what's still available while waiting. Entirely
+          driven by kycData.journey (GET /settings/kyc/access-status). */}
+      <KycJourneyPanel journey={kycData?.journey} />
 
       {/* Identity Verification */}
       <Card className="border-0 shadow-sm">

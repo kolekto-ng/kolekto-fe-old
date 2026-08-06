@@ -20,6 +20,7 @@ import {
   MessageCircle,
   ShieldCheck,
   ChevronRight,
+  Users,
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuthStore } from '@/store';
@@ -39,6 +40,7 @@ const primaryNavItems: NavItem[] = [
 ];
 
 const secondaryNavItems: NavItem[] = [
+  { label: 'Shared with Me', path: '/dashboard/shared-with-me', icon: Users },
   { label: 'Profile', path: '/dashboard/settings', icon: Settings },
 ];
 

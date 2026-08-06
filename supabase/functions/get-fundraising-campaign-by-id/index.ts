@@ -53,7 +53,9 @@ Deno.serve(async (req: Request) => {
 
     const [campRes, profRes, kycRes, docsRes, imgRes, donRes, contRes] = await Promise.all([
       supabase.from("campaigns").select("*").eq("id", id).maybeSingle(),
-      supabase.from("profiles").select("id, full_name, email").eq("id", collection.user_id).single(),
+      // PII: this is a PUBLIC, unauthenticated endpoint — select only
+      // full_name, never email, for the campaign creator.
+      supabase.from("profiles").select("id, full_name").eq("id", collection.user_id).single(),
       supabase.from("kyc_verifications").select("status").eq("user_id", collection.user_id).maybeSingle(),
       supabase.from("verification_documents").select("*").eq("campaign_id", id),
       supabase.from("campaign_images").select("*").eq("campaign_id", id).order("display_order"),
@@ -98,8 +100,7 @@ Deno.serve(async (req: Request) => {
     const enriched = {
       id: collection.id,
       creator_id: collection.user_id,
-      creator_name: profile?.full_name || profile?.email || "Unknown",
-      creator_email: profile?.email || "",
+      creator_name: profile?.full_name || "Unknown",
       creator_kyc_status: profile?.kyc_status || "unverified",
       title: collection.title,
       summary: collection.campaign_summary || camp?.summary || collection.description || null,

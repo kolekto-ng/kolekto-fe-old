@@ -37,7 +37,34 @@ interface Candidate {
   created_at: string;
 }
 
-Deno.serve(async (_req: Request) => {
+// ── Cron-only guard (architectural hardening audit) ─────────────────────────
+// verify_jwt is disabled on this function (like every other function in this
+// project), and the public anon key trivially satisfies any JWT check anyway
+// — so today ANY caller can invoke this repeatedly, forcing repeated
+// external Paystack API calls (one per candidate, up to 25/run) and
+// payment_recovery_log writes. This is a soft, non-breaking gate: if
+// CRON_SECRET is configured in the function's environment, the caller must
+// send it via `X-Cron-Secret`; if it is NOT configured (true today), this
+// check is skipped entirely so the existing pg_cron job — whose exact
+// invocation headers this audit could not verify without touching the live
+// cron.job definition — keeps working unchanged. Operator follow-up: set
+// CRON_SECRET as a function secret AND add `'X-Cron-Secret: <value>'` to the
+// pg_cron job's http call to actually close this gap.
+function isAuthorizedCronCaller(req: Request): boolean {
+  const configuredSecret = Deno.env.get("CRON_SECRET");
+  if (!configuredSecret) return true; // not yet configured — do not break the existing job
+  return req.headers.get("X-Cron-Secret") === configuredSecret;
+}
+
+Deno.serve(async (req: Request) => {
+  if (!isAuthorizedCronCaller(req)) {
+    console.warn("[scheduled-payment-recovery] rejected: missing/incorrect X-Cron-Secret");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const startedAt = Date.now();
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

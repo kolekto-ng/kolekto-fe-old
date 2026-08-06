@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "@/lib/toast";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
+import { useProfileStore } from '@/store/useProfileStore';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
+import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import {
   CollectionType,
@@ -271,6 +273,10 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   const location = useLocation();
   const { user } = useAuthStore();
   const { createCollection } = useCollectionStore();
+  // Single-source creation-limit gate. Every entry point converges on this
+  // wizard, so enforcing here gives identical early UX everywhere; the backend
+  // remains the authority and independently returns 403.
+  const { limitReached: createLimitReached, message: createLimitMessage } = useCanCreateCollection();
   const {
     data,
     stepIndex,
@@ -380,6 +386,13 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     }
   };
 
+  const goToStep = (stepId: StepId) => {
+    const idx = steps.indexOf(stepId);
+    if (idx >= 0) {
+      setStepIndex(idx);
+    }
+  };
+
   const publishCollection = async () => {
     let finalStoryImageUrls: string[] = storyImages;
     let finalVerificationDocs: VerificationDocPayload[] = verificationFiles.map((file) => ({
@@ -431,6 +444,16 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     if (!user) {
       requestPublish();
       setIsAuthPromptOpen(true);
+      return;
+    }
+
+    // Early, uniform enforcement of the unverified one-collection limit. The
+    // backend still rejects with 403 if this is somehow bypassed.
+    if (createLimitReached) {
+      toast.error(createLimitMessage ?? 'You have reached your collection limit.', {
+        id: 'collection-publish',
+      });
+      autoPublishTriggeredRef.current = false;
       return;
     }
 
@@ -522,6 +545,7 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
             onSubmit={() => void handlePublish()}
             onBack={goPrev}
             onCancel={() => navigate(cancelPath)}
+            onEditStep={goToStep}
           />
         );
       default:
@@ -548,6 +572,40 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   return (
     <>
       <div className="mx-auto max-w-2xl">
+        {createLimitReached && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="flex-1 text-xs leading-relaxed text-amber-700">
+              {createLimitMessage}{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  useProfileStore.getState().setActiveSection('kyc');
+                  navigate('/dashboard/settings');
+                }}
+                className="font-semibold underline underline-offset-2"
+              >
+                Complete KYC verification
+              </button>{' '}
+              to create more.
+            </p>
+          </div>
+        )}
+
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => navigate(cancelPath)}
+            aria-label="Close and exit collection creation"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <span className="text-xs font-medium text-gray-400">
+            Step {stepIndex + 1} of {steps.length}
+          </span>
+        </div>
+
         <div className="mb-8">
           <WizardStepper steps={steps} currentIndex={stepIndex} />
         </div>
@@ -555,28 +613,22 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
         <div className="min-h-[400px]">{renderStep()}</div>
 
         {currentStepId !== 'review' && (
-          <div className="mt-8 flex items-center justify-between gap-4 border-t border-gray-100 pt-6">
+          <div className="mt-8 flex items-center gap-3 border-t border-gray-100 pt-6">
             <Button
               type="button"
               variant="outline"
               onClick={goPrev}
               disabled={isFirst}
-              className="flex items-center gap-1.5"
+              className="flex shrink-0 items-center gap-1.5"
             >
               <ChevronLeft className="h-4 w-4" />
               Back
             </Button>
 
-            <div className="flex-1 text-center">
-              <span className="text-xs text-gray-400">
-                Step {stepIndex + 1} of {steps.length}
-              </span>
-            </div>
-
             <Button
               type="button"
               onClick={goNext}
-              className="flex items-center gap-1.5 bg-green-700 text-white hover:bg-green-800"
+              className="flex flex-1 items-center justify-center gap-1.5 bg-green-700 text-white hover:bg-green-800 sm:ml-auto sm:flex-none"
             >
               {stepIndex === steps.length - 2 ? 'Review' : 'Continue'}
               <ChevronRight className="h-4 w-4" />

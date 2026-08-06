@@ -1,5 +1,7 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { KycRequiredModal } from "@/components/kyc/KycRequiredModal";
+import { useKycFocusRefetch } from "@/hooks/useKycFocusRefetch";
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import React, { Suspense, lazy, useEffect } from "react";
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -17,6 +19,8 @@ const TransactionHistoryPage = lazy(() => import("./pages/dashboard/TransactionH
 const ActivitiesPage = lazy(() => import("./pages/dashboard/ActivitiesPage"));
 const ContributePage = lazy(() => import("./pages/contribute/ContributePage"));
 const ActiveCampaignsPage = lazy(() => import("./pages/ActiveCampaignsPage"));
+const AmbassadorsPage = lazy(() => import("./pages/AmbassadorsPage"));
+const AmbassadorPortal = lazy(() => import("./pages/ambassador/AmbassadorPortal"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
@@ -26,6 +30,11 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CollectionDetailsPage = lazy(() => import("./pages/dashboard/CollectionDetailsPage"));
 const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
+const ConfirmEmailChangePage = lazy(() => import("./pages/ConfirmEmailChangePage"));
+const CollectionTransferPage = lazy(() => import("./pages/CollectionTransferPage"));
+const CollectionAccessPage = lazy(() => import("./pages/CollectionAccessPage"));
+const SharedCollectionsPage = lazy(() => import("./pages/dashboard/SharedCollectionsPage"));
+const SharedCollectionDetailPage = lazy(() => import("./pages/dashboard/SharedCollectionDetailPage"));
 import { useAuthStore } from "@/store/useAuthStore";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
@@ -123,6 +132,24 @@ const CollectionNotificationRedirect = () => {
 
 // Auth layout that wraps all routes
 const AuthenticatedApp = () => {
+  const isAmbassadorHost = window.location.hostname.startsWith("ambassador.");
+
+  if (isAmbassadorHost) {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex justify-center items-center h-screen">
+            <Loader2 className="h-8 w-8 animate-spin text-kolekto" />
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/*" element={<AmbassadorPortal />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <Suspense fallback={<AppRouteSkeleton />}>
       <Routes>
@@ -141,6 +168,8 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
       <Route path="/active-campaigns" element={<ActiveCampaignsPage />} />
+      <Route path="/ambassadors" element={<AmbassadorsPage />} />
+      <Route path="/ambassador/*" element={<AmbassadorPortal />} />
       <Route path="/collections/:collectionId" element={<CollectionNotificationRedirect />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
@@ -148,6 +177,9 @@ const AuthenticatedApp = () => {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/help" element={<HelpCenterPage />} />
       <Route path="/payment/verify" element={<PaymentCallback />} />
+      <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
+      <Route path="/collection-transfer" element={<CollectionTransferPage />} />
+      <Route path="/collection-access" element={<CollectionAccessPage />} />
       <Route path="/pwa/*" element={<LegacyPwaRedirect />} />
 
       {/* Protected Dashboard Routes */}
@@ -164,6 +196,8 @@ const AuthenticatedApp = () => {
         <Route path="collections/:id" element={<CollectionDetailsPage />} />
         <Route path="create-collection" element={<DashboardCreateCollectionPage />} />
         <Route path="settings" element={<UserProfilePage />} />
+        <Route path="shared-with-me" element={<SharedCollectionsPage />} />
+        <Route path="shared-with-me/:id" element={<SharedCollectionDetailPage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="activities" element={<ActivitiesPage />} />
       </Route>
@@ -178,7 +212,11 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   const location = useLocation();
+  const isAmbassadorExperience =
+    window.location.hostname.startsWith("ambassador.") ||
+    location.pathname.startsWith("/ambassador");
   const shouldShowWhatsAppButton =
+    !isAmbassadorExperience &&
     !location.pathname.startsWith("/dashboard") &&
     location.pathname !== "/create-collection";
 
@@ -211,21 +249,30 @@ const App = () => {
       });
   }, []);
 
-  // NOTE: this component used to subscribe to supabase.auth.onAuthStateChange
-  // and overwrite `kolekto-auth-token` with the Supabase session shape on
-  // every event. That re-introduced the exact dual-writer bug commit B-16
-  // (src/integrations/supabase/client.ts) tried to eliminate by giving
-  // Supabase its own storage key. Symptoms: random "logged out" mid-session,
-  // ghost SIGNED_OUT events triggering a hard navigate to /login, and the
-  // 401-interceptor wiping the token before useAuthStore noticed.
+  // Part 5 (KYC realtime sync): complements the Supabase channel subscription
+  // in useProfileStore with a throttled refetch-on-focus fallback — see
+  // hooks/useKycFocusRefetch.ts for why the realtime channel alone isn't
+  // fully reliable on mobile.
+  useKycFocusRefetch();
+
+  // Auth rehydration is owned entirely by useAuthStore (see the
+  // module-level `checkAuth()` trigger in store/useAuthStore.ts): on load,
+  // a valid stored token is verified against the backend before
+  // ProtectedRoute/DashboardLayout make a redirect decision. This used to
+  // also be done here via a mount-effect ("AuthSessionWatcher") that called
+  // `checkAuth()` and re-subscribed to Supabase's own auth events — that
+  // duplicated the rehydration path and, worse, re-introduced the B-16
+  // dual-writer bug (both this watcher and the Supabase client fighting
+  // over session state), causing random "logged out" mid-session and ghost
+  // SIGNED_OUT-triggered navigations. It has been removed entirely rather
+  // than re-enabled, so there is exactly one place that ever calls
+  // `checkAuth()` on load.
   //
-  // Source-of-truth split is now:
+  // Source-of-truth split:
   //   - `kolekto-auth-token`            → useAuthStore (custom backend JWT)
   //   - `kolekto-supabase-session`      → supabase client (RLS queries)
   // useAuthStore mirrors into the Supabase client via
-  // `mirrorSetSessionOnSupabase` on signIn/signUp/signOut. No reverse mirror
-  // is needed: nothing else should be invalidating the user's session
-  // out-of-band from a non-user event.
+  // `mirrorSetSessionOnSupabase` on signIn/signUp/signOut.
 
   return (
     <TooltipProvider>
@@ -233,6 +280,7 @@ const App = () => {
       <PwaUpdatePrompt />
       <ScrollToTop />
       <SessionTimeoutGuard />
+      <KycRequiredModal />
       <AuthenticatedApp />
       {shouldShowWhatsAppButton && (
         <Suspense fallback={null}>
@@ -240,52 +288,8 @@ const App = () => {
         </Suspense>
       )}
       {shouldShowWhatsAppButton && <WhatsAppButton />}
-      {/* <AuthSessionWatcher /> */}
     </TooltipProvider>
   );
 };
 
 export default App;
-
-// export function AuthSessionWatcher() {
-//   const { user, checkAuth, signOut } = useAuthStore() as any;
-//   console.log("auth watcher FaRunning...");
-
-
-//   useEffect(() => {
-//     // Check authentication status on app load
-//     checkAuth();
-//   }, [checkAuth]);
-
-//   useEffect(() => {
-//     const onFocus = () => {
-//       // Check auth status when window regains focus
-//       if (user) {
-//         checkAuth();
-//       }
-//     };
-
-//     const onStorageChange = (e: StorageEvent) => {
-//       // Listen for changes to auth token in other tabs
-//       if (e.key === "kolekto-auth-token") {
-//         if (!e.newValue) {
-//           // Token was removed, sign out
-//           signOut();
-//         } else {
-//           // Token was updated, check auth
-//           checkAuth();
-//         }
-//       }
-//     };
-
-//     window.addEventListener("focus", onFocus);
-//     window.addEventListener("storage", onStorageChange);
-
-//     return () => {
-//       window.removeEventListener("focus", onFocus);
-//       window.removeEventListener("storage", onStorageChange);
-//     };
-//   }, [user, checkAuth, signOut]);
-
-//   return null;
-// }

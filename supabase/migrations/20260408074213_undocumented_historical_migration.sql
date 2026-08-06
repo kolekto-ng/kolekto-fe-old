@@ -1,0 +1,8 @@
+-- PLACEHOLDER: this migration was applied directly to the remote project (Kolekto test)
+-- with no corresponding source ever committed to this repository. The actual
+-- historical SQL could not be recovered. This stub exists solely so the
+-- Supabase CLI's migration-history bookkeeping can be reconciled with what's
+-- really deployed (via `supabase migration repair --status applied`) — it
+-- intentionally contains NO SQL and running it is a no-op.
+-- Discovered during the Phase 4 deployment-consistency audit — see the
+-- engineering report for the full list and remediation recommendation.

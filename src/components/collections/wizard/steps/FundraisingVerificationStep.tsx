@@ -208,8 +208,8 @@ const FundraisingVerificationStep: React.FC<Props> = ({
         </p>
 
         {data.social_links.map((link, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="w-36 flex-shrink-0">
+          <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="w-full sm:w-36 sm:flex-shrink-0">
               <Select
                 value={link.platform}
                 onValueChange={(v) => updateSocialLink(i, 'platform', v)}
@@ -226,19 +226,21 @@ const FundraisingVerificationStep: React.FC<Props> = ({
                 </SelectContent>
               </Select>
             </div>
-            <Input
-              placeholder="https://..."
-              value={link.url}
-              onChange={(e) => updateSocialLink(i, 'url', e.target.value)}
-              className="flex-1 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => removeSocialLink(i)}
-              className="text-red-400 hover:text-red-600 p-1"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="https://..."
+                value={link.url}
+                onChange={(e) => updateSocialLink(i, 'url', e.target.value)}
+                className="flex-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => removeSocialLink(i)}
+                className="text-red-400 hover:text-red-600 p-1"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
 

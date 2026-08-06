@@ -93,7 +93,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
               </p>
 
               {data.pricing_tiers.map((tier, index) => (
-                <div key={tier.id} className="flex items-center gap-3 rounded-xl border bg-gray-50 p-3">
+                <div key={tier.id} className="flex flex-col gap-2 rounded-xl border bg-gray-50 p-3 sm:flex-row sm:items-center sm:gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {tier.name || `Tier ${index + 1}`}
@@ -102,7 +102,7 @@ const Step6UniqueId: React.FC<Props> = ({ data, onChange }) => {
                       {tier.price ? `NGN ${parseFloat(tier.price).toLocaleString()}` : 'No price set'}
                     </p>
                   </div>
-                  <div className="w-36">
+                  <div className="w-full sm:w-36">
                     <Input
                       className="text-sm uppercase"
                       placeholder="e.g. VIP"

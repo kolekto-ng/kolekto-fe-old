@@ -14,9 +14,10 @@ import { useAuthStore } from '@/store';
 import { useActivities } from '@/store/useDashboard';
 import { axiosInstance } from '@/utils/axios';
 import { Link } from 'react-router-dom';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
+import { useKycAccess } from '@/hooks/useKycAccess';
 
 interface WithdrawFundsDialogProps {
   open: boolean;
@@ -48,6 +49,12 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
   const [selectedAvailableBalance, setSelectedAvailableBalance] = useState(availableBalance);
   const [collections, setCollections] = useState<any[]>([]);
   const [loadingCols, setLoadingCols] = useState(false);
+  // Mirrors the backend's withdraw gate for early UX only — see useKycAccess.
+  const {
+    canWithdraw,
+    isUnderReview,
+    isLoading: accessLoading,
+  } = useKycAccess();
 
   useEffect(() => {
     if (open) {
@@ -157,24 +164,63 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     }
   };
 
-  // if (profile?.bank_verified !== true || profile?.identity_verified !== true || profile?.address_verified !== true) {
-  //   return (
-  //     <div>
-  //       <Dialog open={open} onOpenChange={onOpenChange}>
-  //         <DialogContent className="sm:max-w-md">
-  //           <DialogHeader>
-  //             <DialogTitle>Withdraw Funds</DialogTitle>
-  //             <DialogDescription>
-  //               To withdraw funds, please complete the verification of your bank details, identity, and address in your profile settings.
-  //             </DialogDescription>
-  //           </DialogHeader>
-  //           <Link className='bg-green-700 rounded-lg py-2 px-2 text-center text-[18px] font-semibold text-white' to="/dashboard/settings">profile</Link>
-  //         </DialogContent>
-  //       </Dialog>
+  // ── KYC gate ────────────────────────────────────────────────────────────
+  // Withdrawal is now verification-gated (featureAccessService.canWithdraw).
+  // The BACKEND is what actually enforces it — POST /withdrawals/request is
+  // mounted behind requireVerifiedOrganizer("withdraw") and rejects with
+  // KYC_REQUIRED before reading a single balance. This check only stops the
+  // user filling in a whole withdrawal form that was always going to be
+  // refused, and explains why in place.
+  //
+  // Balances are still shown either way: hiding them would look like the
+  // money had disappeared, which is the one impression this change must not
+  // create. The funds are untouched — only the payout action is locked.
+  if (open && !accessLoading && !canWithdraw) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
+              <ShieldAlert className="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle className="text-center">
+              Verify your identity to withdraw
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {isUnderReview
+                ? "We're reviewing your documents now. Withdrawals unlock as soon as verification completes."
+                : 'We are required to confirm your identity before releasing funds.'}
+            </DialogDescription>
+          </DialogHeader>
 
-  //     </div>
-  //   )
-  // }
+          <div className="rounded-xl bg-emerald-50 p-3">
+            <p className="text-xs leading-relaxed text-emerald-800">
+              <strong>Your money is safe.</strong> Your balance of{' '}
+              ₦{Number(availableBalance || 0).toLocaleString('en-NG')} stays exactly where it is and
+              contributions keep arriving normally. Nothing is held, deducted, or
+              lost — only the payout action is paused.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-full border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Close
+            </button>
+            <Link
+              to="/dashboard/settings"
+              onClick={() => onOpenChange(false)}
+              className="rounded-full bg-kolekto px-4 py-2 text-center text-sm font-semibold text-white hover:bg-kolekto/90"
+            >
+              {isUnderReview ? 'Check status' : 'Verify Identity'}
+            </Link>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

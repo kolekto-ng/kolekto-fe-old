@@ -614,6 +614,16 @@ const ContributeFlow: React.FC<ContributeFlowProps> = ({ collection }) => {
         toast.error('Valid email is required'); return false;
       }
       if (!contact.phone.trim()) { toast.error('Phone number is required'); return false; }
+      // Shortest real-world phone number is ~7 digits. Below this the value
+      // wasn't a phone number at all — most commonly an email address typed
+      // into this field, which stranded a real production payment
+      // (kolekto-1783668829043-357419): the presence-only check above let
+      // it through, and nothing downstream validated the format until the
+      // database column rejected it — after Paystack had already charged
+      // the contributor.
+      if ((contact.phone.match(/\d/g) || []).length < 7) {
+        toast.error('Enter a valid phone number'); return false;
+      }
     } else {
       if (!contact.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
         toast.error('Email is required to send your receipt'); return false;

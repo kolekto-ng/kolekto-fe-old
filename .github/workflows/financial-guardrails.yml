@@ -1,0 +1,56 @@
+# Financial Projection Engine — conformance + duplication guardrails (Phase 2.2 Wave 4).
+#
+# Enforces the invariant that business logic exists exactly once: the engine's
+# golden-vector suite must stay green and no runtime may reintroduce local
+# financial math. The engine is dependency-free, so no install step is needed.
+#
+# NOTE: this workflow lives in kolekto-fe-old. The guardrail scans whatever
+# runtime roots are present in the checkout (edge functions here). Full
+# cross-repo scanning (incl. kolekto-be-old) runs in the local/monorepo context;
+# to enable it in CI, check out kolekto-be-old as a sibling before the guard step.
+name: financial-guardrails
+
+on:
+  pull_request:
+    paths:
+      - "kolekto-shared-financial/**"
+      - "supabase/functions/**"
+  push:
+    branches: [main, staging]
+    paths:
+      - "kolekto-shared-financial/**"
+      - "supabase/functions/**"
+  workflow_dispatch:
+
+jobs:
+  conformance-and-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Golden-vector conformance (Node harness + parity + vectors)
+        working-directory: kolekto-shared-financial
+        run: node --experimental-strip-types --test "test/*.test.ts"
+
+      - name: Type soundness (engine source)
+        working-directory: kolekto-shared-financial
+        run: npx --yes tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --allowImportingTsExtensions --erasableSyntaxOnly --skipLibCheck --lib ES2022 src/index.ts
+
+      - name: No-local-financial-math guardrail
+        working-directory: kolekto-shared-financial
+        run: node scripts/guard-financial-duplication.mjs
+
+      - name: Edge inline block is in sync with the engine
+        working-directory: kolekto-shared-financial
+        run: |
+          node scripts/bundle-edge.mjs
+          if ! git diff --quiet -- ../supabase/functions; then
+            echo "::error::Inlined FPE block is stale. Run 'npm run bundle:edge' and commit."
+            git --no-pager diff --stat -- ../supabase/functions
+            exit 1
+          fi

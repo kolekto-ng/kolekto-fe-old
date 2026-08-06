@@ -1,5 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  canCreateCollection,
+  kycRequiredBody,
+  loadAccessContext,
+} from "../_shared/featureAccess.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,16 +19,13 @@ function json(data: unknown, status = 200) {
   });
 }
 
-/** Decode JWT payload without verification (test env). */
-function decodeJwtSub(token: string): string | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload?.sub || payload?.id || null;
-  } catch {
-    return null;
-  }
+// Structured, single-line JSON logs — mirrors kolekto-be-old/utils/logger.js's
+// shape so a request can be traced the same way regardless of which write
+// path (Express or this edge function) handled it. NEVER logs title,
+// description, story, or any other collection content — only identifiers and
+// booleans/enums needed to explain an authorization decision.
+function log(event: string, meta: Record<string, unknown>) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), event, path: "edge", ...meta }));
 }
 
 function generateSlug(title: string): string {
@@ -41,22 +43,70 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID();
+
   try {
     const body = await req.json();
-
-    // Resolve user_id: try JWT first, then body fallback
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    const userId = decodeJwtSub(token) || body?.user_id || null;
-
-    if (!userId) {
-      return json({ error: "Unauthorized" }, 401);
-    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // ─────────────────────────────────────────────────────────────────────
+    // AUTHENTICATION — the caller's identity comes EXCLUSIVELY from a
+    // cryptographically verified Supabase access token. There is no
+    // `body.user_id` fallback: a request body is client-controlled and
+    // proves nothing about who sent it. `auth.getUser(jwt)` calls Supabase
+    // Auth (GoTrue) to verify the token's signature and expiry — this is
+    // NOT the same as decoding the JWT payload locally, which only reads
+    // claims without checking whether they were ever legitimately signed.
+    // ─────────────────────────────────────────────────────────────────────
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) {
+      log("collection.create.rejected", { requestId, reason: "no_token" });
+      return json({ error: "Unauthorized" }, 401);
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData?.user?.id) {
+      log("collection.create.rejected", {
+        requestId,
+        reason: authError?.message?.includes("expired") ? "token_expired" : "token_invalid",
+      });
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const userId = authData.user.id;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // KYC gate — unverified users may create only one collection.
+    //
+    // The rule itself now lives in ../_shared/featureAccess.ts, imported by
+    // every edge function that needs it, instead of being re-inlined here.
+    // That module documents the sync contract with the Node implementation
+    // (kolekto-be-old/services/featureAccessService.js) — the two runtimes
+    // cannot share code, but there is exactly one copy per runtime.
+    // ─────────────────────────────────────────────────────────────────────
+    const accessContext = await loadAccessContext(supabase, userId);
+    const allowed = canCreateCollection(accessContext);
+
+    log("collection.create.authorization", {
+      requestId,
+      userId,
+      kycStatus: accessContext.status ?? "not_started",
+      collectionCount: accessContext.collectionCount,
+      // Deliberately no `group` field: classifying B vs C needs payout-account
+      // data this path doesn't load, so emitting it here would under-report
+      // legacy users in the logs. GET /settings/kyc/access-status and
+      // scripts/kycLegacyUserAudit.js are the authorities on grouping.
+      decision: allowed ? "allowed" : "blocked",
+    });
+
+    if (!allowed) {
+      log("collection.create.rejected", { requestId, userId, reason: "kyc_required" });
+      return json(kycRequiredBody("create_collection"), 403);
+    }
 
     const {
       collection_type = "fixed",
@@ -151,7 +201,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError) {
-      console.error("Insert error:", insertError.message, insertError.details, insertError.hint);
+      log("collection.create.failed", { requestId, userId, reason: insertError.message });
       return json({ error: insertError.message }, 400);
     }
 
@@ -264,9 +314,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    log("collection.create.succeeded", { requestId, userId, collectionId: collection.id });
     return json({ data: collection });
   } catch (err) {
-    console.error("Unexpected error:", err);
+    log("collection.create.failed", { requestId, reason: err instanceof Error ? err.message : String(err) });
     return json({ error: "Internal server error" }, 500);
   }
 });

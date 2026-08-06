@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2, ChevronLeft, X, Banknote, Hash, FileText, Tag } from 'lucide-react';
-import { WizardData, TYPE_META, fmtCurrency, calculateFees } from '../wizardTypes';
+import { WizardData, StepId, TYPE_META, fmtCurrency, calculateFees } from '../wizardTypes';
 
 interface Props {
   data: WizardData;
@@ -9,17 +9,30 @@ interface Props {
   onSubmit: () => void;
   onBack: () => void;
   onCancel: () => void;
+  onEditStep: (stepId: StepId) => void;
 }
 
-const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({
+const Section: React.FC<{ icon: React.ReactNode; title: string; onEdit?: () => void; children: React.ReactNode }> = ({
   icon,
   title,
+  onEdit,
   children,
 }) => (
   <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-    <div className="flex items-center gap-2 text-gray-900 font-semibold text-sm">
-      {icon}
-      <span>{title}</span>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 text-gray-900 font-semibold text-sm">
+        {icon}
+        <span>{title}</span>
+      </div>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-xs font-medium text-green-700 hover:text-green-800 hover:underline"
+        >
+          Edit
+        </button>
+      )}
     </div>
     <div className="space-y-2 text-sm text-gray-700">{children}</div>
   </div>
@@ -32,7 +45,7 @@ const Row: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value
   </div>
 );
 
-const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSubmit, onBack, onCancel }) => {
+const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSubmit, onBack, onCancel, onEditStep }) => {
   const meta = TYPE_META[data.collection_type];
   const isFundraising = data.collection_type === 'fundraising';
   const isTicket = data.collection_type === 'ticket';
@@ -81,7 +94,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
       </div>
 
       {/* Basic info */}
-      <Section icon={<FileText className="w-4 h-4" />} title="Basic Information">
+      <Section icon={<FileText className="w-4 h-4" />} title="Basic Information" onEdit={() => onEditStep('basic-info')}>
         <Row label="Title" value={data.title || <span className="text-red-400">Missing</span>} />
         {data.description && <Row label="Description" value={<span className="text-right max-w-xs line-clamp-2">{data.description}</span>} />}
         {(data.collection_type !== 'fundraising') && data.deadline && (
@@ -95,7 +108,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
 
       {/* Pricing */}
       {!isFundraising && (
-        <Section icon={<Banknote className="w-4 h-4" />} title="Pricing">
+        <Section icon={<Banknote className="w-4 h-4" />} title="Pricing" onEdit={() => onEditStep('pricing')}>
           {data.collection_type === 'fixed' && (
             <>
               <Row label="Amount" value={fmtCurrency(parseFloat(data.fixed_amount) || 0)} />
@@ -144,7 +157,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
 
       {/* Fundraising goal */}
       {isFundraising && (
-        <Section icon={<Banknote className="w-4 h-4" />} title="Campaign Goal">
+        <Section icon={<Banknote className="w-4 h-4" />} title="Campaign Goal" onEdit={() => onEditStep('fundraising-goal')}>
           <Row
             label="Target"
             value={
@@ -167,7 +180,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
 
       {/* Charges */}
       {!isFundraising && !isOpenPool && reprAmount > 0 && (
-        <Section icon={<Tag className="w-4 h-4" />} title="Fee Configuration">
+        <Section icon={<Tag className="w-4 h-4" />} title="Fee Configuration" onEdit={() => onEditStep('charges')}>
           <Row label="Fee bearer" value={<span className="capitalize">{data.fee_bearer}</span>} />
           {reprAmount > 0 && (
             <>
@@ -179,8 +192,8 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
       )}
 
       {/* Contributor fields */}
-      {!isFundraising && (
-        <Section icon={<FileText className="w-4 h-4" />} title="Contributor Fields">
+      {!isFundraising && !isTicket && (
+        <Section icon={<FileText className="w-4 h-4" />} title="Contributor Fields" onEdit={() => onEditStep('contributor-fields')}>
           {data.form_fields.length === 0 ? (
             <p className="text-gray-400 text-xs">No custom fields added (name, email & phone collected by default)</p>
           ) : (
@@ -200,7 +213,7 @@ const ReviewStep: React.FC<Props> = ({ data, isSubmitting, isAuthenticated, onSu
 
       {/* Unique ID */}
       {uniqueEnabled && (
-        <Section icon={<Hash className="w-4 h-4" />} title="Unique ID">
+        <Section icon={<Hash className="w-4 h-4" />} title="Unique ID" onEdit={() => onEditStep('unique-id')}>
           {isTicket ? (
             <p className="text-xs text-gray-600">IDs will only be issued for the prefixes configured below.</p>
           ) : (

@@ -21,6 +21,7 @@ const cols = [
       { label: "Careers", to: "/contact" },
       { label: "Partnerships", to: "/contact" },
       { label: "Press", to: "/about" },
+      { label: "Ambassador", to: "/ambassadors" },
     ],
   },
   {

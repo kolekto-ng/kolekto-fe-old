@@ -5,7 +5,9 @@
       "mcp__claude_ai_Supabase__execute_sql",
       "Read(//c/Users/USER/Desktop/Kolekto-codebase/kolekto-be-old/**)",
       "Bash(node --check controllers/contribution.js)",
-      "Bash(node --check controllers/collection.js)"
+      "Bash(node --check controllers/collection.js)",
+      "Bash(cd \"C:\\\\Users\\\\USER\\\\Desktop\\\\Kolekto-codebase\\\\kolekto-be-old\" && grep -rln \"express-rate-limit\\\\|rateLimit\\\\|rate-limit\" --include=\"*.js\" . 2>/dev/null | grep -v node_modules; echo \"--- verifyPaystickIp ---\"; cat middleware/verifyPaystickIp.js; echo \"--- wallet.js controller ---\"; cat controllers/wallet.js)",
+      "Bash(cd \"C:\\\\Users\\\\USER\\\\Desktop\\\\Kolekto-codebase\\\\kolekto-be-old\" && grep -rn \"verifyPaystackIP\" --include=\"*.js\" . 2>/dev/null | grep -v node_modules)"
     ]
   }
 }

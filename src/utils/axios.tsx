@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/store";
 import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
+import { useKycGateStore } from "@/store/useKycGateStore";
 import axios from "axios";
 
 // API configuration following the backend pattern.
@@ -10,8 +11,13 @@ import axios from "axios";
 // explicitly overridden. In dev mode, add a `.env.development.local` with
 // VITE_API_URL=http://localhost:<PORT>/api to point at a local backend —
 // see kolekto-fe-old/.env.development.local. The bare fallback below matches
-// the backend's own default port (see kolekto-be-old/app.js: `PORT || 3000`)
-// so a fresh checkout with no env file still points somewhere that exists.
+// the backend's own default port. NOTE: app.js actually defaults to
+// `PORT || 5050`, not 3000 — this comment previously claimed 3000, and the
+// fallback below still says 3000. Left as-is deliberately rather than
+// "corrected" to 5050: changing the dev fallback is a behaviour change for
+// anyone already running a local proxy on 3000. Set VITE_API_BASE_URL in
+// .env.development.local to point at your local backend (default
+// http://localhost:5050/api) instead of relying on this fallback.
 const API_BASE_URL =
   import.meta.env.MODE === "production"
     ? import.meta.env.VITE_API_URL || "https://api.kolekto.com.ng/api"
@@ -23,6 +29,7 @@ const API_BASE_URL =
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15_000, // 15 s — fail fast instead of hanging when backend is down
   withCredentials: true, // CRUCIAL: This sends cookies cross-domain
 });
 
@@ -31,6 +38,12 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const method = (config.method || "get").toLowerCase();
     const url = config.url || "";
+    const isAmbassadorEndpoint = url.includes("/ambassadors/");
+    const isAmbassadorPublicEndpoint = [
+      "/ambassadors/apply",
+      "/ambassadors/auth/signin",
+      "/ambassadors/auth/setup-pin",
+    ].some((endpoint) => url.includes(endpoint));
     const isAuthPublicEndpoint = [
       "/auth/signin",
       "/auth/signup",
@@ -48,6 +61,16 @@ axiosInstance.interceptors.request.use(
       config.headers["Content-Type"] = "application/json";
     }
 
+    if (isAmbassadorEndpoint && !isAmbassadorPublicEndpoint) {
+      const ambassadorToken = localStorage.getItem("kolekto-ambassador-token");
+      if (ambassadorToken) {
+        config.headers.Authorization = `Bearer ${ambassadorToken}`;
+      } else {
+        delete config.headers.Authorization;
+      }
+      return config;
+    }
+
     // Get session from localStorage
     const session = !isAuthPublicEndpoint ? getValidAuthSessionFromStorage() : null;
     if (session?.access_token) {
@@ -60,6 +83,19 @@ axiosInstance.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+
+// Ambassador public endpoints that don't require authentication.
+// 401s from these are normal credential failures, not session expiry.
+const AMBASSADOR_PUBLIC_ENDPOINTS = [
+  "/ambassadors/apply",
+  "/ambassadors/auth/signin",
+  "/ambassadors/auth/setup-pin",
+];
+
+function isAmbassadorPublicUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return AMBASSADOR_PUBLIC_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+}
 
 // Public auth endpoints — a 401 from these is a normal credential failure
 // (e.g. wrong password on /auth/signin) and must NOT trigger a hard logout.
@@ -98,6 +134,7 @@ function isPublicAuthCall(url: string | undefined): boolean {
 // will keep the session alive.
 function shouldAutoLogout(url: string | undefined): boolean {
   if (!url) return false;
+  if (url.includes("/ambassadors/")) return false;
   return url.includes("/auth/me");
 }
 
@@ -108,6 +145,7 @@ let signingOutPromise: Promise<void> | null = null;
 // Track and rate-limit 401s on non-/auth/me endpoints. If we see a *sustained*
 // stream (>=5 401s within 10s) we conclude the session really is dead and
 // trigger the logout, rather than a transient refresh race.
+// NOTE: ambassador endpoint 401s are handled separately and excluded here.
 const recent401s: number[] = [];
 const STALE_SESSION_THRESHOLD = 5;
 const STALE_SESSION_WINDOW_MS = 10_000;
@@ -120,6 +158,36 @@ function looksLikeDeadSession(): boolean {
     recent401s.shift();
   }
   return recent401s.length >= STALE_SESSION_THRESHOLD;
+}
+
+// Ambassador endpoints use a separate JWT system. When a 401 is received for
+// an ambassador protected route, we clear the ambassador session and redirect
+// to the ambassador login — without touching the main organizer session.
+const AMBASSADOR_TOKEN_KEY = "kolekto-ambassador-token";
+const AMBASSADOR_PROFILE_KEY = "kolekto-ambassador-profile";
+// Read once by the ambassador login page on mount to explain a forced
+// logout (e.g. "Your ambassador account has been temporarily suspended...").
+// A plain login failure never touches this — only a session that was valid
+// and got kicked out mid-use sets it.
+export const AMBASSADOR_LOGOUT_NOTICE_KEY = "kolekto-ambassador-logout-notice";
+let ambassadorRedirectPending = false;
+function handleAmbassadorUnauthorized(message?: string) {
+  if (ambassadorRedirectPending) return;
+  ambassadorRedirectPending = true;
+  localStorage.removeItem(AMBASSADOR_TOKEN_KEY);
+  localStorage.removeItem(AMBASSADOR_PROFILE_KEY);
+  if (message) {
+    sessionStorage.setItem(AMBASSADOR_LOGOUT_NOTICE_KEY, message);
+  }
+  // Defer to allow the current request's error to propagate first.
+  setTimeout(() => {
+    ambassadorRedirectPending = false;
+    const current = window.location.pathname;
+    if (!current.startsWith("/ambassador/login")) {
+      window.history.replaceState(null, "", "/ambassador/login");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  }, 0);
 }
 
 async function performSignOutAndRedirect() {
@@ -152,6 +220,39 @@ axiosInstance.interceptors.response.use(
   async (error) => {
     const status = error.response?.status;
     const url = error.config?.url;
+
+    // Ambassador endpoints use a dedicated JWT + live status check
+    // (verifyAmbassador re-validates ambassador_profiles.status on every
+    // request). A 403 there means the token is still cryptographically
+    // valid but the account is no longer 'accepted' (suspended/rejected) —
+    // that must force an immediate logout exactly like a 401 does, so this
+    // is checked independently of, and before, the organizer/admin 401
+    // handling below (which must never react to ambassador 403s).
+    if (
+      (status === 401 || status === 403) &&
+      url?.includes("/ambassadors/") &&
+      !isAmbassadorPublicUrl(url)
+    ) {
+      handleAmbassadorUnauthorized(error.response?.data?.error);
+      return Promise.reject(error);
+    }
+
+    // Backend-first KYC enforcement (legacy-user migration): ANY endpoint
+    // that blocks an action for lack of identity verification returns
+    // { code: "KYC_REQUIRED" } alongside its 403. Catching it here — once —
+    // means every current and future gated endpoint gets the same
+    // "Identity verification required" modal instead of a generic error,
+    // without each call site needing its own special-case handling.
+    // `message` is the field the backend contract specifies; `error` is the
+    // backwards-compatible alias every older endpoint still sends. Reading
+    // both means the modal shows real copy no matter which path answered
+    // (Express errorHandler, an inline controller response, or an edge
+    // function) — and `feature` lets the modal say WHICH action was blocked.
+    if (error.response?.data?.code === "KYC_REQUIRED") {
+      const data = error.response.data;
+      useKycGateStore.getState().open(data.message || data.error, data.feature);
+      return Promise.reject(error);
+    }
 
     if (status === 401 && !isPublicAuthCall(url)) {
       if (shouldAutoLogout(url)) {

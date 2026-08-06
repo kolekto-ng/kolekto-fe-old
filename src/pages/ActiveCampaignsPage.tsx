@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Filter,
-  Heart,
-  RefreshCcw,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { Filter, Heart, RefreshCcw, Search, Sparkles } from "lucide-react";
 import { toast } from "@/lib/toast";
-
 import Footer from "@/components/Footer/Footer";
 import NavBar from "@/components/NavBar";
 import ActiveCampaignCard, {
@@ -18,7 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FUNDRAISING_CATEGORIES } from "@/constants/fundraising";
 import { getActiveFundraisingCampaigns } from "@/utils/fundraisingCampaigns";
@@ -36,7 +35,10 @@ function readCampaignsCache(): ActiveCampaign[] | null {
   try {
     const raw = sessionStorage.getItem(CAMPAIGNS_CACHE_KEY);
     if (!raw) return null;
-    const { rows, ts } = JSON.parse(raw) as { rows: ActiveCampaign[]; ts: number };
+    const { rows, ts } = JSON.parse(raw) as {
+      rows: ActiveCampaign[];
+      ts: number;
+    };
     if (Date.now() - ts > CAMPAIGNS_CACHE_TTL) return null;
     return rows;
   } catch {
@@ -46,7 +48,10 @@ function readCampaignsCache(): ActiveCampaign[] | null {
 
 function writeCampaignsCache(rows: ActiveCampaign[]) {
   try {
-    sessionStorage.setItem(CAMPAIGNS_CACHE_KEY, JSON.stringify({ rows, ts: Date.now() }));
+    sessionStorage.setItem(
+      CAMPAIGNS_CACHE_KEY,
+      JSON.stringify({ rows, ts: Date.now() }),
+    );
   } catch {
     // storage quota exceeded — ignore
   }
@@ -112,7 +117,8 @@ const ActiveCampaignsPage: React.FC = () => {
   const filteredCampaigns = campaigns.filter((campaign) => {
     const matchesCategory =
       categoryFilter === "all" ||
-      (campaign.category || campaign.campaign_category || "").toLowerCase() === categoryFilter.toLowerCase();
+      (campaign.category || campaign.campaign_category || "").toLowerCase() ===
+        categoryFilter.toLowerCase();
 
     if (!matchesCategory) {
       return false;
@@ -141,7 +147,10 @@ const ActiveCampaignsPage: React.FC = () => {
   campaigns.forEach((campaign) => {
     const category = campaign.category || campaign.campaign_category;
 
-    if (category && !categories.includes(category as (typeof FUNDRAISING_CATEGORIES)[number])) {
+    if (
+      category &&
+      !categories.includes(category as (typeof FUNDRAISING_CATEGORIES)[number])
+    ) {
       categories.push(category as (typeof FUNDRAISING_CATEGORIES)[number]);
     }
   });
@@ -152,7 +161,7 @@ const ActiveCampaignsPage: React.FC = () => {
 
   const shareCampaign = async (
     campaign: ActiveCampaign,
-    event: React.MouseEvent<HTMLButtonElement>
+    event: React.MouseEvent<HTMLButtonElement>,
   ) => {
     event.stopPropagation();
     const shareUrl = `${window.location.origin}${getCampaignLink(campaign)}`;
@@ -160,7 +169,10 @@ const ActiveCampaignsPage: React.FC = () => {
       if (navigator.share) {
         await navigator.share({
           title: campaign.title,
-          text: campaign.summary || campaign.campaign_summary || "Support this active campaign on Kolekto.",
+          text:
+            campaign.summary ||
+            campaign.campaign_summary ||
+            "Support this active campaign on Kolekto.",
           url: shareUrl,
         });
       } else if (navigator.clipboard?.writeText) {
@@ -174,7 +186,7 @@ const ActiveCampaignsPage: React.FC = () => {
         toast.error("Unable to share this campaign right now.");
       }
     }
-  }
+  };
   const clearFilters = () => {
     setSearchTerm("");
     setCategoryFilter("all");
@@ -197,8 +209,9 @@ const ActiveCampaignsPage: React.FC = () => {
                   Active Campaigns
                 </h1>
                 <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">
-                  Explore fundraising campaigns that are currently live on Kolekto, track their
-                  momentum, and share the ones that matter to you.
+                  Explore fundraising campaigns that are currently live on
+                  Kolekto, track their momentum, and share the ones that matter
+                  to you.
                 </p>
               </div>
             </div>
@@ -216,7 +229,10 @@ const ActiveCampaignsPage: React.FC = () => {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,220px)_auto]">
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={setCategoryFilter}
+                  >
                     <SelectTrigger className="h-11 border-gray-200">
                       <div className="flex items-center gap-2 text-slate-600">
                         <Filter className="h-4 w-4" />
@@ -245,11 +261,17 @@ const ActiveCampaignsPage: React.FC = () => {
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
                 <p>
-                  Showing <span className="font-semibold text-slate-900">{filteredCampaigns.length}</span>{" "}
+                  Showing{" "}
+                  <span className="font-semibold text-slate-900">
+                    {filteredCampaigns.length}
+                  </span>{" "}
                   active campaign{filteredCampaigns.length === 1 ? "" : "s"}
                 </p>
                 {(normalizedQuery || categoryFilter !== "all") && (
-                  <Badge variant="outline" className="border-gray-200 bg-slate-50 text-slate-600">
+                  <Badge
+                    variant="outline"
+                    className="border-gray-200 bg-slate-50 text-slate-600"
+                  >
                     Filters applied
                   </Badge>
                 )}
@@ -259,7 +281,10 @@ const ActiveCampaignsPage: React.FC = () => {
             {isLoading ? (
               <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
-                  <Card key={index} className="overflow-hidden rounded-[24px] border-gray-200">
+                  <Card
+                    key={index}
+                    className="overflow-hidden rounded-[24px] border-gray-200"
+                  >
                     <Skeleton className="aspect-[16/10] w-full" />
                     <CardContent className="space-y-5 p-5">
                       <Skeleton className="h-6 w-3/4" />
@@ -283,8 +308,13 @@ const ActiveCampaignsPage: React.FC = () => {
                   <h2 className="mt-5 text-2xl font-semibold text-slate-900">
                     We couldn&apos;t load active campaigns
                   </h2>
-                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{error}</p>
-                  <Button className="mt-6 bg-green-900 text-white hover:bg-green-800" onClick={() => loadCampaigns(true)}>
+                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                    {error}
+                  </p>
+                  <Button
+                    className="mt-6 bg-green-900 text-white hover:bg-green-800"
+                    onClick={() => loadCampaigns(true)}
+                  >
                     Try again
                   </Button>
                 </CardContent>
@@ -299,9 +329,14 @@ const ActiveCampaignsPage: React.FC = () => {
                     No campaigns match your filters
                   </h2>
                   <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                    Try a different keyword or category to discover more active fundraising campaigns.
+                    Try a different keyword or category to discover more active
+                    fundraising campaigns.
                   </p>
-                  <Button variant="outline" className="mt-6 border-gray-200" onClick={clearFilters}>
+                  <Button
+                    variant="outline"
+                    className="mt-6 border-gray-200"
+                    onClick={clearFilters}
+                  >
                     Reset search
                   </Button>
                 </CardContent>

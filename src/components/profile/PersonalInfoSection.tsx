@@ -14,6 +14,8 @@ import {
   MapPin,
   ShieldAlert,
   ShieldCheck,
+  Lock,
+  ArrowRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { useProfileStore } from "@/store/useProfileStore";
@@ -22,7 +24,7 @@ import { axiosInstance } from "@/utils/axios";
 
 const PersonalInfoSection: React.FC = () => {
   const { user } = useAuthStore() as any;
-  const { profile, profileLoading, updateProfile, fetchProfile, kycData } =
+  const { profile, profileLoading, updateProfile, fetchProfile, kycData, setActiveSection } =
     useProfileStore();
   const { profile: settingsProfile, getProfile } = useSettings() as any;
 
@@ -221,7 +223,7 @@ const PersonalInfoSection: React.FC = () => {
               >
                 <User className="w-3 h-3" /> Full Name
               </Label>
-              {isEditing ? (
+              {isEditing && !isVerified ? (
                 <Input
                   id="fullName"
                   value={formData.fullName}
@@ -230,9 +232,16 @@ const PersonalInfoSection: React.FC = () => {
                   placeholder="Enter your full name"
                 />
               ) : (
-                <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
-                  {formData.fullName || "—"}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-900 py-2 px-3 bg-gray-50 rounded-md">
+                    {formData.fullName || "—"}
+                  </p>
+                  {isVerified && (
+                    <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <Lock className="w-3 h-3" /> Locked after KYC verification
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -250,6 +259,13 @@ const PersonalInfoSection: React.FC = () => {
                   Verified
                 </span>
               </p>
+              <button
+                type="button"
+                onClick={() => setActiveSection("security")}
+                className="text-xs text-[#1B5E20] hover:underline flex items-center gap-1"
+              >
+                Change email in Login &amp; Security <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
 
             {/* Phone */}
