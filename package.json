@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:pwa": "vite preview --strictPort --port 4173 --open /dashboard",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:edge-payment": "node --experimental-strip-types --test supabase/functions/initiate-paystack-payment/index.audit.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

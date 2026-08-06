@@ -2,6 +2,19 @@
  * initiate-paystack-payment — self-contained single-file edge function.
  * Safe to paste directly into the Supabase web console editor.
  * All shared utilities are inlined — no external local imports needed.
+ *
+ * 2026-08-06: this file and the deployed production function (busfgcmbndleljklrcbd,
+ * slug initiate-paystack-payment) had diverged in BOTH directions — production
+ * was missing the 2026-08-01 matchTier tier-collision fix (commit 8294d28) that
+ * IS in this file, while this file was missing a phone-plausibility check
+ * (incident kolekto-1783668829043-357419) that WAS live in production. Both are
+ * merged back into this single file below. Root cause: this function is
+ * deployed by hand (`supabase functions deploy`, no CI) and can also be edited
+ * directly in the Supabase console per the paste-ability note above — there was
+ * no single source of truth. Treat this file as authoritative going forward;
+ * verify with `supabase functions download` + diff after every deploy (see
+ * docs/VERIFY_PAYSTACK_PAYMENT_DEPLOYMENT_RUNBOOK_2026-08-06.md in kolekto-be-old
+ * for the same discipline applied to the sibling verify function).
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -27,6 +40,28 @@ function normalizePhone(raw: unknown, maxLen = 20): string | null {
   if (out.length > maxLen) out = out.slice(0, maxLen);
   return out;
 }
+
+// Root-cause fix for production incident kolekto-1783668829043-357419: a
+// contributor typed their EMAIL into the phone field. normalizePhone() alone
+// reduces "rasaqalimat7@gmail.com" to "7" (its only digit) — short enough to
+// fit varchar(20), so it would have been silently stored as garbage instead
+// of failing loudly. This runs BEFORE Paystack is charged (unlike
+// verify-paystack-payment's normalization, which runs AFTER — where
+// rejecting would mean refusing to record a payment already captured), so
+// it's the correct place to actually REJECT implausible input rather than
+// just clean it up. Shortest real-world phone number is ~7 digits.
+const MIN_PHONE_DIGITS = 7;
+function isPlausiblePhone(raw: unknown): boolean {
+  const normalized = normalizePhone(raw);
+  if (!normalized) return false;
+  const digitCount = (normalized.match(/\d/g) || []).length;
+  return digitCount >= MIN_PHONE_DIGITS;
+}
+
+// ── AMOUNT INTEGRITY ─────────────────────────────────────────────────────────
+// ₦1 tolerance to absorb rounding — matches kolekto-be-old controllers/deposit.js
+// (validateContributionAmount) so both amount-checking paths agree.
+const AMOUNT_TOLERANCE = 1;
 
 // ─── SHARED TYPES ─────────────────────────────────────────────────────────────
 type FeeBearer = "contributor" | "organizer";
@@ -1015,6 +1050,18 @@ function normalizePaymentRequest(input: {
     metadata.formData && typeof metadata.formData === "object"
       ? (metadata.formData as Record<string, unknown>)
       : {};
+
+  // Reject BEFORE Paystack is charged, not after. If a phone was supplied
+  // but doesn't normalize to something phone-shaped, refuse the checkout
+  // with a clear error rather than silently storing garbage or crashing the
+  // insert after the contributor's money has already moved. Absent phone
+  // (anonymous fundraising, or hosts who didn't ask for one) is untouched.
+  if (contactSource.phone && !isPlausiblePhone(contactSource.phone)) {
+    throw new PaymentValidationError(
+      "Enter a valid phone number.", 400, "invalid_phone", { collectionId }
+    );
+  }
+
   const contact = {
     name: String(contactSource.name || "").trim(),
     email: String(contactSource.email || "").trim(),
@@ -1111,6 +1158,23 @@ function normalizePaymentRequest(input: {
       }
       contributionAmount = roundCurrency(ticketSelections.reduce((s, sel) => s + sel.subtotal, 0));
 
+      // Impossible-state guard: tickets were selected and priced from the
+      // DB-authoritative tiers above — contributionAmount can only be wrong
+      // here if a future change reintroduces a client-trusted amount. Compare
+      // against what the client believed it was paying and reject on
+      // disagreement rather than silently charging our own number while the
+      // client (and the contributor looking at their screen) saw another.
+      {
+        const clientClaimedAmount = roundCurrency(asNumber(metadata.contributionAmount ?? metadata.amount));
+        if (clientClaimedAmount > 0 && Math.abs(clientClaimedAmount - contributionAmount) > AMOUNT_TOLERANCE) {
+          throw new PaymentValidationError(
+            "The amount for your selected tickets does not match what was submitted. Refresh the page and try again.",
+            409, "ticket_amount_mismatch",
+            { collectionId, ticketSelections, backendAmount: contributionAmount, clientClaimedAmount }
+          );
+        }
+      }
+
     } else {
       quantity = asPositiveInt(metadata.quantity) || 1;
       if (remainingContributionCapacity !== null && quantity > remainingContributionCapacity) {
@@ -1156,6 +1220,24 @@ function normalizePaymentRequest(input: {
     contributionAmount = roundCurrency(asNumber(tier.price));
     selectedTier = tier.tierName != null ? String(tier.tierName) : null;
     selectedTierId = tier.tierId != null ? String(tier.tierId) : null;
+
+    // Impossible-state guard: a tier was resolved server-side from the
+    // DB-authoritative price_tiers — contributionAmount is THE tier's price,
+    // never the client's. This is the exact "any tier picked, one price
+    // charged" failure class the 2026-08-01 matchTier fix addressed (see the
+    // comment in matchTier above). Assert it explicitly so a future refactor
+    // that reintroduces a client-trusted amount, or a matchTier regression,
+    // fails loudly here instead of silently charging the wrong figure.
+    {
+      const clientClaimedAmount = roundCurrency(asNumber(metadata.contributionAmount ?? metadata.amount));
+      if (clientClaimedAmount > 0 && Math.abs(clientClaimedAmount - contributionAmount) > AMOUNT_TOLERANCE) {
+        throw new PaymentValidationError(
+          "The amount for the selected tier does not match what was submitted. Refresh the page and try again.",
+          409, "tier_amount_mismatch",
+          { collectionId, tierId: selectedTierId, tierName: selectedTier, backendAmount: contributionAmount, clientClaimedAmount }
+        );
+      }
+    }
 
   } else {
     // fixed (default)
@@ -1362,6 +1444,20 @@ serve(async (req: Request) => {
     // F4: structured payment-lifecycle log (correlation ID = Paystack reference).
     console.log(
       `[initiate ref=${reference}] PAYMENT_INITIATED collectionId=${normalized.collectionId} type=${normalized.collectionType} contributionAmount=${normalized.contributionAmount} totalPayable=${normalized.totalPayable} feeBearer=${normalized.feeBearer} quantity=${normalized.quantity}`
+    );
+
+    // TIER_AMOUNT_AUDIT: one line, every initialization, regardless of
+    // collection type. Root-cause incident 2026-08-06 (collection
+    // da3e3a24-1133-4cdd-8e2a-c3ca53389db1) was invisible until we pulled the
+    // deployed source directly — this line makes "what tier resolved to what
+    // price, and what did Paystack actually receive" greppable from logs
+    // alone, without needing DB/CLI access to reconstruct it after the fact.
+    console.log(
+      `[initiate ref=${reference}] TIER_AMOUNT_AUDIT collectionId=${normalized.collectionId} ` +
+      `tierId=${normalized.selectedTierId ?? "n/a"} tierName=${JSON.stringify(normalized.selectedTier ?? null)} ` +
+      `tierPrice=${normalized.contributionAmount} frontendAmount=${normalized.providedAmount} ` +
+      `backendAmount=${normalized.contributionAmount} finalPaystackAmountKobo=${Math.round(normalized.totalPayable * 100)} ` +
+      `finalPaystackAmountNaira=${normalized.totalPayable}`
     );
 
     // Paystack metadata MUST be a simple JSON object. Deeply-nested objects,
