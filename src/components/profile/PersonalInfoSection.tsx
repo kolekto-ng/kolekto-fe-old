@@ -115,8 +115,12 @@ const PersonalInfoSection: React.FC = () => {
         .toUpperCase()
         .slice(0, 2)
     : "U";
-  const kycStatus = kycData?.overallStatus || user?.verification_status || "not_started";
-  const isVerified = kycStatus === "verified";
+  // Single source: kycData.overallStatus, sourced from GET /settings/kyc/access-status
+  // (see useProfileStore.fetchKYCStatus). `user.verification_status` was a
+  // phantom fallback — no such column exists on `profiles` in either the test
+  // or prod database, so it was always undefined and never actually fired.
+  const kycStatus = kycData?.overallStatus || "not_started";
+  const isVerified = kycData?.isVerified === true || kycStatus === "verified";
 
   return (
     <div className="space-y-6">

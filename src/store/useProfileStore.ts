@@ -1,13 +1,23 @@
 import { create } from "zustand";
 import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
-import { createClient } from "@supabase/supabase-js";
+// Reuse the ONE shared, authenticated Supabase client instead of building a
+// second throwaway one here. This used to call its own bare
+// `createClient(url, key)` with no auth options — which meant it never
+// received the user's session (useAuthStore.mirrorSetSessionOnSupabase only
+// ever calls `.auth.setSession()` on THIS shared client), so its realtime
+// `postgres_changes` subscription in ensureKycSubscription() below was
+// always authenticating as anon. kyc_verifications' RLS policy
+// (`user_id = auth.uid()`) filters every row for an anon connection, so —
+// independent of the missing supabase_realtime publication membership fixed
+// in database/kyc_verification_state_consolidation.sql — this subscription
+// could never have delivered a single event. It also duplicated client
+// plumbing that client.ts's own header comment documents as a past source of
+// ghost-logout bugs (two Supabase client instances independently managing
+// session state). This module never used the extra client for anything but
+// the realtime channel, so reusing the shared one is a pure fix.
+import { supabase } from "@/integrations/supabase/client";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY!
-);
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
@@ -18,6 +28,20 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 // change doubled the number of live channels (a runaway subscription leak).
 let kycChannel: ReturnType<typeof supabase.channel> | null = null;
 let kycSubscribedFor: string | null = null;
+
+// Monotonic request counter guarding against out-of-order responses.
+// fetchKYCStatus is invoked from many independent call sites — useKycAccess,
+// useKycFocusRefetch, KYCSection, BankDetailsSection, UserProfilePage, and
+// the realtime subscription callback below — so overlapping in-flight
+// requests are the normal case, not an edge case (e.g. the realtime event
+// fired by an admin's approval can land while a focus-triggered refetch from
+// moments earlier is still in flight). Without a sequence guard, whichever
+// response's network round-trip happens to resolve LAST wins, even if it
+// started first and carries staler data — silently reverting a just-applied
+// approval back to "pending" in the UI. Each call captures its own sequence
+// number and only commits to the store if it's still the most recent one
+// issued for this user by the time its response arrives.
+let kycFetchSeq = 0;
 
 function ensureKycSubscription(userId: string, onChange: () => void) {
   if (kycSubscribedFor === userId && kycChannel) return; // already live
@@ -40,6 +64,16 @@ interface ProfileState {
   profile: any;
   kycData: any;
   kycLoading: boolean;
+  // True once fetchKYCStatus has SETTLED (success or failure) at least once
+  // for the current user. Distinct from `kycLoading` (which flips back to
+  // true on every refetch) — this is a one-shot "we have resolved verification
+  // state for this session" latch consumed by DashboardLayout so the KYC
+  // banner never flashes in after the rest of the dashboard has already
+  // painted. Reset on sign-out (see useAuthStore.signOut) and re-armed by
+  // fetchKYCStatus whenever the userId changes, so switching accounts
+  // re-blocks correctly instead of showing the previous user's resolved state.
+  kycStatusResolved: boolean;
+  kycStatusResolvedFor: string | null;
   profileLoading: boolean;
   profileRefreshing: boolean;
   profileLastFetchedAt: number;
@@ -58,6 +92,12 @@ interface ProfileState {
   fetchProfile: () => Promise<void>;
   updateProfile: (data: any) => Promise<boolean>;
   fetchKYCStatus: (userId: string) => Promise<void>;
+  /** Clears profile + KYC state on sign-out (see useAuthStore.signOut) so a
+   * subsequent login — possibly as a different user — can't render with the
+   * previous session's stale verification status for even one frame, and so
+   * DashboardLayout's resolved-gate (kycStatusResolvedFor) correctly re-blocks
+   * instead of matching a leftover value. */
+  resetKycState: () => void;
   requestPasswordOTP: () => Promise<boolean>;
   verifyOTPAndChangePassword: (otp: string, newPassword: string, confirmPassword: string) => Promise<boolean>;
   resetPasswordState: () => void;
@@ -71,6 +111,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   profile: null,
   kycData: null,
   kycLoading: false,
+  kycStatusResolved: false,
+  kycStatusResolvedFor: null,
   profileLoading: false,
   profileRefreshing: false,
   profileLastFetchedAt: 0,
@@ -87,6 +129,21 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   activeSection: "personal",
 
   setActiveSection: (section: string) => set({ activeSection: section }),
+
+  resetKycState: () => {
+    // Invalidate any fetch still in flight for the outgoing user — the
+    // sequence guard in fetchKYCStatus means its response, if it arrives
+    // after this reset, will be silently discarded rather than repopulating
+    // kycData for a session that has already ended.
+    kycFetchSeq += 1;
+    set({
+      profile: null,
+      kycData: null,
+      kycLoading: false,
+      kycStatusResolved: false,
+      kycStatusResolvedFor: null,
+    });
+  },
 
   fetchProfile: async () => {
     const { profile, profileLastFetchedAt, profileInFlight } = get();
@@ -160,33 +217,48 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   fetchKYCStatus: async (userId: string) => {
+    // Stale-response guard (see kycFetchSeq above): this call's slot in the
+    // sequence. Only the highest-numbered call still gets to commit state —
+    // an older, slower-resolving request can never clobber a newer one.
+    const seq = ++kycFetchSeq;
+
     set({ kycLoading: true });
 
     // Subscribe to real-time changes on this user's kyc_verifications row so
     // the KYC section updates automatically when an admin approves a document
     // — without requiring a manual refresh. Idempotent: only one channel per
     // user ever exists, so the re-fetch in the callback can never spawn more.
+    // (kyc_verifications was added to the supabase_realtime publication in
+    // database/kyc_verification_state_consolidation.sql — before that this
+    // subscription was live but silently received nothing.)
     ensureKycSubscription(userId, () => {
       get().fetchKYCStatus(userId);
     });
 
     try {
-      const [res, kycVerificationRes, accessStatusRes] = await Promise.all([
+      const [res, accessStatusRes] = await Promise.all([
         axiosInstance.get(`/settings/kyc/${userId}`),
-        supabase
-          .from("kyc_verifications")
-          .select("status, nin_verified, identity_verified, address_verified, selfie_verified")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        // Backend is the single source of truth for what this user is
-        // allowed to do (legacy-user KYC enforcement). Never re-derive
-        // canCreateCollection/canManageBankAccount/showBanner on the client —
-        // read them here and have every gate/banner consume kycData instead.
+        // Backend is the SINGLE source of truth for verification status and
+        // for what this user is allowed to do (legacy-user KYC enforcement).
+        // Previously this also ran an independent client-side
+        // `supabase.from("kyc_verifications").select(...)` in parallel with
+        // this same call — two different code paths (RLS-scoped client read
+        // vs. service-role backend read) resolving the exact same row on two
+        // separate network round-trips, which is exactly the kind of
+        // duplicate-source drift this store must not have. Removed; every
+        // status field below now comes from this one response.
         axiosInstance.get(`/settings/kyc/access-status`).catch((err) => {
           console.error("Failed to fetch KYC access status:", err);
           return null;
         }),
       ]);
+
+      // A newer fetchKYCStatus call was issued (and possibly already
+      // resolved) while this one was in flight — e.g. the realtime
+      // subscription's callback fired because an admin's approval landed
+      // while a focus-triggered refetch from moments earlier was still
+      // pending. Discard this response; the newer call owns the final word.
+      if (seq !== kycFetchSeq) return;
 
       const documents = res.data?.documents || [];
 
@@ -211,15 +283,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           files: doc.files || [],
         }));
 
-      const kycVerification = kycVerificationRes.data;
       const accessStatus = accessStatusRes?.data || null;
+      // /access-status is best-effort here (its own request already caught
+      // its error above and returned null rather than rejecting). If it
+      // failed transiently, prefer whatever status we already had in memory
+      // over silently regressing a verified user back to "not_started" —
+      // fail-open the same way useKycAccess already documents doing for
+      // canCreateCollection/canWithdraw, applied to the status field itself.
+      const previousStatus = get().kycData?.overallStatus;
+      const overallStatus = accessStatus?.kycStatus || previousStatus || "not_started";
 
       set({
         kycData: {
-          ...res.data?.kycData,
-          overallStatus: kycVerification?.status || "not_started",
-          ninVerified: kycVerification?.nin_verified || false,
-
+          overallStatus,
           identityVerification: {
             status: identityDocs.length > 0 ? identityDocs[0].status : "notStarted",
             documents: identityDocs,
@@ -232,6 +308,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           // Legacy-user KYC enforcement — all backend-computed, never
           // re-derived here. See GET /settings/kyc/access-status
           // (controllers/settings/kyc.js -> featureAccessService).
+          isVerified: accessStatus?.isVerified ?? overallStatus === "verified",
           isLegacyUser: accessStatus?.isLegacyUser ?? false,
           group: accessStatus?.group ?? null,
           canCreateCollection: accessStatus?.canCreateCollection ?? true,
@@ -244,10 +321,17 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           journey: accessStatus?.journey ?? null,
         },
         kycLoading: false,
+        kycStatusResolved: true,
+        kycStatusResolvedFor: userId,
       });
     } catch (error) {
+      if (seq !== kycFetchSeq) return;
       console.error("Failed to fetch KYC data:", error);
-      set({ kycLoading: false });
+      // Still latch "resolved" on failure — DashboardLayout's gate (F3) waits
+      // for resolution, not success, so a persistent backend outage shows the
+      // dashboard fail-open rather than stranding the user on a loading
+      // skeleton forever.
+      set({ kycLoading: false, kycStatusResolved: true, kycStatusResolvedFor: userId });
     }
   },
 

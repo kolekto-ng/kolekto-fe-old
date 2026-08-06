@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "@/lib/toast";
 import { authAPI, axiosInstance } from "../utils/axios";
 import { supabase } from "@/integrations/supabase/client";
+import { useProfileStore } from "@/store/useProfileStore";
 import {
   clearAuthSessionStorage,
   getValidAuthSessionFromStorage,
@@ -224,6 +225,11 @@ export const useAuthStore = create((set, get) => ({
       await axiosInstance.post("auth/signout");
       clearAuthSessionStorage();
       set({ user: null, session: null, isLoading: false });
+      // Clear verification/profile state so a subsequent login — possibly as
+      // a different user on the same device — can never paint with the
+      // outgoing session's kycData for even one frame. Also invalidates any
+      // fetchKYCStatus call still in flight (see resetKycState).
+      useProfileStore.getState().resetKycState();
       // B-16: mirror sign-out into the supabase client so its persisted
       // session is also cleared. Awaited so the SIGNED_OUT event from
       // supabase has fired before this function returns — useful for
@@ -235,6 +241,7 @@ export const useAuthStore = create((set, get) => ({
       // Still clear local state even if server call fails
       clearAuthSessionStorage();
       set({ user: null, session: null, isLoading: false });
+      useProfileStore.getState().resetKycState();
       // Mirror the sign-out on the supabase client even on backend error
       // so the user is fully signed out client-side regardless.
       await mirrorSignOutOnSupabase();

@@ -5,6 +5,7 @@ import DashboardSidebar from './DashboardSidebar';
 import MobileBottomNav from './MobileBottomNav';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from '@/store/useAuthStore';
+import { useProfileStore } from '@/store/useProfileStore';
 import DashboardNavbar from './DashboardNavbar';
 import { DashboardShellSkeleton } from '@/components/ui/page-skeletons';
 import PushNotificationPrompt from '@/components/PushNotificationPrompt';
@@ -40,6 +41,30 @@ const DashboardContent = () => {
 const DashboardLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const { user, isLoading } = useAuthStore();
+  const fetchKYCStatus = useProfileStore((s) => s.fetchKYCStatus);
+  const kycStatusResolved = useProfileStore((s) => s.kycStatusResolved);
+  const kycStatusResolvedFor = useProfileStore((s) => s.kycStatusResolvedFor);
+
+  // Resolve verification state BEFORE the dashboard (and the KYC banner
+  // inside it) ever paints, so "Verify your account" can never flash in a
+  // beat after the rest of the page has already rendered. Every other
+  // consumer of KYC data (useKycAccess, KYCSection, the realtime
+  // subscription, ...) still calls fetchKYCStatus independently for their
+  // own reasons — this effect's only job is to kick the very first fetch off
+  // as early as auth allows, since DashboardLayout is the outermost mount
+  // point for every protected route.
+  //
+  // Gated on kycStatusResolvedFor !== user.id (not just kycStatusResolved)
+  // so switching accounts — sign out, sign in as someone else — correctly
+  // re-blocks on the new user's status instead of reusing the previous
+  // user's resolved flag (see useAuthStore.signOut, which resets both).
+  const isResolvedForCurrentUser = kycStatusResolved && kycStatusResolvedFor === user?.id;
+
+  useEffect(() => {
+    if (user?.id && kycStatusResolvedFor !== user.id) {
+      fetchKYCStatus(user.id);
+    }
+  }, [user?.id, kycStatusResolvedFor, fetchKYCStatus]);
 
   if (isLoading) {
     return <DashboardShellSkeleton />;
@@ -47,6 +72,10 @@ const DashboardLayout: React.FC = () => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!isResolvedForCurrentUser) {
+    return <DashboardShellSkeleton />;
   }
 
   return (

@@ -91,7 +91,21 @@ const KYCSection: React.FC = () => {
     if (user?.id) fetchKYCStatus(user.id);
   };
 
-  if (kycLoading) {
+  // Skeleton only on the true FIRST load (no data yet at all) — not on every
+  // background refetch. fetchKYCStatus sets kycLoading:true unconditionally,
+  // including for refetches triggered by the realtime kyc_verifications
+  // subscription (see useProfileStore.ensureKycSubscription) and
+  // useKycFocusRefetch. The upload flow itself writes to kyc_verifications
+  // (ensureKycVerificationRow), so that subscription fires mid-upload —
+  // if this gated on kycLoading alone, every refetch during an in-progress
+  // upload tore down this whole section (including the open
+  // DocumentUploadForm dialog) and replaced it with a skeleton, then
+  // remounted a BRAND NEW DocumentUploadForm instance once loading
+  // finished — resetting the wizard to step 1 and silently discarding
+  // whatever the user was doing, indistinguishable from a page reload from
+  // the user's point of view. Once kycData exists, a background refetch
+  // updates in place instead.
+  if (kycLoading && !kycData) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-40 rounded-xl" />
