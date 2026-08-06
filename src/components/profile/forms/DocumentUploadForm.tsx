@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useId } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { axiosInstance } from '@/utils/axios';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
+import { beginCriticalFlow, endCriticalFlow } from '@/lib/criticalFlow';
 
 interface DocumentUploadFormProps {
   open: boolean;
@@ -27,6 +28,7 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
   userId
 }) => {
   const { toast } = useToast();
+  const flowId = useId();
   const [step, setStep] = useState(1);
   const [documentType, setDocumentType] = useState('');
   const [nin, setNin] = useState('');
@@ -72,6 +74,28 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       });
     }
   };
+
+  useEffect(() => {
+    console.info('[diag] DocumentUploadForm mounted', { type, flowId });
+    return () => {
+      console.info('[diag] DocumentUploadForm unmounted', { type, flowId });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Marks this upload dialog as a "critical flow" for as long as it's open,
+  // so the background PWA update checker (main.tsx) doesn't poll/prompt for
+  // a refresh mid-flow. See src/lib/criticalFlow.ts.
+  useEffect(() => {
+    if (!open) return;
+    const id = `kyc-upload-${type}-${flowId}`;
+    beginCriticalFlow(id);
+    console.info('[diag] critical flow started', { id });
+    return () => {
+      endCriticalFlow(id);
+      console.info('[diag] critical flow ended', { id });
+    };
+  }, [open, type, flowId]);
 
   useEffect(() => {
     if (open) {
@@ -177,6 +201,13 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
 
     setIsUploading(true);
     setUploadProgress(0);
+    console.info('[diag] KYC upload start', {
+      type,
+      flowId,
+      fileCount: uploadedFiles.length,
+      hasSelfie: !!selfieFile,
+      at: new Date().toISOString(),
+    });
 
     try {
       const formData = new FormData();
@@ -208,6 +239,12 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       });
 
       const result = await res.data;
+      console.info('[diag] KYC upload response received', {
+        type,
+        flowId,
+        success: !!result.success,
+        at: new Date().toISOString(),
+      });
       if (result.success) {
         setUploadProgress(100);
 
@@ -217,7 +254,13 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
         }, 500);
       }
     } catch (error: any) {
-      console.error(error);
+      console.error('[diag] KYC upload failed — state preserved, staying on current step', {
+        type,
+        flowId,
+        step,
+        at: new Date().toISOString(),
+        error,
+      });
       toast({
         title: "Upload Failed",
         description: toFriendlyErrorMessage(error, "Could not upload document. Please try again."),

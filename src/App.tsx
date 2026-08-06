@@ -229,6 +229,13 @@ const App = () => {
     }
   }, []);
 
+  // Temporary P0 diagnostic (2026-08-06): confirms no unexpected SPA
+  // navigation happens during the KYC upload flow. Safe to remove once the
+  // service-worker forced-reload fix (vite.config.ts) is confirmed stable.
+  useEffect(() => {
+    console.info('[diag] route changed', { path: location.pathname, at: new Date().toISOString() });
+  }, [location.pathname]);
+
   useEffect(() => {
     // AOS is purely a UX enhancement; keep it out of the initial JS chunk.
     Promise.all([import("aos"), import("aos/dist/aos.css")])

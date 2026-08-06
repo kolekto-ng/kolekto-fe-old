@@ -8,7 +8,29 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // P0 fix (2026-08-06): this was "autoUpdate". vite-plugin-pwa's
+      // registerType controls what src/main.tsx's registerSW() does when a
+      // new deploy is detected — and "autoUpdate" does NOT mean "update
+      // quietly in the background". It means: the moment the new service
+      // worker activates, the client calls window.location.reload()
+      // unconditionally (see node_modules/vite-plugin-pwa/dist/client/build/register.js,
+      // the `if (auto) { wb.addEventListener("activated", ...
+      // window.location.reload()) }` branch). Combined with skipWaiting +
+      // clientsClaim below, and main.tsx polling registration.update() on a
+      // 90s interval AND on every window focus/visibilitychange, this fired
+      // mid-session any time a new build had shipped — including in the
+      // middle of the KYC upload wizard, whose file-picker/camera prompts
+      // themselves cause the focus/visibility events that trigger the check.
+      // The reload wiped all in-memory React state and sent the user back to
+      // KYC step 1 with no warning.
+      //
+      // "prompt" hands control to the onNeedRefresh() callback in main.tsx,
+      // which already drives a real "Refresh now" banner
+      // (src/components/PwaUpdatePrompt.tsx) — that UI existed but was dead
+      // code under "autoUpdate", since the auto-reload path never calls
+      // onNeedRefresh. Do not switch this back to "autoUpdate" without also
+      // guarding every long-running client flow against mid-flow navigation.
+      registerType: "prompt",
       includeAssets: ["icons/*.png", "favicon.ico"],
       manifest: {
         name: "Kolekto - Smart Group Payment",
@@ -56,7 +78,16 @@ export default defineConfig({
         cacheId: "kolekto-pwa-v4",
         importScripts: ["sw-cleanup.js", "push-sw.js"],
         clientsClaim: true,
-        skipWaiting: true,
+        // skipWaiting: false (was true) — a new SW must sit in the "waiting"
+        // state so workbox-window's `waiting` event fires and main.tsx's
+        // onNeedRefresh() can show the user-facing "Refresh now" prompt. With
+        // skipWaiting:true the new SW self-activated immediately, so the
+        // client-side "waiting" event never fired at all — the update just
+        // silently took over. clientsClaim stays true: once the user clicks
+        // "Refresh" (applyPwaUpdate -> SKIP_WAITING message), the new SW
+        // activates and claims open tabs right away instead of waiting for
+        // them to close.
+        skipWaiting: false,
 
         // Increase file size limit for large assets
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
