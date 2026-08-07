@@ -82,3 +82,28 @@ export function toFriendlyErrorMessage(error: unknown, fallback = GENERIC_ERROR_
 export function toFriendlyActionError(error: unknown): string {
   return toFriendlyErrorMessage(error, ACTION_ERROR_MESSAGE);
 }
+
+// KYC upload hardening: uploads are large multipart requests on a dedicated,
+// longer timeout (see axios.tsx), so "it took too long" and "there's no
+// connection" are genuinely different situations for this one flow and
+// deserve different copy — the generic NETWORK_ERROR_MESSAGE collapses both
+// into the same misleading "check your internet" message. Falls back to
+// toFriendlyErrorMessage for anything not specific to uploads.
+export function toKycUploadErrorMessage(error: unknown): string {
+  const err = error as any;
+
+  if (err?.code === "ECONNABORTED" || /timeout/i.test(String(err?.message || ""))) {
+    return "Upload is taking longer than expected. Please keep this page open while we finish uploading your documents.";
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "Your internet connection appears to be unavailable.";
+  }
+
+  const status = err?.response?.status;
+  if (status === 413) return "One of your files is too large.";
+  if (status === 415) return "One of your files is not supported.";
+  if (status === 500) return "We couldn't upload your documents. Please try again.";
+
+  return toFriendlyErrorMessage(error, "Could not upload document. Please try again.");
+}

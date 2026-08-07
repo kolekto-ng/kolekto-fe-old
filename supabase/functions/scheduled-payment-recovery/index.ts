@@ -52,18 +52,37 @@ interface Candidate {
 
 const MAX_SCHEDULED_ATTEMPTS = 20;
 
-// ── Cron-only guard (architectural hardening audit) ─────────────────────────
-// verify_jwt is disabled on this function (like every other function in this
-// project), and the public anon key trivially satisfies any JWT check anyway
-// — so today ANY caller can invoke this repeatedly, forcing repeated
-// external Paystack API calls (one per candidate, up to 25/run) and
-// payment_recovery_log writes. This is a soft, non-breaking gate: if
-// CRON_SECRET is configured in the function's environment, the caller must
-// send it via `X-Cron-Secret`; if it is NOT configured (true today), this
-// check is skipped entirely so the existing pg_cron job keeps working
-// unchanged. Operator follow-up: set CRON_SECRET as a function secret AND
-// add `'X-Cron-Secret: <value>'` to the pg_cron job's http call to actually
-// close this gap.
+// ── Cron-only guard ─────────────────────────────────────────────────────────
+// HOW THIS FUNCTION IS ACTUALLY INVOKED (verified in production 2026-08-07,
+// do not assume otherwise):
+//
+//   pg_cron job id 5, schedule */5 * * * *, calls net.http_post() against
+//   https://<project>.supabase.co/functions/v1/scheduled-payment-recovery
+//
+// It is an **HTTP request over the public internet**, not an in-database
+// call. Combined with verify_jwt=false, that means the endpoint is reachable
+// by anyone who knows the URL — confirmed empirically: an unauthenticated
+// POST from an external machine reached this function's own handler.
+// CRON_SECRET is therefore NECESSARY, not theoretical.
+//
+// WHERE THE CALLER SUPPLIES IT: in the pg_cron job's own command, as a
+// header on the net.http_post call —
+//
+//   headers := jsonb_build_object(
+//     'Content-Type','application/json',
+//     'X-Cron-Secret','<value of the CRON_SECRET function secret>'
+//   )
+//
+// Both sides must be changed together. If CRON_SECRET is set on the function
+// but the cron job does not send the header, EVERY sweep returns 401 and the
+// recovery safety net silently stops — with no error anywhere, because a run
+// with zero candidates writes no rows either way. That exact outage happened
+// on 2026-08-07 09:16–09:55 UTC (7 consecutive 401s, visible only in
+// net._http_response). Rotate by: update cron.job command first, then
+// `supabase secrets set CRON_SECRET=...`, then verify with a manual POST.
+//
+// The guard stays soft: if CRON_SECRET is unset the check is skipped, so a
+// project that has not configured it keeps working.
 //
 // NOTE (2026-08-07 resilience audit): this guard existed ONLY in git and the
 // attempt cap above existed ONLY in production — neither version was a

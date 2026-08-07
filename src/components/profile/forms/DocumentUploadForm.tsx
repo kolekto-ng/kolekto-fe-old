@@ -9,8 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { axiosInstance } from '@/utils/axios';
-import { toFriendlyErrorMessage } from '@/utils/errorMessages';
+import { toKycUploadErrorMessage } from '@/utils/errorMessages';
 import { beginCriticalFlow, endCriticalFlow } from '@/lib/criticalFlow';
+import { compressFilesForKycUpload } from '@/utils/imageCompression';
+
+// KYC uploads are large multipart requests (selfie + up to 4 documents) that
+// can legitimately take longer than the app's normal 15s API timeout on slow
+// mobile connections — that mismatch was the root cause of production
+// "Unable to connect" reports. This is a per-request override; every other
+// API call keeps the global 15s timeout in axios.tsx unchanged.
+const KYC_UPLOAD_TIMEOUT_MS = 150_000; // 2.5 minutes
+
+type UploadStage = 'idle' | 'preparing' | 'compressing' | 'uploading';
+
+const UPLOAD_STAGE_LABEL: Record<Exclude<UploadStage, 'idle'>, string> = {
+  preparing: 'Preparing documents…',
+  compressing: 'Compressing images…',
+  uploading: 'Uploading…',
+};
 
 interface DocumentUploadFormProps {
   open: boolean;
@@ -36,6 +52,8 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<UploadStage>('idle');
+  const uploadInFlightRef = useRef(false);
 
   // Camera state
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -107,6 +125,8 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       setCapturedImage(null);
       setUploadProgress(0);
       setIsUploading(false);
+      setUploadStage('idle');
+      uploadInFlightRef.current = false;
     }
   }, [open, type]);
 
@@ -199,37 +219,74 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
       return;
     }
 
+    // Guard against duplicate submissions from a double-click/double-tap
+    // landing before React re-renders the disabled button.
+    if (uploadInFlightRef.current) return;
+    uploadInFlightRef.current = true;
+
     setIsUploading(true);
+    setUploadStage('preparing');
     setUploadProgress(0);
+
+    const uploadStartedAt = performance.now();
+    const filesToSend = type === 'identity' && selfieFile
+      ? [selfieFile, ...uploadedFiles]
+      : uploadedFiles;
+
     console.info('[diag] KYC upload start', {
       type,
       flowId,
-      fileCount: uploadedFiles.length,
+      fileCount: filesToSend.length,
       hasSelfie: !!selfieFile,
+      totalUploadSizeBytes: filesToSend.reduce((sum, f) => sum + f.size, 0),
       at: new Date().toISOString(),
     });
 
     try {
+      setUploadStage('compressing');
+      const compression = await compressFilesForKycUpload(filesToSend);
+      console.info('[diag] KYC upload compression complete', {
+        type,
+        flowId,
+        originalTotalSize: compression.originalTotalSize,
+        compressedTotalSize: compression.compressedTotalSize,
+        compressionDurationMs: Math.round(compression.durationMs),
+      });
+
+      // filesToSend was built as [selfie, ...documents] for identity, or just
+      // [...documents] for address — unpack compression.files (same order,
+      // same length) to match.
+      let compressedSelfie: File | undefined;
+      let compressedDocs: File[];
+      if (type === 'identity' && selfieFile) {
+        [compressedSelfie, ...compressedDocs] = compression.files;
+      } else {
+        compressedDocs = compression.files;
+      }
+
       const formData = new FormData();
       formData.append("userId", userId);
       formData.append("documentType", type);
       formData.append("verificationType", documentType);
-      
+
       if (type === 'identity') {
-        if (selfieFile) {
-          formData.append("files", selfieFile);
+        if (compressedSelfie) {
+          formData.append("files", compressedSelfie);
         }
         if (nin) {
           formData.append("nin", nin);
         }
       }
-      
-      // Append ID/address files
-      uploadedFiles.forEach(file => {
+
+      compressedDocs.forEach(file => {
         formData.append("files", file);
       });
 
+      setUploadStage('uploading');
+      const uploadOnlyStartedAt = performance.now();
+
       const res = await axiosInstance.post("/settings/kyc/upload-document", formData, {
+        timeout: KYC_UPLOAD_TIMEOUT_MS,
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -243,6 +300,8 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
         type,
         flowId,
         success: !!result.success,
+        uploadDurationMs: Math.round(performance.now() - uploadOnlyStartedAt),
+        totalDurationMs: Math.round(performance.now() - uploadStartedAt),
         at: new Date().toISOString(),
       });
       if (result.success) {
@@ -250,6 +309,8 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
 
         setTimeout(() => {
           setIsUploading(false);
+          setUploadStage('idle');
+          uploadInFlightRef.current = false;
           setStep(totalSteps); // Jump to success step
         }, 500);
       }
@@ -258,15 +319,19 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
         type,
         flowId,
         step,
+        totalDurationMs: Math.round(performance.now() - uploadStartedAt),
+        failureReason: error?.code || error?.response?.status || error?.message || 'unknown',
         at: new Date().toISOString(),
         error,
       });
       toast({
         title: "Upload Failed",
-        description: toFriendlyErrorMessage(error, "Could not upload document. Please try again."),
+        description: toKycUploadErrorMessage(error),
         variant: "destructive"
       });
       setIsUploading(false);
+      setUploadStage('idle');
+      uploadInFlightRef.current = false;
     }
   };
 
@@ -428,15 +493,16 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
 
           {isUploading && (
             <div className="mt-4">
-              <Progress value={uploadProgress} className="w-full" />
+              <Progress value={uploadStage === 'uploading' ? uploadProgress : 0} className="w-full" />
               <p className="text-xs text-muted-foreground mt-1">
-                Uploading {uploadProgress}%
+                {uploadStage !== 'idle' ? UPLOAD_STAGE_LABEL[uploadStage] : null}
+                {uploadStage === 'uploading' && ` ${uploadProgress}%`}
               </p>
             </div>
           )}
 
           <div className="mt-6 flex justify-between">
-            <Button variant="outline" onClick={() => setStep(type === 'identity' ? 2 : 1)}>Back</Button>
+            <Button variant="outline" onClick={() => setStep(type === 'identity' ? 2 : 1)} disabled={isUploading}>Back</Button>
             <Button
               disabled={uploadedFiles.length === 0 || isUploading}
               onClick={handleUpload}
