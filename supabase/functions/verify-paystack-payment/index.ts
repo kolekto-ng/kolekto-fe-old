@@ -113,6 +113,57 @@ serve(async (req: Request) => {
     const projectRef = supabaseUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "unknown";
     console.log(`[verify ref=${reference}] ENV_CHECK projectRef=${projectRef}`);
 
+    // ══ UNIVERSAL CAPTURE GUARANTEE (Phase 3.1 final) ═══════════════════════
+    // This is the EARLIEST point at which we know Paystack has the money —
+    // before metadata parsing, before collection resolution, before any
+    // lookup that can fail. Record it here.
+    //
+    // Previously the capture write sat after collection resolution, so a
+    // payment whose metadata was missing/corrupt hit `missing_collection_id`
+    // and returned 400 with nothing recorded — the last remaining way for
+    // captured money to avoid the ledger entirely.
+    //
+    // collection_id is deliberately NULL here: it is not yet known, and the
+    // column is nullable precisely so an unresolvable payment can still be
+    // recorded. It is filled in later (COALESCE inside record_payment_capture)
+    // the moment resolution succeeds, on this same row.
+    let captureRecorded = false;
+    if (transaction?.status === "success") {
+      const { error: earlyCaptureError } = await supabase.rpc("record_payment_capture", {
+        p_reference: String(transaction.reference ?? reference),
+        p_collection_id: null,
+        p_transaction_id: transaction.id != null ? String(transaction.id) : null,
+        p_status: String(transaction.status),
+        p_amount: roundCurrency(Number(transaction.amount || 0) / 100),
+        p_currency: transaction.currency ? String(transaction.currency) : null,
+        p_channel: transaction.channel ? String(transaction.channel) : null,
+        p_paid_at: transaction.paid_at ?? null,
+        p_payload: transaction as unknown as Record<string, unknown>,
+        p_contributor_email: customer?.email ? String(customer.email) : null,
+        p_organizer_id: null,
+      });
+
+      if (earlyCaptureError) {
+        // Fail closed: never process a payment we could not durably record.
+        // 500 makes Paystack retry, which is the safe outcome.
+        console.error(
+          `[verify ref=${reference}] EARLY_CAPTURE_WRITE_FAILED — refusing to process`,
+          earlyCaptureError.message
+        );
+        return new Response(
+          JSON.stringify({
+            error: "Could not durably record this payment. It is safe on Paystack — please retry.",
+            code: "capture_ledger_write_failed",
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      captureRecorded = true;
+      console.log(
+        `[verify ref=${reference}] CAPTURE_RECORDED_EARLY amount=${Number(transaction.amount || 0) / 100} (collection not yet resolved)`
+      );
+    }
+
     // Invocation-source tracking (additive, never changes matching/recovery
     // behavior): every existing caller keeps working unchanged because this
     // is inferred from the SAME request shapes already branched on above —
@@ -255,6 +306,28 @@ serve(async (req: Request) => {
         errorCode: "missing_collection_id", errorMessage: "Missing collection ID in payment metadata",
         metadataSource, context: { resolvedKeys: Object.keys(metadata) },
       });
+
+      // UNIVERSAL CAPTURE GUARANTEE: if Paystack captured the money, it is
+      // already in the ledger (recorded above, before this lookup ran). Park
+      // it for review instead of returning 400 — an unresolvable collection
+      // is an admin problem, not a reason for money to vanish. The admin can
+      // supply `overrideCollectionId` via Admin Reconcile to finish it.
+      if (captureRecorded) {
+        await supabase.rpc("mark_payment_needs_review", {
+          p_reference: String(transaction.reference ?? reference),
+          p_failure_code: "missing_collection_id",
+          p_failure_reason: "Captured by Paystack but the collection could not be resolved from metadata.",
+          p_failure_context: { resolvedKeys: Object.keys(metadata), metadataSource },
+        });
+        return new Response(JSON.stringify({
+          status: "needs_review",
+          reference: String(transaction.reference ?? reference),
+          error: "Missing collection ID in payment metadata",
+          code: "missing_collection_id",
+          recorded: true,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       return new Response(JSON.stringify({ error: "Missing collection ID in payment metadata" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -288,6 +361,40 @@ serve(async (req: Request) => {
         reference, collectionId, success: false,
         errorCode: "collection_not_found", errorMessage: "Collection not found.", metadataSource,
       });
+
+      // UNIVERSAL CAPTURE GUARANTEE: the collection was deleted (or the id is
+      // wrong) AFTER the contributor paid. Returning 404 here used to strand
+      // the money. Attach the resolved collection id to the ledger row and
+      // park it for review instead.
+      if (captureRecorded) {
+        await supabase.rpc("record_payment_capture", {
+          p_reference: String(transaction.reference ?? reference),
+          p_collection_id: collectionId,
+          p_transaction_id: transaction.id != null ? String(transaction.id) : null,
+          p_status: String(transaction.status),
+          p_amount: roundCurrency(Number(transaction.amount || 0) / 100),
+          p_currency: transaction.currency ? String(transaction.currency) : null,
+          p_channel: transaction.channel ? String(transaction.channel) : null,
+          p_paid_at: transaction.paid_at ?? null,
+          p_payload: transaction as unknown as Record<string, unknown>,
+          p_contributor_email: customer?.email ? String(customer.email) : null,
+          p_organizer_id: null,
+        });
+        await supabase.rpc("mark_payment_needs_review", {
+          p_reference: String(transaction.reference ?? reference),
+          p_failure_code: "collection_not_found",
+          p_failure_reason: "Captured by Paystack but the collection no longer exists.",
+          p_failure_context: { collectionId, metadataSource },
+        });
+        return new Response(JSON.stringify({
+          status: "needs_review",
+          reference: String(transaction.reference ?? reference),
+          error: "Collection not found.",
+          code: "collection_not_found",
+          recorded: true,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       return new Response(JSON.stringify({ error: "Collection not found." }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -298,6 +405,61 @@ serve(async (req: Request) => {
     let isNewPayment = false; // true only when we insert new contributions (not idempotent replay)
 
     if (transaction.status === "success") {
+      // ══ PHASE 3.1 — CAPTURE GUARANTEE ════════════════════════════════════
+      // Paystack has confirmed the money exists. Record that as a DURABLE
+      // FACT before any business rule gets a chance to reject it.
+      //
+      // Before this existed, a validation failure below returned 4xx and
+      // inserted nothing, so a captured payment could vanish entirely — the
+      // 2026-08-06 incident (₦520,200 across 6 payments). Capture is now
+      // written first, so from this line onward the payment always exists in
+      // the ledger and is always visible in the Payment Inbox.
+      //
+      // record_payment_capture is idempotent: it COALESCEs the write-once
+      // capture facts (so a redelivered webhook writes identical values and
+      // the immutability trigger permits it) and never downgrades a payment
+      // that already reached completed/reconciled.
+      //
+      // FAIL CLOSED: if this write fails we must NOT continue. Returning 500
+      // makes Paystack retry, which is the correct outcome — the alternative
+      // is processing a payment we have not durably recorded, which is the
+      // exact failure mode this whole change exists to remove.
+      const { error: captureError } = await supabase.rpc("record_payment_capture", {
+        p_reference: String(transaction.reference),
+        p_collection_id: collectionId,
+        p_transaction_id: transaction.id != null ? String(transaction.id) : null,
+        p_status: String(transaction.status),
+        p_amount: roundCurrency(Number(transaction.amount || 0) / 100),
+        p_currency: transaction.currency ? String(transaction.currency) : null,
+        p_channel: transaction.channel ? String(transaction.channel) : null,
+        p_paid_at: transaction.paid_at ?? null,
+        p_payload: transaction as unknown as Record<string, unknown>,
+        p_contributor_email: customer?.email ? String(customer.email) : null,
+        p_organizer_id: (collection as Record<string, unknown>)?.user_id
+          ? String((collection as Record<string, unknown>).user_id)
+          : null,
+      });
+
+      if (captureError) {
+        console.error(
+          `[verify ref=${reference}] CAPTURE_LEDGER_WRITE_FAILED — refusing to process`,
+          captureError.message
+        );
+        await logAttempt({
+          reference, collectionId, success: false,
+          errorCode: "capture_ledger_write_failed",
+          errorMessage: captureError.message, metadataSource,
+        });
+        return new Response(
+          JSON.stringify({
+            error: "Could not durably record this payment. It is safe on Paystack — please retry.",
+            code: "capture_ledger_write_failed",
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      console.log(`[verify ref=${reference}] CAPTURE_RECORDED amount=${Number(transaction.amount || 0) / 100}`);
+
       // ── Idempotency: check if we already recorded contributions for this reference ──
       // Use the new payment_reference column that was added via migration.
       const { data: existingContributions } = await supabase
@@ -358,9 +520,40 @@ serve(async (req: Request) => {
               errorCode: error.code, errorMessage: error.message, metadataSource,
               context: error.logContext ?? null,
             });
-            return new Response(JSON.stringify({ error: error.message, code: error.code }), {
-              status: error.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+            // PHASE 3.1 — the money is already captured and already in the
+            // ledger. A business rule refusing it (tier_sold_out,
+            // collection_full, invalid_selected_tier, collection_deleted, …)
+            // must NOT make it disappear: park it in needs_review so it stays
+            // in the Payment Inbox and stays recoverable from the admin panel.
+            const { error: reviewError } = await supabase.rpc("mark_payment_needs_review", {
+              p_reference: String(transaction.reference),
+              p_failure_code: error.code,
+              p_failure_reason: error.message,
+              p_failure_context: (error.logContext ?? null) as Record<string, unknown> | null,
             });
+
+            if (reviewError) {
+              // Never acknowledge a payment we failed to durably annotate —
+              // 500 makes Paystack retry rather than consider it handled.
+              console.error(`[verify ref=${reference}] NEEDS_REVIEW_WRITE_FAILED`, reviewError.message);
+              return new Response(
+                JSON.stringify({ error: "Could not record payment state. Please retry.", code: "needs_review_write_failed" }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            // 200: the payment is durably recorded and awaiting review, so
+            // Paystack should stop retrying. No `receiptData` is returned, so
+            // the contributor's callback page still shows the error (it keys
+            // off receiptData, not the status code).
+            return new Response(JSON.stringify({
+              status: "needs_review",
+              reference: String(transaction.reference),
+              error: error.message,
+              code: error.code,
+              recorded: true,
+            }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
           throw error;
         }
@@ -383,9 +576,34 @@ serve(async (req: Request) => {
             errorCode: "amount_mismatch", errorMessage: "Payment amount validation failed.", metadataSource,
             context: { verifiedTotal, expectedTotal: normalizedPayment.totalPayable },
           });
-          return new Response(JSON.stringify({ error: "Payment amount validation failed. Contact support with your reference." }), {
-            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+          // PHASE 3.1 — THIS IS THE LINE THAT LOST ₦520,200 ON 2026-08-06.
+          // It used to return 400 and insert nothing, so a payment Paystack
+          // had already captured simply ceased to exist. The capture is now
+          // in the ledger (written above) and this records WHY it was refused,
+          // leaving it visible and replayable instead of gone.
+          const { error: reviewError } = await supabase.rpc("mark_payment_needs_review", {
+            p_reference: String(transaction.reference),
+            p_failure_code: "amount_mismatch",
+            p_failure_reason: "Payment amount validation failed.",
+            p_failure_context: { verifiedTotal, expectedTotal: normalizedPayment.totalPayable },
           });
+
+          if (reviewError) {
+            console.error(`[verify ref=${reference}] NEEDS_REVIEW_WRITE_FAILED`, reviewError.message);
+            return new Response(
+              JSON.stringify({ error: "Could not record payment state. Please retry.", code: "needs_review_write_failed" }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          return new Response(JSON.stringify({
+            status: "needs_review",
+            reference: String(transaction.reference),
+            error: "Payment amount validation failed. Contact support with your reference.",
+            code: "amount_mismatch",
+            recorded: true,
+          }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
 
         // Recovery backfill: only when metadata gave us literally nothing beyond
@@ -670,6 +888,29 @@ serve(async (req: Request) => {
       console.log(
         `[verify ref=${reference}] WALLET_UPDATED collectionId=${collectionId}`
       );
+
+      // PHASE 3.1 — close the ledger entry. Contribution(s) and wallet are
+      // now recorded, so the payment has reached a terminal success state.
+      // `reconciled` rather than `completed` when this came via a recovery
+      // path or the row was previously parked in needs_review, so the Payment
+      // Inbox keeps showing which payments needed rescuing.
+      // Best-effort by design: the money is already recorded in
+      // `contributions`, so failing to update the state label must not fail
+      // the request. The invariant view catches any row left behind.
+      if (processedContributions.length > 0) {
+        const viaRecovery =
+          invocationSource === "scheduled_recovery" || invocationSource === "admin_reconcile";
+        const { error: completeError } = await supabase.rpc("mark_payment_completed", {
+          p_reference: String(transaction.reference),
+          p_via_recovery: viaRecovery,
+        });
+        if (completeError) {
+          console.warn(
+            `[verify ref=${reference}] LEDGER_COMPLETE_WRITE_FAILED (non-fatal, invariant view will surface it)`,
+            completeError.message
+          );
+        }
+      }
 
       // ── Send receipt + organizer email (best-effort, non-blocking) ──────────
       // Primary path: call the backend's /api/payments/send-receipt endpoint

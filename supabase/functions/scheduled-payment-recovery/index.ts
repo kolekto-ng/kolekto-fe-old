@@ -27,6 +27,19 @@
  *     also logs its own attempt (it doesn't always — e.g. it returns early,
  *     with no log write, when Paystack itself reports a non-success status).
  *   - Bounded to 25 candidates per run so execution time stays predictable.
+ *   - Bounded to MAX_SCHEDULED_ATTEMPTS retries per reference. Incident
+ *     kolekto-1783668829043-357419 (an email typed into the phone field)
+ *     hit a DB error on every attempt and was retried 15,190 times over 26
+ *     days before the underlying bug was fixed — there was no cap. A
+ *     reference that crosses the cap without succeeding is "dead-lettered":
+ *     an `auto_dead_letter` row is written to payment_admin_actions (kept
+ *     distinct from `mark_resolved`, which means "Paystack confirms this
+ *     was never a real payment" — dead-letter means "we gave up, a human
+ *     should look"), which get_orphaned_payment_candidates() excludes going
+ *     forward. Nothing is deleted and admins can still manually replay it
+ *     any time via the Payment Monitoring dashboard's retry action, which
+ *     calls verify-paystack-payment directly and never goes through the
+ *     candidate query.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -37,6 +50,8 @@ interface Candidate {
   created_at: string;
 }
 
+const MAX_SCHEDULED_ATTEMPTS = 20;
+
 // ── Cron-only guard (architectural hardening audit) ─────────────────────────
 // verify_jwt is disabled on this function (like every other function in this
 // project), and the public anon key trivially satisfies any JWT check anyway
@@ -45,11 +60,15 @@ interface Candidate {
 // payment_recovery_log writes. This is a soft, non-breaking gate: if
 // CRON_SECRET is configured in the function's environment, the caller must
 // send it via `X-Cron-Secret`; if it is NOT configured (true today), this
-// check is skipped entirely so the existing pg_cron job — whose exact
-// invocation headers this audit could not verify without touching the live
-// cron.job definition — keeps working unchanged. Operator follow-up: set
-// CRON_SECRET as a function secret AND add `'X-Cron-Secret: <value>'` to the
-// pg_cron job's http call to actually close this gap.
+// check is skipped entirely so the existing pg_cron job keeps working
+// unchanged. Operator follow-up: set CRON_SECRET as a function secret AND
+// add `'X-Cron-Secret: <value>'` to the pg_cron job's http call to actually
+// close this gap.
+//
+// NOTE (2026-08-07 resilience audit): this guard existed ONLY in git and the
+// attempt cap above existed ONLY in production — neither version was a
+// superset of the other. This file is the reconciliation of both. Do not
+// deploy either side in isolation again; run `npm run verify:edge-parity`.
 function isAuthorizedCronCaller(req: Request): boolean {
   const configuredSecret = Deno.env.get("CRON_SECRET");
   if (!configuredSecret) return true; // not yet configured — do not break the existing job
@@ -135,6 +154,68 @@ Deno.serve(async (req: Request) => {
         .eq("reference", reference)
         .eq("invocation_source", "scheduled_recovery");
       const attemptNumber = (priorAttempts || 0) + 1;
+
+      // PHASE 3.1: never dead-letter money Paystack actually captured.
+      // The attempt cap exists to stop unbounded retries of abandoned
+      // checkouts (one reference was retried 15,190 times over 26 days).
+      // Applying it to a CAPTURED payment is how real money stops being
+      // retried forever — all six payments in the 2026-08-06 incident were
+      // dead-lettered. Captured rows stay eligible indefinitely; the
+      // exponential backoff in get_orphaned_payment_candidates keeps the
+      // retry rate sane without ever giving up.
+      const { data: ledgerRow } = await supabase
+        .from("pending_payment_context")
+        .select("captured_at, state")
+        .eq("reference", reference)
+        .maybeSingle();
+      const isCaptured = Boolean(ledgerRow?.captured_at);
+
+      if (isCaptured && attemptNumber > MAX_SCHEDULED_ATTEMPTS) {
+        console.warn(
+          `[scheduled-payment-recovery ref=${reference}] ATTEMPT_CAP_EXCEEDED_BUT_CAPTURED ` +
+          `attempts=${attemptNumber} — NOT dead-lettering; captured money stays recoverable ` +
+          `(state=${ledgerRow?.state})`
+        );
+      }
+
+      if (!isCaptured && attemptNumber > MAX_SCHEDULED_ATTEMPTS) {
+        console.warn(
+          `[scheduled-payment-recovery ref=${reference}] ATTEMPT_CAP_EXCEEDED priorAttempts=${priorAttempts} cap=${MAX_SCHEDULED_ATTEMPTS} — dead-lettering`
+        );
+        try {
+          await supabase.from("payment_recovery_log").insert({
+            reference,
+            collection_id: collectionId,
+            success: false,
+            error_code: "attempt_cap_exceeded",
+            error_message: `Exceeded ${MAX_SCHEDULED_ATTEMPTS} scheduled recovery attempts without success.`,
+            metadata_source: "scheduled_recovery",
+            invocation_source: "scheduled_recovery",
+            attempt_number: attemptNumber,
+            duration_ms: Date.now() - attemptStartedAt,
+            selected_tier_id: selectedTierId,
+            note: "auto_dead_lettered",
+          });
+        } catch (logErr) {
+          console.warn(`[scheduled-payment-recovery ref=${reference}] RECOVERY_LOG_WRITE_FAILED (non-fatal):`, (logErr as Error)?.message);
+        }
+        try {
+          await supabase.from("payment_admin_actions").insert({
+            reference,
+            collection_id: collectionId,
+            admin_user_id: null,
+            admin_email: "system:scheduled_recovery",
+            action: "auto_dead_letter",
+            old_status: "failed",
+            new_status: "dead_letter",
+            reason: `Exceeded ${MAX_SCHEDULED_ATTEMPTS} scheduled recovery attempts (${priorAttempts} prior failures) without success — stopped automatic retries. Needs manual review; use the Payment Monitoring dashboard's retry action to replay once the underlying issue is understood.`,
+          });
+        } catch (deadLetterErr) {
+          console.warn(`[scheduled-payment-recovery ref=${reference}] DEAD_LETTER_WRITE_FAILED (non-fatal, will retry cap check next run):`, (deadLetterErr as Error)?.message);
+        }
+        results.push({ reference, outcome: "dead_lettered" });
+        continue;
+      }
 
       const verifyResponse = await fetch(`${supabaseUrl}/functions/v1/verify-paystack-payment`, {
         method: "POST",

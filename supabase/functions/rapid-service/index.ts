@@ -1,4 +1,16 @@
-// functions/settle-pending-deposits/index.ts
+// functions/rapid-service/index.ts
+//
+// DEPLOYED SLUG: `rapid-service`. The directory was previously named
+// `settle-pending-deposits`, which did not match the slug this function is
+// actually deployed under — so the deploy-parity check reported a download
+// failure instead of a real comparison, and the drift went unnoticed. The
+// directory now matches the slug; do not rename it back.
+//
+// STATUS (verified 2026-08-07): no cron job invokes this function. The live
+// settlement path is the `settlement-recompute-wallets` pg_cron job at 04:00
+// UTC, which calls the SQL function settlement_recompute_wallets('cron')
+// directly. This function remains deployed as a manual/rollback trigger for
+// process_deposit_settlements(), which does still exist.
 //
 // Daily T+1 settlement sweep, triggered by pg_cron at 4am UTC. Moves
 // pending wallet balances into available balance via the
