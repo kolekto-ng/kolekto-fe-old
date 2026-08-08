@@ -236,7 +236,11 @@ export const useCollectionStore = create((set, get: any) => ({
 
       let collectionRow: any;
 
-      if (getCreateCollectionPath() === "express") {
+      const useExpressCreate =
+        collectionData?.collection_type === "fundraising" ||
+        getCreateCollectionPath() === "express";
+
+      if (useExpressCreate) {
         // Express CollectionService. Auth is the Bearer token on axiosInstance;
         // the user_id in the body is ignored server-side (taken from the JWT).
         const res = await axiosInstance.post("/create-collection", {

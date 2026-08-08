@@ -21,7 +21,10 @@ function createQueryBuilderMock(resolved: { data: any; error: any }) {
   return builder;
 }
 
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, postMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  postMock: vi.fn(),
+}));
 
 vi.mock("@/integrations/supabase/client", () => {
   return {
@@ -31,6 +34,12 @@ vi.mock("@/integrations/supabase/client", () => {
     },
   };
 });
+
+vi.mock("@/utils/axios", () => ({
+  axiosInstance: {
+    post: postMock,
+  },
+}));
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCollectionStore as useCollectionStoreUntyped } from "./useCollectionStore";
@@ -50,6 +59,7 @@ describe("useCollectionStore", () => {
       inFlight: null,
     } as any);
     invokeMock.mockReset();
+    postMock.mockReset();
     (supabase.from as any).mockReset();
     localStorage.clear();
   });
@@ -64,6 +74,41 @@ describe("useCollectionStore", () => {
       expect(supabase.from).toHaveBeenCalledWith("collections");
       const neqCalls = builder._calls.filter((c: any) => c.method === "neq");
       expect(neqCalls).toContainEqual({ method: "neq", args: ["status", "deleted"] });
+    });
+  });
+
+  describe("createCollection", () => {
+    it("routes fundraising submissions through Express even when the generic create flag is set to edge", async () => {
+      localStorage.setItem("kolekto-ff-create-path", "edge");
+      localStorage.setItem("kolekto-auth-token", JSON.stringify({ user: { id: "user-1" }, access_token: "token" }));
+      postMock.mockResolvedValue({
+        data: {
+          data: {
+            id: "fund-1",
+            title: "Save the Hall",
+            collection_type: "fundraising",
+            status: "pending_review",
+            created_at: "2026-08-08T00:00:00.000Z",
+          },
+        },
+      });
+      invokeMock.mockResolvedValue({ data: { data: { id: "wrong-path" } }, error: null });
+
+      const result = await useCollectionStore.getState().createCollection({
+        title: "Save the Hall",
+        collection_type: "fundraising",
+      });
+
+      expect(postMock).toHaveBeenCalledWith(
+        "/create-collection",
+        expect.objectContaining({
+          title: "Save the Hall",
+          collection_type: "fundraising",
+          user_id: "user-1",
+        }),
+      );
+      expect(invokeMock).not.toHaveBeenCalled();
+      expect(result.id).toBe("fund-1");
     });
   });
 
