@@ -14,13 +14,15 @@ import { Banknote } from "lucide-react";
 
 interface WithdrawFormProps {
   availableBalance: number;
+  // Only the payout account ID travels to the backend. The destination bank
+  // details (account number, account name, bank) are resolved server-side
+  // from the owned payout_accounts row — see requestWithdrawal in
+  // controllers/withdrawal.js. Sending them from here was how a crafted
+  // request could redirect a payout to an unverified account, so this
+  // payload deliberately no longer carries them.
   onSubmit: (data: {
     amount: number;
-    payoutAccountId?: string;
-    accountName: string;
-    accountNumber: string;
-    bankName: string;
-    bankCode?: string;
+    payoutAccountId: string;
   }) => void;
   isLoading: boolean;
 }
@@ -266,11 +268,12 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
     if (validate()) {
       const selectedAccount = payoutAccounts.find((acc: any) => acc.id === selectedAccountId);
       if (selectedAccount) {
-        const accountName = selectedAccount.account_name || selectedAccount.accountName || '';
-        const accountNumber = selectedAccount.account_number || selectedAccount.accountNumber || '';
+        // Kept as a UX check only — it stops the user submitting against a
+        // row the settings screen already shows as incomplete. The backend
+        // performs the same check against its own copy of the row and is the
+        // one that actually decides.
         const bankName = selectedAccount.bank_name || selectedAccount.bankName || '';
-        const bankCode = selectedAccount.bank_code || selectedAccount.bankCode || '';
-
+        const accountName = selectedAccount.account_name || selectedAccount.accountName || '';
         if (!accountName || !bankName) {
           setErrors((prev) => ({
             ...prev,
@@ -282,10 +285,6 @@ const WithdrawForm: React.FC<WithdrawFormProps> = ({
         onSubmit({
           amount: parseFloat(amount),
           payoutAccountId: selectedAccount.id,
-          accountName,
-          accountNumber,
-          bankName,
-          bankCode,
         });
       }
     }

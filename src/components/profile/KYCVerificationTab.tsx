@@ -37,89 +37,34 @@ import ComprehensiveKYC from '../settings/comprehensive-kyc-system.js';
 import { axiosInstance } from '@/utils/axios.js';
 import { useAuthStore } from '@/store/useAuthStore.js';
 
-// BVN Verification Form Component
+// REMOVED — second bank-name matching algorithm.
+//
+// This file used to contain a `BVNVerificationForm` whose `crossCheckBankAccount`
+// compared a BVN-derived name to a bank account name with a first-token
+// substring test in either direction ("does either name contain the other's
+// first word"). That is a THIRD answer to "do these names belong to the same
+// person", disagreeing with both the server-side rule and each other, and by
+// that test "Alex Felix" matched "Alex Johnson".
+//
+// It was also unreachable and non-enforcing: the card that opened it is
+// commented out below, its result never blocked anything (only a `critical`
+// severity counted, which the name check never set), and a "Proceed Anyway"
+// button overrode it regardless. It called Paystack from the BROWSER using
+// `process.env.REACT_APP_PAYSTACK_SECRET_KEY` — a CRA-style variable Vite
+// never injects, so it would have sent `Bearer undefined`; had it been wired
+// up under a name Vite does inject, it would have shipped the Paystack secret
+// key to every visitor.
+//
+// The single authority for bank-account name verification is
+// kolekto-be-old/utils/bankNameMatch.js, called only from the Express
+// controllers that write payout accounts. Do not reintroduce a client-side
+// pre-check here: a second rule that disagrees is worse than no rule.
+
 const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
   const [bvnNumber, setBvnNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [verificationResult, setVerificationResult] = useState(null);
-
-  // Function to verify BVN with Paystack
-  const verifyBVNWithPaystack = async (bvn) => {
-    try {
-      const response = await fetch('https://api.paystack.co/bank/resolve_bvn/' + bvn, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.REACT_APP_PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      console.log(response, 'bvn res');
-
-      if (!response.ok) {
-        throw new Error('BVN verification failed');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Paystack BVN verification error:', error);
-      throw error;
-    }
-  };
-
-  // Function to cross-check BVN data with user's bank account
-  const crossCheckBankAccount = (bvnData, userBankData) => {
-    const discrepancies = [];
-
-    // Check account name similarity
-    const bvnName = `${bvnData.first_name} ${bvnData.last_name}`.toLowerCase();
-    const userAccountName = userBankData.accountName.toLowerCase();
-
-    // Simple name matching (you might want to use a more sophisticated matching algorithm)
-    const nameMatch = bvnName.includes(userAccountName.split(' ')[0]) ||
-      userAccountName.includes(bvnName.split(' ')[0]);
-
-    if (!nameMatch) {
-      discrepancies.push({
-        field: 'Account Name',
-        bvnValue: bvnName,
-        userValue: userAccountName,
-        severity: 'high'
-      });
-    }
-
-    // Check if BVN matches the one associated with the bank account
-    if (userBankData.bvn && userBankData.bvn !== bvnNumber) {
-      discrepancies.push({
-        field: 'BVN',
-        bvnValue: bvnNumber,
-        userValue: userBankData.bvn,
-        severity: 'critical'
-      });
-    }
-
-    // Check phone number if available
-    if (bvnData.mobile && userBankData.phoneNumber) {
-      const bvnPhone = bvnData.mobile.replace(/\D/g, '');
-      const userPhone = userBankData.phoneNumber.replace(/\D/g, '');
-
-      if (bvnPhone !== userPhone) {
-        discrepancies.push({
-          field: 'Phone Number',
-          bvnValue: bvnData.mobile,
-          userValue: userBankData.phoneNumber,
-          severity: 'medium'
-        });
-      }
-    }
-
-    return {
-      isValid: discrepancies.filter(d => d.severity === 'critical').length === 0,
-      discrepancies,
-      matchScore: discrepancies.length === 0 ? 100 : Math.max(0, 100 - (discrepancies.length * 25))
-    };
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -132,56 +77,14 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
       return;
     }
 
-    setIsLoading(true);
-
-    try {
-      // Step 1: Verify BVN with Paystack
-      console.log('Verifying BVN with Paystack...');
-      const paystackResponse = await verifyBVNWithPaystack(bvnNumber);
-
-      if (!paystackResponse.status || !paystackResponse.data) {
-        throw new Error(paystackResponse.message || 'BVN verification failed');
-      }
-
-      const bvnData = paystackResponse.data;
-
-      // Step 2: Cross-check with user's bank account data
-      console.log('Cross-checking with bank account data...');
-      const crossCheckResult = crossCheckBankAccount(bvnData, userData.bankVerification);
-
-      const result = {
-        bvnData,
-        crossCheckResult,
-        isVerified: crossCheckResult.isValid,
-        timestamp: new Date().toISOString()
-      };
-
-      setVerificationResult(result);
-
-      if (result.isVerified) {
-        // Success - BVN verified and matches bank account
-        setTimeout(() => {
-          onSuccess({
-            status: 'verified',
-            bvnData: bvnData,
-            verifiedAt: new Date().toISOString(),
-            matchScore: crossCheckResult.matchScore
-          });
-          onOpenChange(false);
-          setBvnNumber('');
-          setVerificationResult(null);
-        }, 2000);
-      } else {
-        // BVN verified but has discrepancies
-        setError('BVN verification completed but there are discrepancies with your account information.');
-      }
-
-    } catch (error) {
-      console.error('BVN verification failed:', error);
-      setError(toFriendlyErrorMessage(error, 'Could not verify BVN. Please try again.'));
-    } finally {
-      setIsLoading(false);
-    }
+    // BVN verification has no backend endpoint today. The previous
+    // implementation called Paystack directly from the browser and then ran
+    // its own name-matching rule on the response — both removed above.
+    //
+    // If BVN verification is reintroduced it must go through the Express API
+    // (the provider secret cannot live in a bundle), and any name comparison
+    // must call the one authority, utils/bankNameMatch.js, server-side.
+    setError('BVN verification is unavailable right now. Please use identity document upload instead.');
   };
 
   const handleClose = () => {
@@ -224,58 +127,9 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
 
-          {/* Verification Result Display */}
-          {verificationResult && (
-            <div className="space-y-3">
-              <Separator />
-              <h4 className="font-medium text-sm">Verification Results:</h4>
-
-              {/* BVN Data Display */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <h5 className="font-medium text-blue-800 text-sm mb-2">BVN Information:</h5>
-                <div className="text-xs text-blue-600 space-y-1">
-                  <p>• Name: {verificationResult.bvnData.first_name} {verificationResult.bvnData.last_name}</p>
-                  <p>• Phone: {verificationResult.bvnData.mobile}</p>
-                  <p>• Date of Birth: {verificationResult.bvnData.date_of_birth}</p>
-                </div>
-              </div>
-
-              {/* Cross-Check Results */}
-              <div className={`border rounded-lg p-3 ${verificationResult.crossCheckResult.isValid
-                ? 'bg-green-50 border-green-200'
-                : 'bg-yellow-50 border-yellow-200'
-                }`}>
-                <div className="flex items-center space-x-2 mb-2">
-                  {verificationResult.crossCheckResult.isValid ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                  )}
-                  <h5 className={`font-medium text-sm ${verificationResult.crossCheckResult.isValid
-                    ? 'text-green-800'
-                    : 'text-yellow-800'
-                    }`}>
-                    Account Match: {verificationResult.crossCheckResult.matchScore}%
-                  </h5>
-                </div>
-
-                {/* Show discrepancies if any */}
-                {verificationResult.crossCheckResult.discrepancies.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-yellow-600 mb-2">Discrepancies found:</p>
-                    {verificationResult.crossCheckResult.discrepancies.map((discrepancy, index) => (
-                      <div key={index} className="text-xs">
-                        <p className="font-medium text-yellow-800">{discrepancy.field}:</p>
-                        <p className="text-yellow-600 ml-2">
-                          BVN: {discrepancy.bvnValue} | Account: {discrepancy.userValue}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* The verification-result panel that stood here rendered the
+              removed cross-check's match score and discrepancy list. Nothing
+              produces that shape any more. */}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <h4 className="text-sm font-medium text-blue-800 mb-1">How to get your BVN:</h4>
@@ -295,49 +149,24 @@ const BVNVerificationForm = ({ open, onOpenChange, onSuccess, userData }) => {
             >
               Cancel
             </Button>
-            {verificationResult && !verificationResult.isVerified ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  // Proceed with verification despite discrepancies
-                  onSuccess({
-                    status: 'verified',
-                    bvnData: verificationResult.bvnData,
-                    verifiedAt: new Date().toISOString(),
-                    matchScore: verificationResult.crossCheckResult.matchScore,
-                    hasDiscrepancies: true,
-                    discrepancies: verificationResult.crossCheckResult.discrepancies
-                  });
-                  onOpenChange(false);
-                  setBvnNumber('');
-                  setVerificationResult(null);
-                }}
-                className="text-yellow-700 border-yellow-300"
-              >
-                <AlertCircle className="h-4 w-4 mr-2" />
-                Proceed Anyway
-              </Button>
-            ) : (
-              <Button type="submit" disabled={isLoading || (verificationResult && verificationResult.isVerified)}>
-                {isLoading ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Verifying...
-                  </>
-                ) : verificationResult && verificationResult.isVerified ? (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    Verified
-                  </>
-                ) : (
-                  <>
-                    <Shield className="h-4 w-4 mr-2" />
-                    Verify BVN
-                  </>
-                )}
-              </Button>
-            )}
+            {/* The "Proceed Anyway" button that stood here let a user accept
+                their own BVN verification despite a reported name
+                discrepancy — the check it overrode is gone, and an
+                override-your-own-verification control should not come back
+                with it. */}
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Verify BVN
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

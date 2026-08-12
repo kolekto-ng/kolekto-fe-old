@@ -175,14 +175,15 @@ export interface WithdrawalState {
   
   // Actions
   fetchWithdrawals: (userId?: string, collectionId?: string) => Promise<Withdrawal[]>;
+  // The payout destination is resolved server-side from `payout_account_id`
+  // (ownership-checked against the authenticated user). `account_name`,
+  // `account_number`, `bank_name` and `bank_code` are deliberately absent:
+  // the backend ignores them, and accepting them here would invite a caller
+  // to believe they set the destination.
   createWithdrawal: (withdrawalData: {
     amount: number;
     collection_id?: string;
     payout_account_id?: string;
-    account_name?: string;
-    account_number?: string;
-    bank_name?: string;
-    bank_code?: string;
     organizer_id: string;
   }) => Promise<Withdrawal>;
 }

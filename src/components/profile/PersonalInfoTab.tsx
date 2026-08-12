@@ -8,7 +8,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Edit2, Camera, Check, Key, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store';
-import PaymentAccounts from './PaymentAccount';
+// PaymentAccount.tsx was deleted: it was an older duplicate of the
+// add-bank-account dialog whose `kycVerified` flag was hardcoded `false`
+// with a TODO, so it could never open. Keeping a second copy of the
+// add-account flow around — one whose KYC gate was a client-side literal
+// somebody could "fix" to `true` — was a hazard, not dead weight. The live
+// path is components/profile/BankDetailsSection.tsx, which reads the gate
+// from the backend (kycData.canManageBankAccount).
 import ProfilePictureUpload from '../settings/profile-picture-upload';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogTrigger, DialogContent } from '@/components/ui/dialog';
@@ -305,7 +311,6 @@ const PersonalInfoTab: React.FC<{ kycStatus?: string }> = ({ kycStatus }) => {
         </CardContent>
       </Card>
 
-      <PaymentAccounts />
     </div>
   );
 };

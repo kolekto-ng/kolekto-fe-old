@@ -97,11 +97,7 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
 
   const handleWithdraw = async (data: {
     amount: number;
-    payoutAccountId?: string;
-    accountName: string;
-    accountNumber: string;
-    bankName: string;
-    bankCode?: string;
+    payoutAccountId: string;
   }) => {
     if (!user) {
       toast.error('You must be logged in to withdraw funds');
@@ -111,19 +107,16 @@ export const WithdrawFundsDialog: React.FC<WithdrawFundsDialogProps> = ({
     setIsLoading(true);
 
     try {
-      // `account_number` from a saved payout account is not available in
-      // plaintext on the client — the table only stores the encrypted cipher
-      // + last-4. We pass `payout_account_id` so the backend can decrypt
-      // server-side and store the readable number on the withdrawal row for
-      // admin review.
+      // Only the payout account id is sent. The backend loads that row
+      // (ownership-checked against the authenticated user), decrypts the
+      // account number and takes the account name and bank from the stored
+      // row — it ignores any destination fields in this body. Sending them
+      // would be inert, and their absence is what makes the destination
+      // unforgeable from the client.
       await createWithdrawal({
         amount: data.amount,
         collection_id: selectedCollectionId,
         payout_account_id: data.payoutAccountId,
-        account_name: data.accountName,
-        account_number: data.accountNumber,
-        bank_name: data.bankName,
-        bank_code: data.bankCode,
         organizer_id: user.id
       });
 
