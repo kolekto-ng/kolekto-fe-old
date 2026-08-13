@@ -105,8 +105,11 @@ async function fetchFromEdgeFunction(): Promise<FundraisingCampaignRow[]> {
 }
 
 async function fetchFromCollectionsFallback(): Promise<FundraisingCampaignRow[]> {
-  const { data: collections, error } = await supabase
-    .from("collections")
+  // Curated public view, not the base table: this fallback runs on the PUBLIC
+  // fundraising listing, so it must not read columns the public UI never
+  // renders. See database/s3_public_collection_view_2026-08-12.sql.
+  const { data: collections, error } = await (supabase as any)
+    .from("public_collection_view")
     .select("*")
     .eq("status", "active")
     .order("created_at", { ascending: false })

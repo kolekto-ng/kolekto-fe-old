@@ -21,8 +21,10 @@ import {
   ShieldCheck,
   ChevronRight,
   Users,
+  Building2,
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher';
 import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 
@@ -41,6 +43,9 @@ const primaryNavItems: NavItem[] = [
 
 const secondaryNavItems: NavItem[] = [
   { label: 'Shared with Me', path: '/dashboard/shared-with-me', icon: Users },
+  // Workspace management: switch, create, and edit settings. Sits above Profile
+  // because it scopes everything else in the dashboard.
+  { label: 'Workspaces', path: '/dashboard/workspace', icon: Building2 },
   { label: 'Profile', path: '/dashboard/settings', icon: Settings },
 ];
 
@@ -85,10 +90,15 @@ const DashboardSidebar = () => {
   return (
     <Sidebar className="border-r border-gray-100">
       {/* ── Logo ─────────────────────────────────────────────────── */}
-      <SidebarHeader className="px-4 py-5 bg-white">
+      <SidebarHeader className="px-4 py-5 bg-white space-y-3">
         <Link to="/dashboard" onClick={close}>
           <Logo size="md" />
         </Link>
+        {/* Workspace identity sits directly under the logo — the first thing a
+            user sees, and the standard home for "which space am I in" in every
+            product that has this concept. Previously the switcher existed only
+            as faint text in the navbar and was effectively invisible. */}
+        <WorkspaceSwitcher variant="full" />
       </SidebarHeader>
 
       {/* ── Navigation ───────────────────────────────────────────── */}

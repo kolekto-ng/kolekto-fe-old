@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Logo from '../Logo';
 import NotificationCenter from './NotificationCenter';
+import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher';
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Home',
@@ -34,8 +35,12 @@ const DashboardNavbar: React.FC = () => {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <Logo size="sm" />
+            {/* Which workspace am I acting as? Kept visible on mobile too —
+                organizers manage collections from their phones, and acting in
+                the wrong workspace is exactly the mistake this prevents. */}
+            <WorkspaceSwitcher className="min-w-0 max-w-[45vw]" />
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
@@ -48,9 +53,13 @@ const DashboardNavbar: React.FC = () => {
   return (
     <div className="sticky top-0 z-30 bg-gray-50 border-b border-gray-100">
       <div className="flex items-center justify-between px-6 h-14">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <SidebarTrigger className="hidden md:flex" />
           <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
+          <span className="text-gray-300" aria-hidden="true">/</span>
+          {/* Active workspace context, adjacent to the page title so the answer
+              to "who am I acting as?" is always on screen. */}
+          <WorkspaceSwitcher />
         </div>
         <div className="flex items-center gap-2">
           <NotificationCenter />

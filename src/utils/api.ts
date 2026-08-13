@@ -64,18 +64,16 @@ export const handleApiResponse = async (response: Response) => {
 // useCollectionStore.createCollection → backend (single authority). Do not
 // reintroduce a parallel create path here.
 
-// Transaction API functions
-export const transactionAPI = {
-  getAll: async () => {
-    const response = await authenticatedFetch('/transactions');
-    return handleApiResponse(response);
-  },
-
-  getById: async (id: string) => {
-    const response = await authenticatedFetch(`/transactions/${id}`);
-    return handleApiResponse(response);
-  },
-};
+// NOTE: `transactionAPI` (getAll/getById against '/transactions') was removed
+// in the Phase 1.5 remediation. It was dead code — defined here, imported
+// nowhere — pointing at backend routes that were DELIBERATELY REMOVED for
+// security: `GET /transactions` returned rows without filtering by caller.
+// `tests/productionHardening.test.js` actively asserts that route stays
+// unmounted. Do NOT reintroduce either the client or the route.
+//
+// Transaction history in the UI is derived from collections + contributions +
+// withdrawals (see store/useTransactionStore.ts). There is no `transactions`
+// table in any Kolekto database.
 
 // User API functions
 export const userAPI = {

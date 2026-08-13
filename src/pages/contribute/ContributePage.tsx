@@ -74,9 +74,15 @@ const ContributePage: React.FC = () => {
         let collectionData: any;
 
         if (UUID_RE.test(collectionId)) {
-          // Direct Supabase lookup by UUID
-          const { data, error: fetchError } = await supabase
-            .from('collections')
+          // Direct Supabase lookup by UUID via the CURATED PUBLIC VIEW.
+          // This page is unauthenticated, so it must not read the base
+          // `collections` table — that exposed every column (user_id,
+          // next_contributor_number, rejection_reason, workspace_id …) to
+          // anyone with the anon key. `public_collection_view` carries only the
+          // fields this flow actually renders. See
+          // database/s3_public_collection_view_2026-08-12.sql.
+          const { data, error: fetchError } = await (supabase as any)
+            .from('public_collection_view')
             .select('*')
             .eq('id', collectionId)
             .single();
@@ -179,7 +185,8 @@ const ContributePage: React.FC = () => {
     // the only guard — a contributor can never pay into a closed/paused/full row.
     const refreshCollectionRow = async () => {
       const [{ data: fresh }, { data: paidContributions }, { data: walletData }] = await Promise.all([
-        supabase.from('collections').select('*').eq('id', collectionId).single(),
+        // Curated public view — same reason as the initial load above.
+        (supabase as any).from('public_collection_view').select('*').eq('id', collectionId).single(),
         supabase
           .from('contributions')
           .select('id, contributor_information')

@@ -1,3 +1,24 @@
+// Supabase schema types.
+//
+// ⚠️ HAND-MAINTAINED, NOT GENERATED — and therefore prone to drift. It covers
+// only a handful of the ~50 tables that actually exist. Treat a table's absence
+// here as "not yet typed", never as "does not exist".
+//
+// 2026-08-12 (Phase 1.5 remediation): removed two PHANTOM table declarations,
+// `transactions` and `payment_config`. Neither exists in the test OR the
+// production database — no migration has ever created them and nothing reads or
+// writes them. Their presence here caused repeated false conclusions, including
+// a documented (and wrong) claim that prod had a `transactions` table that
+// needed workspace ownership.
+//
+// What "transactions" means in Kolekto: a DERIVED VIEW composed at read time
+// from `collections` + `contributions` + `withdrawals` (see
+// store/useTransactionStore.ts). The durable payment records are `contributions`
+// and `deposits`. Do NOT create a `transactions` table to satisfy this file.
+//
+// Prefer regenerating from the live schema over editing by hand:
+//   supabase gen types typescript --project-id <ref> > src/integrations/supabase/types.ts
+
 export type Json =
   | string
   | number
@@ -127,24 +148,6 @@ export type Database = {
           }
         ];
       };
-      payment_config: {
-        Row: {
-          id: number;
-          key_name: string | null;
-          key_value: string | null;
-        };
-        Insert: {
-          id?: number;
-          key_name?: string | null;
-          key_value?: string | null;
-        };
-        Update: {
-          id?: number;
-          key_name?: string | null;
-          key_value?: string | null;
-        };
-        Relationships: [];
-      };
       profiles: {
         Row: {
           created_at: string | null;
@@ -174,71 +177,6 @@ export type Database = {
           updated_at?: string | null;
         };
         Relationships: [];
-      };
-      transactions: {
-        Row: {
-          amount: number;
-          collection_id: string | null;
-          contribution_id: string | null;
-          created_at: string | null;
-          description: string | null;
-          id: string;
-          type: string;
-          user_id: string | null;
-          withdrawal_id: string | null;
-        };
-        Insert: {
-          amount: number;
-          collection_id?: string | null;
-          contribution_id?: string | null;
-          created_at?: string | null;
-          description?: string | null;
-          id?: string;
-          type: string;
-          user_id?: string | null;
-          withdrawal_id?: string | null;
-        };
-        Update: {
-          amount?: number;
-          collection_id?: string | null;
-          contribution_id?: string | null;
-          created_at?: string | null;
-          description?: string | null;
-          id?: string;
-          type?: string;
-          user_id?: string | null;
-          withdrawal_id?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "transactions_collection_id_fkey";
-            columns: ["collection_id"];
-            isOneToOne: false;
-            referencedRelation: "collections";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "transactions_contribution_id_fkey";
-            columns: ["contribution_id"];
-            isOneToOne: false;
-            referencedRelation: "contributions";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "transactions_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "transactions_withdrawal_id_fkey";
-            columns: ["withdrawal_id"];
-            isOneToOne: false;
-            referencedRelation: "withdrawals";
-            referencedColumns: ["id"];
-          }
-        ];
       };
       withdrawals: {
         Row: {
@@ -302,7 +240,48 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      // Curated public surface for contribute/payment pages. Backed by
+      // database/s3_public_collection_view_2026-08-12.sql. Anonymous visitors
+      // read THIS, not the `collections` base table, which no longer grants
+      // anon SELECT. Deliberately omits user_id, next_contributor_number,
+      // rejection_reason and workspace_id.
+      public_collection_view: {
+        Row: {
+          id: string;
+          slug: string | null;
+          created_at: string | null;
+          title: string;
+          description: string | null;
+          banner_url: string | null;
+          amount: number;
+          currency: string;
+          currency_symbol: string;
+          fee_bearer: string;
+          target_amount: number | null;
+          min_contribution: number | null;
+          price_tiers: Json | null;
+          status: string;
+          type: string;
+          collection_type: string | null;
+          deadline: string | null;
+          event_date: string | null;
+          ticket_mode: string | null;
+          max_contributions: number | null;
+          total_contributions: number;
+          allow_multiple_quantity: boolean | null;
+          is_open_ended: boolean | null;
+          unique_id_enabled: boolean | null;
+          contributions_fields: Json | null;
+          code_prefix: string | null;
+          support_phone_number: string;
+          story: Json | null;
+          story_images: Json | null;
+          campaign_summary: string | null;
+          campaign_category: string | null;
+          campaign_keywords: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       [_ in never]: never;

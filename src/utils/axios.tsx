@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/store";
 import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
+import { getActiveWorkspaceId } from "@/utils/activeWorkspace";
 import { useKycGateStore } from "@/store/useKycGateStore";
 import axios from "axios";
 
@@ -78,6 +79,24 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${session.access_token}`;
     } else {
       delete config.headers.Authorization;
+    }
+
+    // Workspace Phase 1: attach the active workspace as a REQUEST hint.
+    //
+    // The backend treats this as a request, never as authorization — it
+    // re-verifies membership and capability server-side and rejects ids the
+    // caller has no claim to (it does NOT silently fall back). Sending it is
+    // therefore safe even if the value is stale or wrong.
+    //
+    // Read from localStorage directly rather than importing useWorkspaceStore:
+    // the store imports this module, so importing it back would create a cycle.
+    // Only sent for authenticated, non-ambassador calls; ambassadors are a
+    // separate identity system with no workspace context.
+    if (session?.access_token) {
+      const activeWorkspaceId = getActiveWorkspaceId();
+      if (activeWorkspaceId) {
+        config.headers["X-Workspace-Id"] = activeWorkspaceId;
+      }
     }
     return config;
   },

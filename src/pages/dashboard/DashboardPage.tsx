@@ -28,6 +28,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
 import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
 import { getCollectionStatusMeta } from "@/utils/collectionStatus";
+import { ActiveWorkspaceBadge } from "@/components/workspace/WorkspaceSwitcher";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -239,6 +240,10 @@ const DashboardPage: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 capitalize">
             {firstName} 👋
           </h1>
+          {/* Which workspace this dashboard's numbers belong to. Shown here
+              because the figures below are workspace-scoped, and a user acting
+              in the wrong workspace should be able to notice immediately. */}
+          <ActiveWorkspaceBadge className="mt-2" />
         </div>
         <div className="flex items-center gap-2">
           <Button

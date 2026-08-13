@@ -14,6 +14,7 @@ const DashboardLayout = lazy(() => import("./components/dashboard/DashboardLayou
 const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
 const DashboardCreateCollectionPage = lazy(() => import("./pages/dashboard/CreateCollectionPage"));
 const CollectionsPage = lazy(() => import("./pages/dashboard/CollectionsPage"));
+const WorkspacePage = lazy(() => import("./pages/dashboard/WorkspacePage"));
 // import ProfilePage from "./pages/dashboard/ProfilePage";
 const TransactionHistoryPage = lazy(() => import("./pages/dashboard/TransactionHistoryPage"));
 const ActivitiesPage = lazy(() => import("./pages/dashboard/ActivitiesPage"));
@@ -36,6 +37,7 @@ const CollectionAccessPage = lazy(() => import("./pages/CollectionAccessPage"));
 const SharedCollectionsPage = lazy(() => import("./pages/dashboard/SharedCollectionsPage"));
 const SharedCollectionDetailPage = lazy(() => import("./pages/dashboard/SharedCollectionDetailPage"));
 import { useAuthStore } from "@/store/useAuthStore";
+import { useWorkspaceBootstrap } from "@/hooks/useWorkspaceBootstrap";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
 import SessionTimeoutGuard from "./components/SessionTimeoutGuard";
@@ -197,6 +199,7 @@ const AuthenticatedApp = () => {
         <Route path="create-collection" element={<DashboardCreateCollectionPage />} />
         <Route path="settings" element={<UserProfilePage />} />
         <Route path="shared-with-me" element={<SharedCollectionsPage />} />
+        <Route path="workspace" element={<WorkspacePage />} />
         <Route path="shared-with-me/:id" element={<SharedCollectionDetailPage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="activities" element={<ActivitiesPage />} />
@@ -212,6 +215,13 @@ const AuthenticatedApp = () => {
 // Main App component restructured to fix React hooks issues
 const App = () => {
   const location = useLocation();
+
+  // Workspace Phase 1: load the signed-in user's workspaces so requests carry
+  // an X-Workspace-Id. Failure-tolerant by design — the backend falls back to
+  // the caller's personal workspace when the header is absent, so the app
+  // behaves exactly as it did before if this never resolves.
+  useWorkspaceBootstrap();
+
   const isAmbassadorExperience =
     window.location.hostname.startsWith("ambassador.") ||
     location.pathname.startsWith("/ambassador");
