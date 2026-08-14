@@ -33,6 +33,7 @@ const UserProfilePage = lazy(() => import("./pages/dashboard/UserProfilePage"));
 const PaymentCallback = lazy(() => import("./components/contribute/paymentCallback"));
 const ConfirmEmailChangePage = lazy(() => import("./pages/ConfirmEmailChangePage"));
 const CollectionTransferPage = lazy(() => import("./pages/CollectionTransferPage"));
+const InvitePage = lazy(() => import("./pages/InvitePage"));
 const CollectionAccessPage = lazy(() => import("./pages/CollectionAccessPage"));
 const SharedCollectionsPage = lazy(() => import("./pages/dashboard/SharedCollectionsPage"));
 const SharedCollectionDetailPage = lazy(() => import("./pages/dashboard/SharedCollectionDetailPage"));
@@ -181,6 +182,7 @@ const AuthenticatedApp = () => {
       <Route path="/payment/verify" element={<PaymentCallback />} />
       <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
       <Route path="/collection-transfer" element={<CollectionTransferPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/collection-access" element={<CollectionAccessPage />} />
       <Route path="/pwa/*" element={<LegacyPwaRedirect />} />
 

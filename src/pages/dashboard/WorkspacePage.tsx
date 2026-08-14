@@ -1,14 +1,14 @@
-// WorkspacePage.tsx — Workspace management surface (Phase 8 frontend).
+// WorkspacePage.tsx — Workspace management surface (Phase 8 frontend, Wave 4
+// invitations).
 //
 // Covers: viewing the active workspace, editing its settings, listing every
-// workspace the user belongs to, and creating a new (non-personal) one.
-//
-// DELIBERATELY ABSENT: members / invitations. Adding a second member would
-// break the `user_id ↔ workspace_id` equivalence the Phase 2B verification
-// harness depends on, so multi-member support ships only after that harness is
-// green. The UI says so explicitly rather than showing a disabled teaser.
+// workspace the user belongs to, creating a new (non-personal) one, and (as
+// of Wave 4) inviting people into it. Backend authorization
+// (workspace:members.manage) remains authoritative — the `canUpdate` check
+// below is presentation only, same disclaimer as the rest of this file's
+// store.
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Check, Loader2, Plus, ShieldCheck, User } from "lucide-react";
+import { Building2, Check, Loader2, Mail, Plus, ShieldCheck, User, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -38,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useWorkspaceStore, type WorkspaceType } from "@/store/useWorkspaceStore";
+import { useWorkspaceStore, type WorkspaceType, type WorkspaceInvite } from "@/store/useWorkspaceStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
@@ -78,6 +78,11 @@ export default function WorkspacePage() {
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
+  const pendingInvites = useWorkspaceStore((s) => s.pendingInvites);
+  const invitesLoading = useWorkspaceStore((s) => s.invitesLoading);
+  const fetchPendingInvites = useWorkspaceStore((s) => s.fetchPendingInvites);
+  const createInvite = useWorkspaceStore((s) => s.createInvite);
+  const revokeInvite = useWorkspaceStore((s) => s.revokeInvite);
   const userId = (useAuthStore() as any)?.user?.id;
 
   const active = useMemo(
@@ -121,6 +126,50 @@ export default function WorkspacePage() {
   const [newType, setNewType] = useState<WorkspaceType | "">("");
   const [newDescription, setNewDescription] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // ── Invitations (Wave 4) ─────────────────────────────────────────────────
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active || active.type === "personal") return;
+    fetchPendingInvites(active.id).catch(() => {
+      // Swallowed by design, matching this page's own error-state pattern for
+      // secondary data — the workspace itself already loaded; a failed
+      // invites fetch must not block the rest of the page. The empty list
+      // renders instead, and the user can retry by switching away and back.
+    });
+  }, [active?.id, active?.type, fetchPendingInvites]);
+
+  const handleInvite = async () => {
+    if (!active || !inviteEmail.trim()) return;
+    setSendingInvite(true);
+    try {
+      await createInvite(active.id, { email: inviteEmail.trim(), role: inviteRole });
+      toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+      setInviteEmail("");
+      setInviteRole("MEMBER");
+    } catch (err) {
+      toast.error(toFriendlyErrorMessage(err, "Could not send invitation."));
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const handleRevoke = async (invite: WorkspaceInvite) => {
+    if (!active) return;
+    setRevokingId(invite.id);
+    try {
+      await revokeInvite(active.id, invite.id);
+      toast.success(`Invitation to ${invite.email} revoked`);
+    } catch (err) {
+      toast.error(toFriendlyErrorMessage(err, "Could not revoke invitation."));
+    } finally {
+      setRevokingId(null);
+    }
+  };
 
   const handleCreate = async () => {
     if (!newName.trim() || !newType) return;
@@ -311,6 +360,91 @@ export default function WorkspacePage() {
         </Card>
       )}
 
+      {/* Invitations — org-type workspaces only; a personal workspace is
+          deliberately single-user, so there is nothing to invite anyone into
+          there (the backend does not structurally block it, but the product
+          surface only exposes it here). */}
+      {active && active.type !== "personal" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Invitations</CardTitle>
+            <CardDescription>
+              {canUpdate
+                ? "Invite someone by email. They'll be able to accept once they sign in with that address."
+                : "You don't have permission to manage invitations for this workspace."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {canUpdate && (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  disabled={sendingInvite}
+                  className="sm:flex-1"
+                  aria-label="Invite email address"
+                />
+                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as "ADMIN" | "MEMBER")}>
+                  <SelectTrigger className="sm:w-32" aria-label="Invite role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MEMBER">Member</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleInvite} disabled={!inviteEmail.trim() || sendingInvite} className="sm:w-auto">
+                  {sendingInvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Send invitation
+                </Button>
+              </div>
+            )}
+
+            {invitesLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : pendingInvites.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No pending invitations.</p>
+            ) : (
+              <ul className="space-y-2">
+                {pendingInvites.map((invite) => (
+                  <li
+                    key={invite.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{invite.email}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {invite.role} · expires {new Date(invite.expires_at).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </span>
+                    {canUpdate && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRevoke(invite)}
+                        disabled={revokingId === invite.id}
+                        aria-label={`Revoke invitation to ${invite.email}`}
+                      >
+                        {revokingId === invite.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* All workspaces */}
       <Card>
         <CardHeader>
@@ -354,12 +488,6 @@ export default function WorkspacePage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Honest statement of what's not built yet, rather than a dead teaser. */}
-      <p className="text-xs text-muted-foreground">
-        Inviting other people into a workspace isn't available yet — it's the next
-        stage of the workspace rollout.
-      </p>
     </div>
   );
 }

@@ -37,6 +37,29 @@ export interface Workspace {
   role?: "OWNER" | "ADMIN" | "MEMBER";
 }
 
+/** An ADMIN/MEMBER-granting invitation (Workspace Wave 4). Never carries a token. */
+export interface WorkspaceInvite {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: "ADMIN" | "MEMBER";
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
+  invited_by: string;
+  expires_at: string;
+  created_at: string;
+}
+
+/** The pre-auth preview shape from GET /invites/:token/preview. Deliberately
+ * has no `email` field — the backend never reveals the targeted address
+ * before the visitor has authenticated and proven control of it. */
+export interface InvitePreview {
+  valid: boolean;
+  workspaceName?: string;
+  workspaceType?: WorkspaceType;
+  role?: "ADMIN" | "MEMBER";
+  expiresAt?: string;
+}
+
 // Re-exported for convenience so callers have one obvious import site.
 export { getActiveWorkspaceId };
 
@@ -45,6 +68,8 @@ interface WorkspaceState {
   activeWorkspaceId: string | null;
   isLoading: boolean;
   error: string | null;
+  pendingInvites: WorkspaceInvite[];
+  invitesLoading: boolean;
   /** @param userId the signed-in user; scopes the persisted selection to them. */
   fetchWorkspaces: (userId?: string | null) => Promise<Workspace[]>;
   switchWorkspace: (id: string, userId?: string | null) => void;
@@ -58,6 +83,27 @@ interface WorkspaceState {
     patch: { name?: string; description?: string }
   ) => Promise<Workspace>;
   reset: () => void;
+  // ── Invitations (Wave 4) ──────────────────────────────────────────────
+  fetchPendingInvites: (workspaceId: string) => Promise<WorkspaceInvite[]>;
+  createInvite: (
+    workspaceId: string,
+    input: { email: string; role: "ADMIN" | "MEMBER" }
+  ) => Promise<WorkspaceInvite>;
+  revokeInvite: (workspaceId: string, inviteId: string) => Promise<void>;
+  /**
+   * Accept an invitation by token AND make the resulting workspace active —
+   * in that specific order. Lives in the store (not the accept page's own
+   * component logic) so the ordering itself — accept, THEN fetchWorkspaces,
+   * THEN switchWorkspace — is a single, unit-testable unit rather than
+   * something a page component could get wrong or reorder. See
+   * switchWorkspace's own comment: it silently no-ops on a workspace id the
+   * server hasn't returned yet, which is exactly what calling it before
+   * fetchWorkspaces resolves would do.
+   */
+  acceptInviteAndActivate: (
+    token: string,
+    userId?: string | null
+  ) => Promise<{ workspace_id: string }>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -65,6 +111,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeWorkspaceId: getActiveWorkspaceId(),
   isLoading: false,
   error: null,
+  pendingInvites: [],
+  invitesLoading: false,
 
   fetchWorkspaces: async (userId?: string | null) => {
     set({ isLoading: true, error: null });
@@ -141,6 +189,77 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   reset: () => {
     setActiveWorkspaceId(null);
-    set({ workspaces: [], activeWorkspaceId: null, error: null, isLoading: false });
+    set({ workspaces: [], activeWorkspaceId: null, error: null, isLoading: false, pendingInvites: [] });
+  },
+
+  // ── Invitations (Wave 4) ─────────────────────────────────────────────────
+  // Backend authorization (workspace:members.manage) remains authoritative —
+  // this store's `role` field is presentation only, same disclaimer as the
+  // rest of this file.
+
+  fetchPendingInvites: async (workspaceId: string) => {
+    set({ invitesLoading: true });
+    try {
+      const res = await axiosInstance.get(`/workspaces/${workspaceId}/invites`);
+      const invites: WorkspaceInvite[] = res?.data?.data ?? [];
+      set({ pendingInvites: invites, invitesLoading: false });
+      return invites;
+    } catch (err) {
+      set({ invitesLoading: false });
+      throw err;
+    }
+  },
+
+  createInvite: async (workspaceId: string, input: { email: string; role: "ADMIN" | "MEMBER" }) => {
+    const res = await axiosInstance.post(`/workspaces/${workspaceId}/invites`, input);
+    const invite: WorkspaceInvite = res?.data?.data;
+    if (!invite?.id) throw new Error("Invitation was not created. Please try again.");
+    set((state) => ({
+      // A reissue (same email) replaces the prior PENDING row in the list
+      // rather than duplicating it — mirrors the backend's revoke-and-replace
+      // behavior for the same (workspace, email) pair.
+      pendingInvites: [invite, ...state.pendingInvites.filter((i) => i.email !== invite.email)],
+    }));
+    return invite;
+  },
+
+  revokeInvite: async (workspaceId: string, inviteId: string) => {
+    await axiosInstance.delete(`/workspaces/${workspaceId}/invites/${inviteId}`);
+    set((state) => ({
+      pendingInvites: state.pendingInvites.filter((i) => i.id !== inviteId),
+    }));
+  },
+
+  acceptInviteAndActivate: async (token: string, userId?: string | null) => {
+    const member = await acceptInviteByToken(token);
+    // MUST resolve before switchWorkspace — see the interface comment above
+    // and switchWorkspace's own "only switch to a workspace the server
+    // actually returned" guard.
+    await get().fetchWorkspaces(userId);
+    get().switchWorkspace(member.workspace_id, userId);
+    return member;
   },
 }));
+
+// ── Public, token-scoped invitation actions (Wave 4) ────────────────────────
+// Deliberately standalone functions, not store state: the accept page
+// (/invite/:token) is reachable pre-authentication, before any workspace
+// context exists, so these have no dependency on the store's auth-gated
+// state. They still use axiosInstance for consistency with the rest of the
+// app's API-client conventions. acceptInviteAndActivate above (a store
+// action) is the one that also needs get()/set(), which is why it lives on
+// the store while these three do not.
+
+export async function previewInviteByToken(token: string): Promise<InvitePreview> {
+  const res = await axiosInstance.get(`/invites/${token}/preview`);
+  return res?.data?.data ?? { valid: false };
+}
+
+export async function acceptInviteByToken(token: string): Promise<{ workspace_id: string }> {
+  const res = await axiosInstance.post(`/invites/${token}/accept`);
+  return res?.data?.data;
+}
+
+export async function declineInviteByToken(token: string): Promise<void> {
+  await axiosInstance.post(`/invites/${token}/decline`);
+}
