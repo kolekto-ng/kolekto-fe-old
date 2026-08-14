@@ -110,6 +110,41 @@ describe("useCollectionStore", () => {
       expect(invokeMock).not.toHaveBeenCalled();
       expect(result.id).toBe("fund-1");
     });
+
+    it("sends an explicit workspaceId as the X-Workspace-Id header when the caller provides one", async () => {
+      localStorage.setItem("kolekto-auth-token", JSON.stringify({ user: { id: "user-1" }, access_token: "token" }));
+      postMock.mockResolvedValue({
+        data: { data: { id: "col-1", title: "Club Dues", collection_type: "fixed", created_at: "2026-08-13T00:00:00.000Z" } },
+      });
+
+      await useCollectionStore.getState().createCollection(
+        { title: "Club Dues", collection_type: "fixed" },
+        "ws-explicit-123",
+      );
+
+      expect(postMock).toHaveBeenCalledWith(
+        "/create-collection",
+        expect.objectContaining({ title: "Club Dues", user_id: "user-1" }),
+        { headers: { "X-Workspace-Id": "ws-explicit-123" } },
+      );
+    });
+
+    it("omits the third axios argument entirely when no workspaceId is known (backwards compatible)", async () => {
+      localStorage.setItem("kolekto-auth-token", JSON.stringify({ user: { id: "user-1" }, access_token: "token" }));
+      postMock.mockResolvedValue({
+        data: { data: { id: "col-2", title: "No Workspace Yet", collection_type: "fixed", created_at: "2026-08-13T00:00:00.000Z" } },
+      });
+
+      await useCollectionStore.getState().createCollection({ title: "No Workspace Yet", collection_type: "fixed" });
+
+      expect(postMock).toHaveBeenCalledWith(
+        "/create-collection",
+        expect.objectContaining({ title: "No Workspace Yet", user_id: "user-1" }),
+      );
+      // Exactly 2 args — no explicit `undefined` third arg that would silently
+      // rely on axios' default config while looking like an explicit no-op.
+      expect(postMock.mock.calls[0].length).toBe(2);
+    });
   });
 
   describe("removeCollection", () => {

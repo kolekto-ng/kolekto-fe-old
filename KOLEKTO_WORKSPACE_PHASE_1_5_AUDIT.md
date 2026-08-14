@@ -1,5 +1,7 @@
 # KOLEKTO WORKSPACE — PHASE 1.5 PRODUCTION READINESS AUDIT
 
+> **SUPERSEDED (2026-08-13):** current state is tracked in `KOLEKTO_WORKSPACE_2.0_ARCHITECTURE_AUDIT.md`. In particular, BUG-2 (anon profile PII) and the broad `collections_public_read` policy — both open when this audit was written — were independently re-verified as **fixed on TEST** in the superseding document. This document is retained for its methodology and historical findings.
+
 **Date:** 2026-08-12 · **Scope:** audit + discovery only. No Phase 2 built.
 **Test project:** `lpeeckqsltxohppheucz` (Phase 1 applied) · **Prod:** `busfgcmbndleljklrcbd` — **inspected READ-ONLY, unchanged.**
 

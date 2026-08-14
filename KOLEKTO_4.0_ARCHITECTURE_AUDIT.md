@@ -7,6 +7,8 @@
 
 > Legend for complexity/risk: **S** (small, <1 wk), **M** (medium, 1–3 wk), **L** (large, 1–2 mo), **XL** (multi-month / cross-team).
 
+> **STATUS UPDATE (2026-08-13):** The Workspace primitive this report recommends in §1.2 has since been **built and verified on TEST Supabase** — `workspaces`, `workspace_members`, `collections.workspace_id`, `WorkspaceSwitcher`, `WorkspacePage`, `useWorkspaceStore`. It exists only on branch `ghazali/fix-with-claude` — **not merged to staging/main, not in production.** `user_id` remains the authoritative ownership column everywhere except workspace resolution itself; `workspace_id` is additive/inert. See `kolekto-fe-old/CLAUDE.md` and `KOLEKTO_WORKSPACE_PHASE_1_IMPLEMENTATION.md` for current state — the "no tenancy primitive" framing below describes the problem this report was written to solve, not the current codebase.
+
 ---
 
 ## 1. Executive Summary
@@ -15,7 +17,7 @@ Kolekto is a functional, revenue-bearing fintech product with a **single-tenant,
 
 1. **Business logic is split across three runtimes with no single source of truth.** The same operations exist in Express controllers (`kolekto-be-old`), in Supabase Edge Functions (`create-collection`, `update-collection`, `verify-paystack-payment`, …), *and* in direct `supabase.from()` calls from the React client. `create-collection` literally exists twice. This is the #1 architectural risk for any migration, because "add `workspace_id`" must be applied in three places consistently or money/authorization bugs appear.
 
-2. **There is no tenancy primitive.** Everything is keyed to `user_id`. "Collaboration" today is two bolt-on flows: `collection_access_grants` (read-only visibility toggles — view earnings / view contributors) and `collection_transfer_requests` (move `user_id` via OTP). Neither is a real membership/role system. There is no object that can own branding, a catalog, members, analytics, or a public page. The Workspace **is** that missing primitive.
+2. **There is no tenancy primitive.** *(As of 2026-08-13: there now is — see status update above. This section describes the state that motivated building it.)* Everything is keyed to `user_id`. "Collaboration" today is two bolt-on flows: `collection_access_grants` (read-only visibility toggles — view earnings / view contributors) and `collection_transfer_requests` (move `user_id` via OTP). Neither is a real membership/role system. There is no object that can own branding, a catalog, members, analytics, or a public page. The Workspace **is** that missing primitive.
 
 3. **The schema and its type contract have drifted.** The generated `src/integrations/supabase/types.ts` knows only 6 tables (`collections`, `contributions`, `transactions`, `withdrawals`, `profiles`, `payment_config`) while the database actually has ~25+ (access grants, transfers, notifications, push, five email tables, admin_users, KYC, ambassador program, payment recovery, code sequences…). Types are hand-maintained and stale, so the client has no compile-time protection against RLS/shape changes.
 
@@ -205,7 +207,7 @@ Identity (auth.users / profiles)
 **Strengths.** Consistent shadcn/Radix component base, a real design language, a purpose-built collection wizard, unified toasts (Sonner), friendly error mapping, QR + share canvas for virality.
 
 **Gaps.**
-- **No workspace context in the UI** — nowhere to see "which org am I acting as."
+- **No workspace context in the UI** — nowhere to see "which org am I acting as." *(Update 2026-08-13: `WorkspaceSwitcher.tsx` now provides this — TEST-verified, not yet in production; see status update at top of doc.)*
 - **Onboarding drops users straight into an empty dashboard** with no intent capture (§11 onboarding).
 - **Empty/loading/success states are uneven** — some flows have skeletons, others spin. Standardize (§15).
 - **Marketing + app + ambassador in one shell** dilutes the authed experience.

@@ -1,5 +1,7 @@
 # KOLEKTO WORKSPACE — PHASE 2 ARCHITECTURE
 
+> **SUPERSEDED (2026-08-13):** current state and the endorsed forward plan are tracked in `KOLEKTO_WORKSPACE_2.0_ARCHITECTURE_AUDIT.md` (see its §12–19), which carries forward this document's core design — including the equivalence-verification requirement in §1 below — largely unchanged. This document is retained for its detailed rationale.
+
 **Status:** DESIGN ONLY — no Phase 2 code exists. Companion to `KOLEKTO_WORKSPACE_PHASE_1_5_AUDIT.md`.
 **Objective:** make Workspace the real ownership and authorization boundary, without a flag-day and without touching money.
 

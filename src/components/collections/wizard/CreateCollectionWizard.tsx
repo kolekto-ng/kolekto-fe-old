@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
 import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
@@ -273,6 +274,11 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   const location = useLocation();
   const { user } = useAuthStore();
   const { createCollection } = useCollectionStore();
+  // Wave 2 (authorization hardening): the wizard must know its own workspace
+  // context explicitly rather than the create call implicitly inheriting
+  // whatever the global axios interceptor happens to have at request time.
+  // See useCollectionStore.createCollection's `workspaceId` param.
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   // Single-source creation-limit gate. Every entry point converges on this
   // wizard, so enforcing here gives identical early UX everywhere; the backend
   // remains the authority and independently returns 403.
@@ -435,7 +441,7 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     }
 
     const payload = buildPayload(data, finalStoryImageUrls, finalVerificationDocs, finalBannerUrl);
-    return createCollection(payload as never);
+    return createCollection(payload as never, activeWorkspaceId);
   };
 
   const handlePublish = async (isAutoTriggered = false) => {

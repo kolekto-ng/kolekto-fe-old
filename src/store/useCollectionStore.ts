@@ -221,7 +221,25 @@ export const useCollectionStore = create((set, get: any) => ({
   // The switch is a runtime feature flag (see @/lib/featureFlags) so enabling
   // the Express path — and rolling back — needs no redeploy. Both paths accept
   // the same flat payload and return { data: collection }.
-  createCollection: async (collectionData: any) => {
+  //
+  // `workspaceId` (Wave 2, authorization hardening): the CALLER's explicit
+  // workspace context, if it knows one (the creation wizard always does — see
+  // useWorkspaceStore). This is sent as the X-Workspace-Id header on this
+  // specific request rather than left to the global axios interceptor's
+  // implicit localStorage read, so collection creation never depends on an
+  // out-of-band side channel the caller has no visibility into. The backend
+  // re-verifies membership/capability regardless of how the header arrived —
+  // this only makes an already-safe mechanism explicit, it does not change
+  // what the backend trusts. Omitted, the interceptor's fallback still
+  // applies (backwards compatible for any other call site).
+  //
+  // NOTE: the legacy Edge Function path has no workspace awareness at all
+  // (verified: zero references to "workspace" in
+  // supabase/functions/create-collection/index.ts) — passing workspaceId
+  // cannot affect it. That path is a documented backstop, not the default
+  // (getCreateCollectionPath() defaults to "express"); fixing that gap would
+  // mean modifying the Edge function itself, which is out of scope here.
+  createCollection: async (collectionData: any, workspaceId?: string | null) => {
     set({ isLoading: true, error: null });
     try {
       // Resolve user_id from storage as a fallback for the Edge Function
@@ -243,10 +261,12 @@ export const useCollectionStore = create((set, get: any) => ({
       if (useExpressCreate) {
         // Express CollectionService. Auth is the Bearer token on axiosInstance;
         // the user_id in the body is ignored server-side (taken from the JWT).
-        const res = await axiosInstance.post("/create-collection", {
-          ...collectionData,
-          user_id: userId,
-        });
+        const requestBody = { ...collectionData, user_id: userId };
+        const res = workspaceId
+          ? await axiosInstance.post("/create-collection", requestBody, {
+              headers: { "X-Workspace-Id": workspaceId },
+            })
+          : await axiosInstance.post("/create-collection", requestBody);
         const body = res?.data;
         if (body?.error) throw new Error(body.error);
         if (!body?.data?.id) {

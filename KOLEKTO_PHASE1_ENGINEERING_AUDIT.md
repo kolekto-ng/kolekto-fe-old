@@ -4,7 +4,9 @@
 **Scope:** `kolekto-fe-old` (customer PWA + Supabase Edge Functions), `kolekto-be-old` (Express API + crons), `kolekto-admin-control-panel-1` (admin), shared Supabase project(s).
 **Mandate of this document:** **Audit, inventory, and design only.** No code, migrations, or behavior changes were made in producing it. It is the concrete, file-and-function-level companion to the strategic `KOLEKTO_4.0_ARCHITECTURE_AUDIT.md` — that document sets the *why* (Workspaces, ledger, capabilities); this one sets the *what and where* for Phase 1: **consolidate business logic so every critical financial operation has exactly one authoritative implementation.**
 
-> **Phase 1 is not feature work.** No Workspaces, roles, permissions, onboarding, or DB tables are introduced. Every existing feature must keep behaving exactly as today. This audit is Step 1 of that program.
+> **Phase 1 is not feature work.** No Workspaces, roles, permissions, onboarding, or DB tables are introduced *by this write-consolidation program*. Every existing feature must keep behaving exactly as today. This audit is Step 1 of that program.
+
+> **STATUS UPDATE (2026-08-13):** As a separate track (not part of this write-consolidation program), Workspace tenancy has since been built and verified on TEST Supabase — `workspaces`, `workspace_members`, `collections.workspace_id`, workspace API routes, frontend store/switcher. It lives only on branch `ghazali/fix-with-claude`, not merged to staging/main, not in production. It does not change any finding in this document — `workspace_id` is additive/inert and does not participate in the write-authority consolidation this audit tracks. See `CLAUDE.md` for current status; do not read this document's "no Workspaces" framing as meaning the feature doesn't exist in the codebase.
 
 ---
 

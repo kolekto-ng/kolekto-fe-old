@@ -316,6 +316,19 @@ export const useAuthStore = create((set, get) => ({
 // unexpired token was found in storage above, `isLoading` is already `true`
 // so ProtectedRoute/DashboardLayout render their skeleton instead of
 // bouncing to /login while this resolves.
+//
+// Deferred via queueMicrotask rather than called inline: this module and
+// utils/axios.tsx import each other (axios.tsx imports useAuthStore for its
+// 401 handler; this file imports axiosInstance for the /auth/me call). On a
+// fresh page load the circular import can leave axios.tsx's module body
+// still mid-execution when this file's top-level code runs, so a same-tick
+// call here read `axiosInstance` before its `export const` had assigned —
+// a TDZ ReferenceError that checkAuth's catch block swallowed as "not
+// authenticated," bouncing a valid session straight to /login. Queueing as
+// a microtask runs this after the synchronous module-evaluation phase (and
+// therefore axios.tsx's export) has completed.
 if (initialStoredSession) {
-  void useAuthStore.getState().checkAuth();
+  queueMicrotask(() => {
+    void useAuthStore.getState().checkAuth();
+  });
 }

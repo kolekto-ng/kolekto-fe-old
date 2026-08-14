@@ -92,7 +92,14 @@ axiosInstance.interceptors.request.use(
     // the store imports this module, so importing it back would create a cycle.
     // Only sent for authenticated, non-ambassador calls; ambassadors are a
     // separate identity system with no workspace context.
-    if (session?.access_token) {
+    //
+    // Wave 2 (authorization hardening): this is a FALLBACK, not the primary
+    // source, for any call site that already knows its own workspace context
+    // explicitly (e.g. useCollectionStore.createCollection passes one). A
+    // caller-supplied header must never be clobbered by this implicit global
+    // read — otherwise "pass it explicitly" would be theater that the
+    // interceptor silently overrides a moment later.
+    if (session?.access_token && !config.headers["X-Workspace-Id"]) {
       const activeWorkspaceId = getActiveWorkspaceId();
       if (activeWorkspaceId) {
         config.headers["X-Workspace-Id"] = activeWorkspaceId;

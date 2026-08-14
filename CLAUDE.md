@@ -11,10 +11,18 @@ Vite + React 18 + TS PWA. Talks to the Express API (`kolekto-be-old`), Supabase 
 
 ## Phase 1 constraints
 
-- No behavior changes; no `workspace_id`/roles/permissions (that is Phase 2). `user_id` semantics unchanged.
+- No unrelated behavior changes. `user_id` ownership semantics unchanged — Workspace membership is additive, not a replacement (see Workspace status below).
 - Errors go through `toFriendlyErrorMessage` / `extractFunctionError` and the single Sonner toast system (`src/lib/toast.ts`).
 - Never cache financial API responses in the service worker (PWA keeps `api-no-cache`).
 - Historical incident write-ups live in `docs/`. The old `CreateCollectionForm.tsx` was dead and has been removed — the live path is the wizard (`src/components/collections/wizard/`).
+
+## Workspace status (as of 2026-08-13)
+
+- **IMPLEMENTED, verified on TEST Supabase only** — personal workspaces, `workspace_members` (OWNER role only today), `collections.workspace_id`, `GET/POST/PATCH /api/workspaces`, `WorkspaceSwitcher`, `WorkspacePage`, `useWorkspaceStore`, `useWorkspaceBootstrap`.
+- **NOT in production.** This code exists only on `ghazali/fix-with-claude` (~126 commits ahead of `staging`) — absent from `main`, `staging`, and prod Supabase. Do not assume it is live for any user.
+- `collections.workspace_id` is written on create but is **additive/inert** — it is not yet load-bearing for authorization anywhere outside workspace resolution itself. `user_id` remains the authoritative ownership column.
+- **PLANNED / NOT YET IMPLEMENTED:** invitations, member management, role management beyond OWNER, capability administration UI, ownership transfer, workspace-scoped financial authorization, audit logs for workspace administration.
+- Do not build against "no workspace_id" as an assumption — check current code, this doc goes stale fast.
 
 ## Notes
 

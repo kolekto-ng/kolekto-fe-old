@@ -1,5 +1,7 @@
 # KOLEKTO WORKSPACE — PHASE 1 IMPLEMENTATION CONTRACT
 
+> **SUPERSEDED (2026-08-13):** current state is tracked in `KOLEKTO_WORKSPACE_2.0_ARCHITECTURE_AUDIT.md`. This document is retained for its implementation rationale and is historically accurate as of 2026-08-12, but should not be read as current status.
+
 **Status:** ✅ **IMPLEMENTED & VERIFIED ON TEST** (2026-08-12) · ⛔ **NOT DEPLOYED TO PROD**
 **Target Supabase project:** `lpeeckqsltxohppheucz` (Kolekto **test**)
 **Prod project (`busfgcmbndleljklrcbd`) is READ-ONLY for the whole of Phase 1.**
