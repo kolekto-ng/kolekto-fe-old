@@ -38,7 +38,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useWorkspaceStore, type WorkspaceType, type WorkspaceInvite } from "@/store/useWorkspaceStore";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useWorkspaceStore,
+  type WorkspaceType,
+  type WorkspaceInvite,
+  type WorkspaceMember,
+} from "@/store/useWorkspaceStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
@@ -54,6 +69,18 @@ const CREATABLE_TYPES: { value: WorkspaceType; label: string; hint: string }[] =
 
 /** Roles that may edit workspace settings — mirrors the backend capability map. */
 const CAN_UPDATE_ROLES = ["OWNER", "ADMIN"];
+
+/** Display label for a member; falls back through name → email → "this member". */
+function memberLabel(member: WorkspaceMember) {
+  return member.full_name || member.email || "this member";
+}
+
+/**
+ * What a pending removal points at. Deliberately NOT a WorkspaceMember: a
+ * plain MEMBER leaving has no roster row available (the roster requires
+ * workspace:members.manage), only their own membership_id from GET /workspaces.
+ */
+type RemovalTarget = { memberId: string; userId: string | null; label: string };
 
 function WorkspaceTypeBadge({ type }: { type: string }) {
   if (type === "personal") {
@@ -83,6 +110,15 @@ export default function WorkspacePage() {
   const fetchPendingInvites = useWorkspaceStore((s) => s.fetchPendingInvites);
   const createInvite = useWorkspaceStore((s) => s.createInvite);
   const revokeInvite = useWorkspaceStore((s) => s.revokeInvite);
+  const members = useWorkspaceStore((s) => s.members);
+  const membersLoading = useWorkspaceStore((s) => s.membersLoading);
+  const membersError = useWorkspaceStore((s) => s.membersError);
+  const fetchMembers = useWorkspaceStore((s) => s.fetchMembers);
+  const changeMemberRole = useWorkspaceStore((s) => s.changeMemberRole);
+  const suspendMember = useWorkspaceStore((s) => s.suspendMember);
+  const reactivateMember = useWorkspaceStore((s) => s.reactivateMember);
+  const removeMember = useWorkspaceStore((s) => s.removeMember);
+  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   const userId = (useAuthStore() as any)?.user?.id;
 
   const active = useMemo(
@@ -168,6 +204,97 @@ export default function WorkspacePage() {
       toast.error(toFriendlyErrorMessage(err, "Could not revoke invitation."));
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  // ── Members (Wave 5) ─────────────────────────────────────────────────────
+  // `canUpdate` gates which controls RENDER. It is presentation only: the
+  // backend re-checks workspace:members.manage on every request, and OWNER
+  // protection plus the self-action rules are enforced in the database.
+  const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
+  // Minimal descriptor rather than a WorkspaceMember, because a plain MEMBER
+  // leaving has no roster row to point at — only their own membership_id.
+  const [removeTarget, setRemoveTarget] = useState<RemovalTarget | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  /** The caller's own membership id for the active workspace, if known. */
+  const selfMembershipId = active?.membership_id ?? null;
+  /** A non-OWNER member may always leave; an OWNER never can (backend-enforced). */
+  const canLeaveActiveWorkspace =
+    !!active && active.type !== "personal" && active.role !== "OWNER" && !!selfMembershipId;
+
+  // Only managers may read the roster: GET /members requires
+  // workspace:members.manage, so fetching it as a plain MEMBER would return a
+  // guaranteed 403 and surface a permission error for simply opening the page.
+  // A MEMBER needs no roster — their own membership_id (from GET /workspaces)
+  // is all the leave action requires. `canUpdate` here is a render decision,
+  // not an authorization one; the backend re-checks regardless.
+  useEffect(() => {
+    if (!active || active.type === "personal" || !canUpdate) return;
+    fetchMembers(active.id).catch(() => {
+      // Swallowed here by design: membersError is already set by the store and
+      // rendered inline below, matching this page's pattern for secondary data.
+    });
+  }, [active?.id, active?.type, canUpdate, fetchMembers]);
+
+  const handleRoleChange = async (member: WorkspaceMember, role: "ADMIN" | "MEMBER") => {
+    if (!active) return;
+    setMemberBusyId(member.id);
+    try {
+      await changeMemberRole(active.id, member.id, role);
+      toast.success(`${memberLabel(member)} is now ${role}`);
+    } catch (err) {
+      toast.error(toFriendlyErrorMessage(err, "Could not change this member's role."));
+    } finally {
+      setMemberBusyId(null);
+    }
+  };
+
+  const handleToggleStatus = async (member: WorkspaceMember) => {
+    if (!active) return;
+    const suspending = member.status === "active";
+    setMemberBusyId(member.id);
+    try {
+      if (suspending) {
+        await suspendMember(active.id, member.id);
+        toast.success(`${memberLabel(member)} suspended`);
+      } else {
+        await reactivateMember(active.id, member.id);
+        toast.success(`${memberLabel(member)} reactivated`);
+      }
+    } catch (err) {
+      toast.error(
+        toFriendlyErrorMessage(
+          err,
+          suspending ? "Could not suspend this member." : "Could not reactivate this member."
+        )
+      );
+    } finally {
+      setMemberBusyId(null);
+    }
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!active || !removeTarget) return;
+    const leaving = removeTarget.userId === userId;
+    setRemoving(true);
+    try {
+      await removeMember(active.id, removeTarget.memberId);
+      toast.success(leaving ? `You left ${active.name}` : `${removeTarget.label} removed`);
+      setRemoveTarget(null);
+      // Leaving revokes your own access — refresh the workspace list so the
+      // switcher and active-workspace selection stop pointing at a workspace
+      // the server will no longer return.
+      if (leaving) await fetchWorkspaces(userId);
+    } catch (err) {
+      toast.error(
+        toFriendlyErrorMessage(
+          err,
+          leaving ? "Could not leave this workspace." : "Could not remove this member."
+        )
+      );
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -444,6 +571,232 @@ export default function WorkspacePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Your membership (Wave 5) — shown to non-managers, who cannot read the
+          roster below (GET /members requires workspace:members.manage). This is
+          the plain MEMBER's route to leaving a workspace; it needs nothing but
+          their own membership_id, already present from GET /workspaces. */}
+      {active && active.type !== "personal" && !canUpdate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Your membership</CardTitle>
+            <CardDescription>Your role in {active.name}.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex min-w-0 items-center gap-2">
+                <User className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-medium">You</span>
+                <Badge variant="outline">{active.role ?? "MEMBER"}</Badge>
+              </span>
+              {canLeaveActiveWorkspace && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setRemoveTarget({
+                      memberId: selfMembershipId as string,
+                      userId,
+                      label: "you",
+                    })
+                  }
+                >
+                  Leave workspace
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Members roster (Wave 5) — managers only; see the fetch guard above. */}
+      {active && active.type !== "personal" && canUpdate && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Members</CardTitle>
+            <CardDescription>
+              People who belong to {active.name}. The workspace owner cannot be changed or removed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {membersLoading ? (
+              <Skeleton className="h-16 w-full" />
+            ) : membersError ? (
+              <div className="rounded-lg border border-destructive/40 p-3">
+                <p className="text-sm text-destructive">{membersError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => fetchMembers(active.id).catch(() => {})}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : members.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No members yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {members.map((member) => {
+                  const isOwner = member.role === "OWNER";
+                  const isSelf = member.user_id === userId;
+                  const busy = memberBusyId === member.id;
+                  // OWNER is protected server-side; never render controls that
+                  // the backend is guaranteed to reject. Self-role-change and
+                  // self-suspend are likewise rejected server-side, so only the
+                  // "leave" action is offered on your own row.
+                  const canManageThis = canUpdate && !isOwner && !isSelf;
+                  const canLeave = isSelf && !isOwner;
+
+                  return (
+                    <li
+                      key={member.id}
+                      className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <User className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {member.full_name || member.email || "Unknown member"}
+                            {isSelf && (
+                              <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                            )}
+                          </span>
+                          {member.email && member.full_name && (
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {member.email}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge variant={isOwner ? "default" : "outline"}>{member.role}</Badge>
+                        {member.status === "suspended" && (
+                          <Badge variant="secondary">Suspended</Badge>
+                        )}
+
+                        {isOwner ? (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <ShieldCheck className="h-3 w-3" aria-hidden="true" /> Protected
+                          </span>
+                        ) : (
+                          <>
+                            {canManageThis && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    handleRoleChange(
+                                      member,
+                                      member.role === "ADMIN" ? "MEMBER" : "ADMIN"
+                                    )
+                                  }
+                                >
+                                  {busy ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                  ) : member.role === "ADMIN" ? (
+                                    "Change to MEMBER"
+                                  ) : (
+                                    "Promote to ADMIN"
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={busy}
+                                  onClick={() => handleToggleStatus(member)}
+                                >
+                                  {member.status === "active" ? "Suspend" : "Reactivate"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    setRemoveTarget({
+                                      memberId: member.id,
+                                      userId: member.user_id,
+                                      label: memberLabel(member),
+                                    })
+                                  }
+                                  aria-label={`Remove ${memberLabel(member)}`}
+                                >
+                                  <X className="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                              </>
+                            )}
+                            {canLeave && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() =>
+                                  setRemoveTarget({
+                                    memberId: member.id,
+                                    userId: member.user_id,
+                                    label: memberLabel(member),
+                                  })
+                                }
+                              >
+                                Leave workspace
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Remove / leave confirmation — destructive, so it always confirms. */}
+      <AlertDialog
+        open={!!removeTarget}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {removeTarget?.userId === userId
+                ? "Leave workspace?"
+                : `Remove ${removeTarget?.label ?? "this member"}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeTarget?.userId === userId
+                ? "You will lose access to this workspace and its collections. You'll need a new invitation to rejoin."
+                : "They will lose access to this workspace and its collections. You can invite them again later."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              disabled={removing}
+              onClick={(e) => {
+                // Keep the dialog mounted while the request is in flight so the
+                // busy state is visible; handleConfirmRemove closes it on success.
+                e.preventDefault();
+                void handleConfirmRemove();
+              }}
+            >
+              {removing
+                ? "Working..."
+                : removeTarget?.userId === userId
+                  ? "Leave workspace"
+                  : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* All workspaces */}
       <Card>

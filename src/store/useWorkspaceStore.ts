@@ -35,6 +35,20 @@ export interface Workspace {
   description?: string | null;
   created_at?: string;
   role?: "OWNER" | "ADMIN" | "MEMBER";
+  /**
+   * The CALLER'S OWN workspace_members row id for this workspace (Wave 5).
+   *
+   * Supplied by GET /workspaces, which is rooted at workspace_members
+   * filtered to the authenticated user — so it is never another user's id.
+   * It exists so a plain MEMBER can leave a workspace without holding
+   * workspace:members.manage (the roster endpoint that would otherwise
+   * reveal this id requires that capability).
+   *
+   * Optional because the zero-workspace self-heal path returns a personal
+   * workspace without it; that caller is always OWNER, and an OWNER can
+   * never leave, so it is unreachable in practice.
+   */
+  membership_id?: string;
 }
 
 /** An ADMIN/MEMBER-granting invitation (Workspace Wave 4). Never carries a token. */
@@ -47,6 +61,27 @@ export interface WorkspaceInvite {
   invited_by: string;
   expires_at: string;
   created_at: string;
+}
+
+/**
+ * A workspace member (Workspace Wave 5).
+ *
+ * `full_name`/`email` are FLAT, not nested under a `profile` object: the
+ * backend's workspaceMemberRepository merges profile data onto the membership
+ * row itself (it cannot use a PostgREST embedded join, because
+ * workspace_members.user_id references auth.users, not profiles). Either may
+ * be null if the profile row is missing.
+ */
+export interface WorkspaceMember {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  status: "active" | "invited" | "suspended";
+  joined_at: string | null;
+  created_at: string;
+  full_name: string | null;
+  email: string | null;
 }
 
 /** The pre-auth preview shape from GET /invites/:token/preview. Deliberately
@@ -70,6 +105,9 @@ interface WorkspaceState {
   error: string | null;
   pendingInvites: WorkspaceInvite[];
   invitesLoading: boolean;
+  members: WorkspaceMember[];
+  membersLoading: boolean;
+  membersError: string | null;
   /** @param userId the signed-in user; scopes the persisted selection to them. */
   fetchWorkspaces: (userId?: string | null) => Promise<Workspace[]>;
   switchWorkspace: (id: string, userId?: string | null) => void;
@@ -104,6 +142,17 @@ interface WorkspaceState {
     token: string,
     userId?: string | null
   ) => Promise<{ workspace_id: string }>;
+  // ── Member management (Wave 5) ────────────────────────────────────────
+  fetchMembers: (workspaceId: string) => Promise<WorkspaceMember[]>;
+  changeMemberRole: (
+    workspaceId: string,
+    memberId: string,
+    role: "ADMIN" | "MEMBER"
+  ) => Promise<WorkspaceMember>;
+  suspendMember: (workspaceId: string, memberId: string) => Promise<WorkspaceMember>;
+  reactivateMember: (workspaceId: string, memberId: string) => Promise<WorkspaceMember>;
+  /** Removes another member, or leaves the workspace when memberId is your own. */
+  removeMember: (workspaceId: string, memberId: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -113,6 +162,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   error: null,
   pendingInvites: [],
   invitesLoading: false,
+  members: [],
+  membersLoading: false,
+  membersError: null,
 
   fetchWorkspaces: async (userId?: string | null) => {
     set({ isLoading: true, error: null });
@@ -189,7 +241,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   reset: () => {
     setActiveWorkspaceId(null);
-    set({ workspaces: [], activeWorkspaceId: null, error: null, isLoading: false, pendingInvites: [] });
+    set({
+      workspaces: [],
+      activeWorkspaceId: null,
+      error: null,
+      isLoading: false,
+      pendingInvites: [],
+      members: [],
+      membersError: null,
+    });
   },
 
   // ── Invitations (Wave 4) ─────────────────────────────────────────────────
@@ -238,6 +298,72 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await get().fetchWorkspaces(userId);
     get().switchWorkspace(member.workspace_id, userId);
     return member;
+  },
+
+  // ── Member management (Wave 5) ───────────────────────────────────────────
+  // Same disclaimer as the rest of this file: the role/status values held here
+  // drive which controls are RENDERED, nothing more. Every mutation below is
+  // independently authorized by the backend (workspace:members.manage, plus
+  // the OWNER-protection and self-action rules enforced atomically in the
+  // database), so a client that called these directly would gain nothing.
+
+  fetchMembers: async (workspaceId: string) => {
+    set({ membersLoading: true, membersError: null });
+    try {
+      const res = await axiosInstance.get(`/workspaces/${workspaceId}/members`);
+      const members: WorkspaceMember[] = res?.data?.data ?? [];
+      set({ members, membersLoading: false });
+      return members;
+    } catch (err: any) {
+      set({ membersError: toFriendlyErrorMessage(err), membersLoading: false });
+      throw err;
+    }
+  },
+
+  changeMemberRole: async (workspaceId, memberId, role) => {
+    const res = await axiosInstance.patch(
+      `/workspaces/${workspaceId}/members/${memberId}/role`,
+      { role }
+    );
+    const updated: WorkspaceMember = res?.data?.data;
+    if (!updated?.id) throw new Error("Member role was not updated. Please try again.");
+    set((state) => ({
+      members: state.members.map((m) => (m.id === memberId ? { ...m, ...updated } : m)),
+    }));
+    return updated;
+  },
+
+  suspendMember: async (workspaceId, memberId) => {
+    const res = await axiosInstance.patch(
+      `/workspaces/${workspaceId}/members/${memberId}/status`,
+      { status: "suspended" }
+    );
+    const updated: WorkspaceMember = res?.data?.data;
+    if (!updated?.id) throw new Error("Member was not suspended. Please try again.");
+    set((state) => ({
+      members: state.members.map((m) => (m.id === memberId ? { ...m, ...updated } : m)),
+    }));
+    return updated;
+  },
+
+  reactivateMember: async (workspaceId, memberId) => {
+    const res = await axiosInstance.patch(
+      `/workspaces/${workspaceId}/members/${memberId}/status`,
+      { status: "active" }
+    );
+    const updated: WorkspaceMember = res?.data?.data;
+    if (!updated?.id) throw new Error("Member was not reactivated. Please try again.");
+    set((state) => ({
+      members: state.members.map((m) => (m.id === memberId ? { ...m, ...updated } : m)),
+    }));
+    return updated;
+  },
+
+  removeMember: async (workspaceId: string, memberId: string) => {
+    await axiosInstance.delete(`/workspaces/${workspaceId}/members/${memberId}`);
+    set((state) => ({
+      members: state.members.filter((m) => m.id !== memberId),
+    }));
   },
 }));
 
