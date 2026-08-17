@@ -27,18 +27,24 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher';
 import { useAuthStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
+import { useWorkspaceCapabilities } from '@/hooks/useWorkspaceCapabilities';
 
 interface NavItem {
   label: string;
   path: string;
   icon: React.ElementType;
+  /** Wave 6.6 — when set, the item renders only if the capability allows it. */
+  capability?: 'wallet';
 }
 
 const primaryNavItems: NavItem[] = [
   { label: 'Home', path: '/dashboard', icon: Home },
   { label: 'Collections', path: '/dashboard/collections', icon: BarChart2 },
   { label: 'Activities', path: '/dashboard/activities', icon: History },
-  { label: 'Wallet', path: '/dashboard/transactions', icon: Layers3 },
+  // Wave 6.6: the Wallet entry is capability-gated below (transaction:read).
+  // Home, Collections and Activities stay visible to everyone — they degrade
+  // to money-free payloads server-side rather than being withheld.
+  { label: 'Wallet', path: '/dashboard/transactions', icon: Layers3, capability: 'wallet' },
 ];
 
 const secondaryNavItems: NavItem[] = [
@@ -57,6 +63,14 @@ const DashboardSidebar = () => {
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
   const { setActiveSection } = useProfileStore();
+  // Wave 6.6 — hide navigation the active workspace does not entitle the user
+  // to. Cosmetic: /dashboard/transactions and the endpoints behind it are
+  // independently gated server-side, so a user who typed the URL directly
+  // would still receive no financial data.
+  const { canViewWallet } = useWorkspaceCapabilities();
+  const visiblePrimaryNavItems = primaryNavItems.filter(
+    (item) => item.capability !== 'wallet' || canViewWallet,
+  );
 
   const isActive = (path: string) =>
     location.pathname === path ||
@@ -108,7 +122,7 @@ const DashboardSidebar = () => {
           <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest text-gray-400 uppercase">
             Menu
           </p>
-          {primaryNavItems.map(({ label, path, icon: Icon }) => {
+          {visiblePrimaryNavItems.map(({ label, path, icon: Icon }) => {
             const active = isActive(path);
             return (
               <button

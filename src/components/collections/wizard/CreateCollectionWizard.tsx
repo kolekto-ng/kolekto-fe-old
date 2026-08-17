@@ -7,6 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuthStore, useCollectionDraftStore, useCollectionStore } from '@/store';
 import { useProfileStore } from '@/store/useProfileStore';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { CAPABILITY, workspacesWithCapability } from '@/utils/workspaceCapabilities';
+import { WorkspacePicker } from '@/components/collections/wizard/WorkspacePicker';
 import CollectionPublishAuthPrompt from '@/components/collections/CollectionPublishAuthPrompt';
 import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
@@ -279,6 +281,7 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
   // whatever the global axios interceptor happens to have at request time.
   // See useCollectionStore.createCollection's `workspaceId` param.
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
   // Single-source creation-limit gate. Every entry point converges on this
   // wizard, so enforcing here gives identical early UX everywhere; the backend
   // remains the authority and independently returns 403.
@@ -298,6 +301,30 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     clearPublishIntent,
     resetDraft,
   } = useCollectionDraftStore();
+
+  // Wave 6.3 — which workspace this collection will be filed under.
+  //
+  // Precedence: the user's explicit draft choice, then the active workspace,
+  // then the first workspace they may create in. The draft choice is
+  // re-validated against the CURRENT eligible list on every render, so a
+  // choice that has since become invalid (membership revoked, role
+  // downgraded, workspace archived) silently falls back rather than
+  // submitting an id the backend will reject.
+  //
+  // This value is a REQUEST. collectionService re-resolves it server-side and
+  // asserts `collection:create` before writing, so it cannot grant anything.
+  const eligibleWorkspaces = React.useMemo(
+    () => workspacesWithCapability(workspaces, CAPABILITY.COLLECTION_CREATE),
+    [workspaces],
+  );
+  const effectiveWorkspaceId = React.useMemo(() => {
+    const chosen = data.workspace_id;
+    if (chosen && eligibleWorkspaces.some((w) => w.id === chosen)) return chosen;
+    if (activeWorkspaceId && eligibleWorkspaces.some((w) => w.id === activeWorkspaceId)) {
+      return activeWorkspaceId;
+    }
+    return eligibleWorkspaces[0]?.id ?? activeWorkspaceId ?? null;
+  }, [data.workspace_id, eligibleWorkspaces, activeWorkspaceId]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
@@ -441,7 +468,9 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
     }
 
     const payload = buildPayload(data, finalStoryImageUrls, finalVerificationDocs, finalBannerUrl);
-    return createCollection(payload as never, activeWorkspaceId);
+    // Wave 6.3: the user's explicit choice, not merely whatever workspace is
+    // active. Sent as X-Workspace-Id; the backend re-authorizes it.
+    return createCollection(payload as never, effectiveWorkspaceId);
   };
 
   const handlePublish = async (isAutoTriggered = false) => {
@@ -615,6 +644,18 @@ const CreateCollectionWizard: React.FC<CreateCollectionWizardProps> = ({
         <div className="mb-8">
           <WizardStepper steps={steps} currentIndex={stepIndex} />
         </div>
+
+        {/* Wave 6.3 — explicit workspace choice. Rendered on the first step
+            only, above the step body, rather than as a new wizard step: the
+            persisted draft stores `stepIndex`, so inserting a step would
+            shift every in-progress draft to the wrong screen on resume.
+            Renders nothing when the user has only one eligible workspace. */}
+        {isFirst && (
+          <WorkspacePicker
+            value={effectiveWorkspaceId ?? ''}
+            onChange={(workspaceId) => setDraftData({ workspace_id: workspaceId })}
+          />
+        )}
 
         <div className="min-h-[400px]">{renderStep()}</div>
 

@@ -5,6 +5,8 @@ import { formatCurrency, formatDate } from "@/utils/formatters";
 import { toast } from "@/lib/toast";
 import { axiosInstance } from "@/utils/axios";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
+// Cache-key input only — dependency-free module. See Wave 6.2.
+import { getActiveWorkspaceId } from "@/utils/activeWorkspace";
 
 export const useWithdrawalStore = create((set, get) => ({
   withdrawals: [],
@@ -19,7 +21,9 @@ export const useWithdrawalStore = create((set, get) => ({
     collectionId?: string,
     opts: { force?: boolean } = {},
   ) => {
-    const key = `${userId || "all"}:${collectionId || "all"}`;
+    // Wave 6.2: workspace is part of the cache identity.
+    const requestWorkspaceId = getActiveWorkspaceId();
+    const key = `${userId || "all"}:${collectionId || "all"}:${requestWorkspaceId ?? "none"}`;
     const { inFlight, lastFetchedAt, lastFetchKey, withdrawals } = get();
     const { force = false } = opts;
     const isFresh =
@@ -34,6 +38,9 @@ export const useWithdrawalStore = create((set, get) => ({
         const res = await axiosInstance.get("/withdrawals", {
           params: { userId, collectionId },
         });
+
+        // Wave 6.2 — stale in-flight guard.
+        if (getActiveWorkspaceId() !== requestWorkspaceId) return res.data;
 
         set({
           withdrawals: Array.isArray(res?.data?.withdrawals)

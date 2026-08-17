@@ -11,6 +11,8 @@ import { ListFilter, RotateCcw, Search, ShieldCheck, SlidersHorizontal, X } from
 
 import { useCollectionStore } from '@/store/useCollectionStore';
 import { useAuthStore } from '@/store';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
+import { useWorkspaceCapabilities } from '@/hooks/useWorkspaceCapabilities';
 import { useCanCreateCollection } from '@/hooks/useCanCreateCollection';
 import { CollectionGridSkeleton } from '@/components/ui/page-skeletons';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,10 +48,18 @@ const CollectionsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | (typeof STATUS_OPTIONS)[number]['value']>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | (typeof TYPE_OPTIONS)[number]['value']>('all');
   const userId = user?.id;
+  // Wave 6.2 — drives refetch + realtime re-keying on workspace switch.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const hasCachedCollections = collections.length > 0;
   // Single source of truth for the creation limit (shared with the wizard).
   const { limitReached: collectionLimitReached } = useCanCreateCollection();
+  // Wave 6.6 — workspace capability, distinct from the KYC limit above.
+  const { canCreateCollection } = useWorkspaceCapabilities();
 
+  // Wave 6.2: activeWorkspaceId is a dependency so a switch refetches. The
+  // store's own reset has already emptied `collections` by this point, so
+  // `hasCachedCollections` is false and the page shows its loading state
+  // rather than the previous workspace's rows.
   useEffect(() => {
     if (userId) {
       fetchCollections(userId, {
@@ -59,15 +69,19 @@ const CollectionsPage: React.FC = () => {
         toast.error('Failed to load collections. Please try again.');
       });
     }
-  }, [userId, hasCachedCollections, fetchCollections]);
+  }, [userId, activeWorkspaceId, hasCachedCollections, fetchCollections]);
 
   // Live-update the list when any of the user's collections changes (status
   // flips to closed/paused, a new collection is created, target/limit edited).
   // One channel per user, torn down on unmount — no duplicate subscriptions.
+  // Wave 6.2: the channel name and the effect's deps both include the active
+  // workspace, so switching tears this subscription down and re-establishes
+  // it. Without that, the callback would keep firing refetches attributed to
+  // the workspace that was active when the channel was first opened.
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
-      .channel(`collections-list-${user.id}`)
+      .channel(`collections-list-${user.id}-${activeWorkspaceId ?? 'none'}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${user.id}` },
@@ -79,7 +93,7 @@ const CollectionsPage: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, fetchCollections]);
+  }, [user?.id, activeWorkspaceId, fetchCollections]);
 
   const handleShare = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -190,7 +204,12 @@ const CollectionsPage: React.FC = () => {
                 Clear filters
               </Button>
             )}
-            {collectionLimitReached ? (
+            {/* Wave 6.6 — hidden entirely without collection:create (a MEMBER
+                of the active workspace). The KYC limit below is a separate,
+                orthogonal gate that DISABLES rather than hides, because it is
+                a state the user can resolve themselves. Both are cosmetic:
+                collectionService asserts collection:create server-side. */}
+            {!canCreateCollection ? null : collectionLimitReached ? (
               <Button
                 type="button"
                 disabled

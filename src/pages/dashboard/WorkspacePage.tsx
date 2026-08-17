@@ -57,6 +57,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "@/lib/toast";
 import { toFriendlyErrorMessage } from "@/utils/errorMessages";
+import { useWorkspaceCapabilities } from "@/hooks/useWorkspaceCapabilities";
 
 /** Types a user may create. `personal` is excluded — the DB provisions exactly one. */
 const CREATABLE_TYPES: { value: WorkspaceType; label: string; hint: string }[] = [
@@ -68,7 +69,10 @@ const CREATABLE_TYPES: { value: WorkspaceType; label: string; hint: string }[] =
 ];
 
 /** Roles that may edit workspace settings — mirrors the backend capability map. */
-const CAN_UPDATE_ROLES = ["OWNER", "ADMIN"];
+// (Wave 6.6) The former CAN_UPDATE_ROLES constant lived here and duplicated
+// the backend's role→capability mapping in the client. It was removed in
+// favour of useWorkspaceCapabilities(), which reads the server-supplied
+// capability list, so this file no longer interprets roles at all.
 
 /** Display label for a member; falls back through name → email → "this member". */
 function memberLabel(member: WorkspaceMember) {
@@ -126,7 +130,16 @@ export default function WorkspacePage() {
     [workspaces, activeWorkspaceId]
   );
 
-  const canUpdate = !!active?.role && CAN_UPDATE_ROLES.includes(active.role);
+  // Wave 6.6 — derived from the capabilities the SERVER attached to this
+  // workspace, not from a client-side reading of `role`. The previous
+  // `CAN_UPDATE_ROLES.includes(active.role)` was a second, drifting copy of
+  // the backend's role→capability map; there is now exactly one, in
+  // services/workspaceAuthorizationService.js.
+  //
+  // Still presentation only, exactly as before: workspace:members.manage is
+  // asserted server-side on every invite/role/status/remove call.
+  const { canManageMembers, canUpdateWorkspace } = useWorkspaceCapabilities();
+  const canUpdate = canUpdateWorkspace || canManageMembers;
 
   // ── Settings form ─────────────────────────────────────────────────────────
   const [name, setName] = useState("");

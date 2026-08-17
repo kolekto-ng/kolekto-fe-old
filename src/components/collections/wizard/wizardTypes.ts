@@ -57,6 +57,21 @@ export interface WizardData {
   // Step 1
   collection_type: CollectionType;
 
+  /**
+   * Which workspace this collection will belong to (Wave 6.3).
+   *
+   * Lives in WizardData rather than component state so it rides the persisted
+   * draft (useCollectionDraftStore) — navigating away or refreshing mid-wizard
+   * must not silently move a half-finished collection into whichever workspace
+   * happens to be active at submit time.
+   *
+   * Empty string means "not chosen yet"; the wizard defaults it to the active
+   * workspace on mount when that workspace permits creation. The backend
+   * re-derives and re-authorizes it regardless — see
+   * collectionService.resolveWorkspaceId.
+   */
+  workspace_id: string;
+
   // Step 2 – Basic Info (shared)
   title: string;
   description: string;
@@ -113,6 +128,7 @@ export interface WizardData {
 
 export const createInitialWizardData = (collectionType: CollectionType = 'fixed'): WizardData => ({
   collection_type: collectionType,
+  workspace_id: '',
   title: '',
   description: '',
   deadline: '',

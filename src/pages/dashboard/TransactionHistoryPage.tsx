@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
+import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -106,6 +107,8 @@ const TransactionHistoryPage: React.FC = () => {
   const { collections, fetchCollections, isLoading: collectionsLoading } = useCollectionStore() as any;
   const { withdrawals, fetchWithdrawals, isLoading: withdrawalsLoading } = useWithdrawalStore() as any;
   const { user } = useAuthStore() as any;
+  // Wave 6.2 — drives refetch + realtime re-keying on workspace switch.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
 
   // Ensure collections are available when user lands directly on this page.
   useEffect(() => {
@@ -161,7 +164,7 @@ const TransactionHistoryPage: React.FC = () => {
     };
 
     const channel = supabase
-      .channel(`wallet-live-${user.id}`)
+      .channel(`wallet-live-${user.id}-${activeWorkspaceId ?? 'none'}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'wallets' },
@@ -186,7 +189,9 @@ const TransactionHistoryPage: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
     };
-  }, [activeTab, fetchCollections, fetchWithdrawals, user?.id]);
+    // Wave 6.2: activeWorkspaceId is a dependency so a switch refetches the
+    // wallet view and re-keys the realtime channel.
+  }, [activeTab, fetchCollections, fetchWithdrawals, user?.id, activeWorkspaceId]);
 
   const withdrawalsArray = useMemo(
     () =>

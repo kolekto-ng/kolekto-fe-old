@@ -6,6 +6,10 @@ import { toFriendlyErrorMessage } from "@/utils/errorMessages";
 import { axiosInstance } from "@/utils/axios";
 import { getCreateCollectionPath } from "@/lib/featureFlags";
 import { useKycGateStore } from "@/store/useKycGateStore";
+// Read from the dependency-free module rather than useWorkspaceStore, for the
+// same reason utils/axios.tsx does: the workspace store imports axios, so
+// importing it here would risk a cycle. This is a cache-key input only.
+import { getActiveWorkspaceId } from "@/utils/activeWorkspace";
 
 // `supabase.functions.invoke` surfaces a generic FunctionsHttpError
 // ("Edge Function returned a non-2xx status code") and hides the real reason
@@ -121,7 +125,11 @@ export const useCollectionStore = create((set, get: any) => ({
       } catch {}
     }
 
-    const key = uid || "all";
+    // Wave 6.2: the cache key includes the active workspace, so data fetched
+    // under Workspace A can never satisfy a read under Workspace B even if
+    // the reset in store/workspaceInvalidation.ts were somehow missed.
+    const requestWorkspaceId = getActiveWorkspaceId();
+    const key = `${uid || "all"}:${requestWorkspaceId ?? "none"}`;
     const state = get();
     const hasCachedData =
       state.lastFetchKey === key &&
@@ -146,22 +154,35 @@ export const useCollectionStore = create((set, get: any) => ({
       });
       try {
 
-      // Cast through `any`: the generated Database types are stale for this
-      // embedded `wallets(*)` join (pre-existing — same "wallets" mismatch
-      // shows up anywhere this select string is used), which otherwise blows
-      // up the filter-chain type instantiation once enough .eq/.neq/.order
-      // calls stack on top of it.
-      let query: any = (supabase.from("collections") as any)
-        .select("*, contributions(id, amount, status), wallets(*)")
-        .neq("status", "deleted")
-        .order("created_at", { ascending: false });
+      // Wave 6.3 — migrated from a browser-side Supabase query to the Express
+      // endpoint. The old query read `collections` directly with
+      // `.eq("user_id", uid)`, which meant the backend could not apply
+      // workspace scoping OR the `transaction:read` financial gate to this
+      // screen at all: the X-Workspace-Id header the interceptor already
+      // sends simply never reached a server that could act on it.
+      //
+      // GET /collections returns the same row shape this store already
+      // formats (`*` + `contributions` + `wallets`, newest first), with two
+      // server-side differences that are the entire point of the migration:
+      // the scope is resolved by collectionScopeService, and the wallet block
+      // plus contribution AMOUNTS are omitted for callers who lack
+      // `transaction:read`. formatCollection already tolerates their absence
+      // (`hasMoney` degrades to the stored counts), so a money-free payload
+      // renders as a list without figures rather than a broken page.
+      const response = await axiosInstance.get("/collections");
+      const rows = response?.data?.data ?? [];
 
-      if (uid) query = query.eq("user_id", uid);
+      const formatted = (Array.isArray(rows) ? rows : []).map(formatCollection);
 
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
+      // Wave 6.2 — stale in-flight guard. The user may have switched workspace
+      // while this request was airborne. Adopting the response now would
+      // repopulate the list with the PREVIOUS workspace's rows immediately
+      // after the switch cleared them, under the new workspace's label.
+      // Drop it: the switch already triggered a fresh fetch of its own.
+      if (getActiveWorkspaceId() !== requestWorkspaceId) {
+        return get().collections;
+      }
 
-      const formatted = (data ?? []).map(formatCollection);
       set({
         collections: formatted,
         isLoading: false,

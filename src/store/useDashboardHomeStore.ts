@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import { formatDistanceToNow } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
 import { axiosInstance } from "@/utils/axios";
+// Cache-key input only — read from the dependency-free module to avoid an
+// import cycle through useWorkspaceStore → axios. See Wave 6.2.
+import { getActiveWorkspaceId } from "@/utils/activeWorkspace";
 
 const RECENT_COLLECTION_LIMIT = 3;
 const RECENT_ACTIVITY_LIMIT = 5;
@@ -47,6 +49,8 @@ interface DashboardHomeState {
   error: string | null;
   lastFetchedAt: number;
   lastUserId: string | null;
+  /** Wave 6.2 — part of the cache identity, so A's figures never satisfy B. */
+  lastWorkspaceId: string | null;
   inFlight: Promise<void> | null;
   loadDashboardHome: (
     userId: string | null | undefined,
@@ -92,6 +96,7 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
   error: null,
   lastFetchedAt: 0,
   lastUserId: null,
+  lastWorkspaceId: null,
   inFlight: null,
 
   loadDashboardHome: async (userId, opts = {}) => {
@@ -103,21 +108,26 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
         isLoading: false,
         isRefreshing: false,
         lastUserId: null,
+        lastWorkspaceId: null,
       });
       return;
     }
 
     const state = get();
     const { force = false, silent = false } = opts;
+    // Wave 6.2: cache identity is (user, workspace), not user alone.
+    const requestWorkspaceId = getActiveWorkspaceId();
+    const sameScope =
+      state.lastUserId === userId && state.lastWorkspaceId === requestWorkspaceId;
     const hasCachedData =
-      state.lastUserId === userId &&
+      sameScope &&
       (state.recentCollections.length > 0 ||
         state.activities.length > 0 ||
         state.lastFetchedAt > 0);
     const isFresh =
       hasCachedData && Date.now() - Number(state.lastFetchedAt || 0) < DASHBOARD_STALE_MS;
 
-    if (!force && state.inFlight && state.lastUserId === userId) return state.inFlight;
+    if (!force && state.inFlight && sameScope) return state.inFlight;
     if (!force && isFresh) return;
 
     const request = (async () => {
@@ -126,111 +136,92 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
         isRefreshing: hasCachedData || silent,
         error: null,
         lastUserId: userId,
+        lastWorkspaceId: requestWorkspaceId,
       });
 
       try {
-        const { data: collectionsRaw, error: colErr } = await supabase
-          .from("collections")
-          .select(
-            "id, title, status, collection_type, deadline, created_at, target_amount, amount, max_contributions",
-          )
-          .eq("user_id", userId)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(RECENT_COLLECTION_LIMIT);
-
-        if (colErr) console.error("Collections fetch error:", colErr.message);
-
-        const cols: any[] = collectionsRaw || [];
-        const [
-          { count: totalCollectionsCount },
-          { count: activeCollectionsCount },
-        ] = await Promise.all([
-          supabase
-            .from("collections")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId),
-          supabase
-            .from("collections")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", userId)
-            .eq("status", "active"),
-        ]);
-
-        const totalCollections = Number(totalCollectionsCount || 0);
-        const activeCollections = Number(activeCollectionsCount || 0);
-        const collectionIds: string[] = cols.map((c: any) => c.id);
-        const recentCollectionIds = collectionIds.slice(0, RECENT_COLLECTION_LIMIT);
-        const titleMap: Record<string, string> = {};
-        for (const c of cols) titleMap[c.id] = c.title;
-
+        // Wave 6.4 — every read below now goes through the Express API.
+        //
+        // This store previously mixed three browser-side Supabase queries
+        // (recent collections, two exact counts, per-collection paid
+        // contributions) with two backend calls. The direct queries carried
+        // no workspace context and could not be capability-gated, so the
+        // dashboard's figures were reachable regardless of what the backend
+        // would have permitted. All three are gone:
+        //   • counts        → /dashboard/stats (already returned them)
+        //   • recent cards  → /collections (workspace-scoped, money-gated)
+        //   • paid amounts  → the `contributions` embed on that same response
+        //
+        // Each endpoint applies the transaction:read gate server-side, so a
+        // caller without it simply receives no figures and the dashboard
+        // renders its non-financial half.
         const statsPromise = axiosInstance
           .get("/dashboard/stats")
           .then((res) => res?.data?.data || res?.data || res || {})
           .catch(() => ({}));
 
-        const paidContribsPromise =
-          recentCollectionIds.length > 0
-            ? supabase
-                .from("contributions")
-                .select("amount, collection_id")
-                .in("collection_id", recentCollectionIds)
-                .eq("status", "paid")
-                .then((res) => res.data || [])
-                .catch(() => [])
-            : Promise.resolve([]);
+        const collectionsPromise = axiosInstance
+          .get("/collections")
+          .then((res) => res?.data?.data || [])
+          .catch(() => []);
 
         const activitiesPromise = axiosInstance
           .get(`/dashboard/activities?limit=${RECENT_ACTIVITY_LIMIT}`)
           .then((res) => res?.data?.data || res?.data || res || [])
           .catch(() => null);
 
-        const [statsData, paidContribs, activitiesData] = await Promise.all([
+        const [statsData, allCollections, activitiesData] = await Promise.all([
           statsPromise,
-          paidContribsPromise,
+          collectionsPromise,
           activitiesPromise,
         ]);
 
-        const contribsByCol: Record<string, any[]> = {};
-        for (const contribution of paidContribs || []) {
-          if (!contribsByCol[contribution.collection_id]) {
-            contribsByCol[contribution.collection_id] = [];
-          }
-          contribsByCol[contribution.collection_id].push(contribution);
-        }
+        const cols: any[] = Array.isArray(allCollections) ? allCollections : [];
+        const titleMap: Record<string, string> = {};
+        for (const c of cols) titleMap[c.id] = c.title;
 
-        const recentCollections = cols.slice(0, RECENT_COLLECTION_LIMIT).map((collection: any) => {
-          const cList = contribsByCol[collection.id] || [];
-          return {
-            id: collection.id,
-            title: collection.title,
-            status: collection.status,
-            collection_type: collection.collection_type || "fixed",
-            totalRaised: cList.reduce(
-              (sum: number, contribution: any) => sum + Number(contribution.amount || 0),
-              0,
-            ),
-            participants: cList.length,
-            deadline: collection.deadline,
-            created_at: collection.created_at,
-            goalAmount: Number(collection.target_amount || collection.amount || 0) || undefined,
-            maxParticipants: Number(collection.max_contributions || 0) || undefined,
-          };
-        });
+        // Counts come from the backend, which computes them over the same
+        // scope it applied to the list. Falling back to the local array keeps
+        // the cards populated if /dashboard/stats itself failed.
+        const totalCollections = Number(
+          statsData.totalCollections ?? cols.length ?? 0,
+        );
+        const activeCollections = Number(
+          statsData.activeCollections ??
+            cols.filter((c) => c.status === "active").length ??
+            0,
+        );
 
-        let activitiesRows = activitiesData;
-        if (!activitiesRows && collectionIds.length > 0) {
-          const { data: contribs } = await supabase
-            .from("contributions")
-            .select("id, name, email, amount, gross_amount, created_at, collection_id")
-            .in("collection_id", collectionIds)
-            .eq("status", "paid")
-            .order("created_at", { ascending: false })
-            .limit(RECENT_ACTIVITY_LIMIT);
-          activitiesRows = contribs || [];
-        } else if (!activitiesRows) {
-          activitiesRows = [];
-        }
+        // `contributions` is embedded on each collection row, with AMOUNTS
+        // present only when the caller holds transaction:read. Without it the
+        // reduce yields 0 and the card shows a participant count but no
+        // figure — the intended money-free rendering.
+        const recentCollections = cols
+          .filter((collection: any) => collection.status === "active")
+          .slice(0, RECENT_COLLECTION_LIMIT)
+          .map((collection: any) => {
+            const paid = (Array.isArray(collection.contributions)
+              ? collection.contributions
+              : []
+            ).filter((contribution: any) => contribution.status === "paid");
+            return {
+              id: collection.id,
+              title: collection.title,
+              status: collection.status,
+              collection_type: collection.collection_type || "fixed",
+              totalRaised: paid.reduce(
+                (sum: number, contribution: any) => sum + Number(contribution.amount || 0),
+                0,
+              ),
+              participants: paid.length,
+              deadline: collection.deadline,
+              created_at: collection.created_at,
+              goalAmount: Number(collection.target_amount || collection.amount || 0) || undefined,
+              maxParticipants: Number(collection.max_contributions || 0) || undefined,
+            };
+          });
+
+        const activitiesRows = Array.isArray(activitiesData) ? activitiesData : [];
 
         const activities = (activitiesRows || []).map((activity: any) => {
           const createdAt = activity.created_at;
@@ -245,6 +236,11 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
             relative_time: toRelativeTime(createdAt),
           };
         });
+
+        // Wave 6.2 — stale in-flight guard: discard a response that was
+        // issued under a workspace the user has since switched away from,
+        // rather than letting it overwrite the new workspace's state.
+        if (getActiveWorkspaceId() !== requestWorkspaceId) return;
 
         set({
           stats: {

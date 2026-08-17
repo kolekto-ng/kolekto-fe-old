@@ -39,6 +39,7 @@ const SharedCollectionsPage = lazy(() => import("./pages/dashboard/SharedCollect
 const SharedCollectionDetailPage = lazy(() => import("./pages/dashboard/SharedCollectionDetailPage"));
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWorkspaceBootstrap } from "@/hooks/useWorkspaceBootstrap";
+import { useWorkspaceInvalidation } from "@/hooks/useWorkspaceInvalidation";
 import WhatsAppButton from "./components/WhatsappFloatButton";
 import ScrollToTop from "./components/ScrollToTop";
 import SessionTimeoutGuard from "./components/SessionTimeoutGuard";
@@ -223,6 +224,12 @@ const App = () => {
   // the caller's personal workspace when the header is absent, so the app
   // behaves exactly as it did before if this never resolves.
   useWorkspaceBootstrap();
+
+  // Workspace Wave 6.2: switching workspace must actually change the data on
+  // screen, not just the badge. This clears the workspace-scoped stores on
+  // every switch so each page falls back to its skeleton and refetches under
+  // the new X-Workspace-Id, instead of showing the previous workspace's rows.
+  useWorkspaceInvalidation();
 
   const isAmbassadorExperience =
     window.location.hostname.startsWith("ambassador.") ||

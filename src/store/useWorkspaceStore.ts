@@ -49,6 +49,20 @@ export interface Workspace {
    * never leave, so it is unreachable in practice.
    */
   membership_id?: string;
+  /**
+   * The caller's capabilities IN THIS WORKSPACE, derived server-side from
+   * their membership row and returned by GET /workspaces (Wave 6.3).
+   *
+   * ⚠️ PRESENTATION ONLY — same disclaimer as the rest of this file. This
+   * decides which controls are RENDERED. Every endpoint independently
+   * re-derives the caller's capabilities from the database, so editing this
+   * array in devtools changes what the UI draws and nothing else.
+   *
+   * Optional because an older backend (or a cached response) may omit it;
+   * callers must treat absence as "unknown", not as "denied" — see
+   * utils/workspaceCapabilities.ts.
+   */
+  capabilities?: string[];
 }
 
 /** An ADMIN/MEMBER-granting invitation (Workspace Wave 4). Never carries a token. */

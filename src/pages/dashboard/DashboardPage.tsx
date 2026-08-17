@@ -29,6 +29,8 @@ import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
 import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
 import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 import { ActiveWorkspaceBadge } from "@/components/workspace/WorkspaceSwitcher";
+import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import { useWorkspaceCapabilities } from "@/hooks/useWorkspaceCapabilities";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -183,13 +185,18 @@ const DashboardPage: React.FC = () => {
     loadDashboardHome,
   } = useDashboardHomeStore();
   const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
+  // Wave 6.2 — drives reload + realtime re-keying on workspace switch.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  // Wave 6.6 — which actions this workspace entitles the user to.
+  const { canCreateCollection, canRequestWithdrawal, canSeeMoney } =
+    useWorkspaceCapabilities();
 
   useEffect(() => {
     const userId = user?.id || getStoredUserId();
     void loadDashboardHome(userId);
 
     const rtChannel = supabase
-      .channel(`dashboard-rt-${userId || "guest"}`)
+      .channel(`dashboard-rt-${userId || "guest"}-${activeWorkspaceId ?? "none"}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "contributions" },
@@ -224,7 +231,11 @@ const DashboardPage: React.FC = () => {
     return () => {
       supabase.removeChannel(rtChannel);
     };
-  }, [user?.id, loadDashboardHome]);
+    // Wave 6.2: activeWorkspaceId is a dependency so a switch re-runs this —
+    // reloading the dashboard under the new workspace and re-keying the
+    // realtime channel. The store reset has already cleared `stats` etc., so
+    // the skeleton shows rather than the previous workspace's figures.
+  }, [user?.id, activeWorkspaceId, loadDashboardHome]);
 
   if (loading) {
     return <DashboardHomeSkeleton />;
@@ -245,27 +256,41 @@ const DashboardPage: React.FC = () => {
               in the wrong workspace should be able to notice immediately. */}
           <ActiveWorkspaceBadge className="mt-2" />
         </div>
+        {/* Wave 6.6 — capability-gated actions. Both are enforced server-side
+            regardless: /withdrawals/request keeps its collection-ownership
+            check, and create-collection asserts collection:create. */}
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => setIsGlobalWithdrawOpen(true)}
-            className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
-          >
-            <Banknote className="w-4 h-4" />
-            Withdrawal
-          </Button>
-          <Button
-            size="sm"
-            className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm hidden md:flex"
-            onClick={() => navigate("/dashboard/create-collection")}
-          >
-            <Plus className="w-4 h-4" /> Create Collection
-          </Button>
+          {canRequestWithdrawal && (
+            <Button
+              size="sm"
+              onClick={() => setIsGlobalWithdrawOpen(true)}
+              className="bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm"
+            >
+              <Banknote className="w-4 h-4" />
+              Withdrawal
+            </Button>
+          )}
+          {canCreateCollection && (
+            <Button
+              size="sm"
+              className="bg-kolekto hover:bg-kolekto/90 flex items-center gap-1.5 shadow-sm hidden md:flex"
+              onClick={() => navigate("/dashboard/create-collection")}
+            >
+              <Plus className="w-4 h-4" /> Create Collection
+            </Button>
+          )}
         </div>
       </div>
 
       {/* ── Wallet Summary ──────────────────────────────────────────────────────── */}
+      {/* Wave 6.6 — the three balance cards render only with transaction:read.
+          The backend already omits these fields for callers without it, so
+          without this guard they would format as "₦NaN". The Collections card
+          below is NOT gated: counts are not money, and a money-free dashboard
+          must still be a useful one. */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        {canSeeMoney && (
+          <>
         <Card className="border-gray-200 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
             <CardTitle className="text-xs font-medium text-gray-500">
@@ -322,6 +347,8 @@ const DashboardPage: React.FC = () => {
             </p>
           </CardContent>
         </Card>
+          </>
+        )}
 
         <Card
           className="border-gray-200 shadow-sm relative overflow-hidden flex flex-col justify-between group cursor-pointer"
