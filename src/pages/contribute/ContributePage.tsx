@@ -11,6 +11,7 @@ import { FaTwitter, FaFacebook, FaInstagram, FaWhatsapp } from 'react-icons/fa';
 import ContributeFlow from '@/components/contribute/ContributeFlow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
+import { normalizePublicCollectionIdentifier } from '@/utils/publicCollectionIdentifier';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -56,11 +57,29 @@ const annotateTierAvailability = (collectionData: any, paidContributions: any[])
 };
 
 const ContributePage: React.FC = () => {
-  const { collectionId } = useParams<{ collectionId: string }>();
+  const { collectionId: rawCollectionId } = useParams<{ collectionId: string }>();
   const navigate = useNavigate();
+
+  // The identifier in the address bar is whatever the sharing app decided the
+  // URL was. Chat autolinkers routinely swallow the punctuation that wrapped
+  // the link in prose — most often the closing bracket of
+  // "(https://kolekto.com.ng/contribute/<slug>)" — and that trailing character
+  // made the exact slug lookup miss, so those contributors saw "Collection Not
+  // Found" for a link that worked for everyone else (incident 2026-08-18).
+  // Canonicalizing here also picks the correct UUID-vs-slug branch below.
+  const collectionId = normalizePublicCollectionIdentifier(rawCollectionId);
   const [collection, setCollection] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Put the canonical link in the address bar so a reload, a copy-paste or a
+  // browser bookmark carries the clean identifier. `replace` keeps the back
+  // button working, and normalization is idempotent so this runs at most once.
+  useEffect(() => {
+    if (collectionId && rawCollectionId && collectionId !== rawCollectionId) {
+      navigate(`/contribute/${collectionId}`, { replace: true });
+    }
+  }, [collectionId, rawCollectionId, navigate]);
 
   useEffect(() => {
     const fetchCollection = async () => {
