@@ -100,10 +100,45 @@ export function toKycUploadErrorMessage(error: unknown): string {
     return "Your internet connection appears to be unavailable.";
   }
 
+  // Branch on the backend's stable error CODE before anything else. The
+  // backend now distinguishes a business conflict (this NIN belongs to
+  // someone else) from each infrastructure failure stage, so the UI must
+  // stop collapsing all of them into one "Upload failed" message — that
+  // ambiguity is precisely what made the identity-KYC incident unreadable
+  // for users and support alike. See KYC_ERROR_CODES in the backend's
+  // controllers/settings/kyc.js.
+  const code = err?.response?.data?.code;
+  const KYC_CODE_MESSAGES: Record<string, string> = {
+    KYC_NIN_ALREADY_REGISTERED:
+      "This NIN is already registered to a different Kolekto account. Please check the number you entered, or contact support if you believe this is a mistake.",
+    ENCRYPTION_NOT_CONFIGURED:
+      "Identity verification is temporarily unavailable. Please try again in a few minutes — your documents were not submitted.",
+    KYC_DOCUMENT_UPLOAD_FAILED:
+      "We couldn't save your documents. Nothing was submitted, so please try again.",
+    KYC_VERIFICATION_CREATE_FAILED:
+      "We couldn't start your verification. Nothing was submitted, so please try again.",
+    KYC_IDENTITY_PERSISTENCE_FAILED:
+      "We couldn't save your identity details. Nothing was submitted, so please try again.",
+  };
+  if (code && KYC_CODE_MESSAGES[code]) return KYC_CODE_MESSAGES[code];
+
   const status = err?.response?.status;
   if (status === 413) return "One of your files is too large.";
   if (status === 415) return "One of your files is not supported.";
+  if (status === 503) return "Verification is temporarily unavailable. Please try again in a few minutes.";
   if (status === 500) return "We couldn't upload your documents. Please try again.";
 
   return toFriendlyErrorMessage(error, "Could not upload document. Please try again.");
+}
+
+// Whether a KYC upload failure is a business decision the user must act on
+// (a conflicting NIN) rather than a transient failure they should just retry.
+// Drives the toast TITLE — "Upload Failed" on a NIN conflict is actively
+// misleading, since the upload itself was never the problem.
+export function isKycConflictError(error: unknown): boolean {
+  const err = error as any;
+  return (
+    err?.response?.status === 409 ||
+    err?.response?.data?.code === "KYC_NIN_ALREADY_REGISTERED"
+  );
 }

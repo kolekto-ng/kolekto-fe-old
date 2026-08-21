@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { axiosInstance } from '@/utils/axios';
-import { toKycUploadErrorMessage } from '@/utils/errorMessages';
+import { toKycUploadErrorMessage, isKycConflictError } from '@/utils/errorMessages';
 import { beginCriticalFlow, endCriticalFlow } from '@/lib/criticalFlow';
 import { compressFilesForKycUpload } from '@/utils/imageCompression';
 
@@ -313,6 +313,21 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
           uploadInFlightRef.current = false;
           setStep(totalSteps); // Jump to success step
         }, 500);
+      } else {
+        // A 2xx whose body is not `{success:true}` used to fall through here
+        // silently: no toast, and isUploading/uploadInFlightRef were never
+        // reset, so the dialog sat on a frozen spinner and the Submit button
+        // stayed dead — the user could neither retry nor find out what
+        // happened. Treat an unexpected success shape as a failure.
+        console.error('[diag] KYC upload: unexpected 2xx response shape', { type, flowId, result });
+        toast({
+          title: "Upload Failed",
+          description: "We couldn't confirm your upload. Please try again.",
+          variant: "destructive"
+        });
+        setIsUploading(false);
+        setUploadStage('idle');
+        uploadInFlightRef.current = false;
       }
     } catch (error: any) {
       console.error('[diag] KYC upload failed — state preserved, staying on current step', {
@@ -321,17 +336,27 @@ export const DocumentUploadForm: React.FC<DocumentUploadFormProps> = ({
         step,
         totalDurationMs: Math.round(performance.now() - uploadStartedAt),
         failureReason: error?.code || error?.response?.status || error?.message || 'unknown',
+        errorCode: error?.response?.data?.code || null,
         at: new Date().toISOString(),
         error,
       });
       toast({
-        title: "Upload Failed",
+        // A NIN that belongs to another account isn't an upload problem, and
+        // titling it "Upload Failed" sends users into a retry loop that can
+        // never succeed. Name the actual problem instead.
+        title: isKycConflictError(error) ? "NIN Already Registered" : "Upload Failed",
         description: toKycUploadErrorMessage(error),
         variant: "destructive"
       });
       setIsUploading(false);
       setUploadStage('idle');
       uploadInFlightRef.current = false;
+      // The NIN field lives on step 1, so a NIN conflict is unfixable from
+      // the upload step — send the user back to the one input they can
+      // actually correct. Selected files and the selfie are kept in state.
+      if (isKycConflictError(error)) {
+        setStep(1);
+      }
     }
   };
 
