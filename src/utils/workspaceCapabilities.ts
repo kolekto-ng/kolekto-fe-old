@@ -56,6 +56,10 @@ const ROLE_CAPABILITIES_FALLBACK: Record<string, Capability[]> = {
     CAPABILITY.COLLECTION_DELETE,
     CAPABILITY.TRANSACTION_READ,
     CAPABILITY.WITHDRAWAL_CREATE,
+    // Wave 6.7F.3 — OWNER-only: approving an ADMIN's pending_owner_approval
+    // withdrawal in this workspace. See CAPABILITIES.WITHDRAWAL_APPROVE's
+    // own doc in the backend's workspaceAuthorizationService.js.
+    CAPABILITY.WITHDRAWAL_APPROVE,
     CAPABILITY.REPORTS_READ,
   ],
   ADMIN: [
@@ -66,6 +70,12 @@ const ROLE_CAPABILITIES_FALLBACK: Record<string, Capability[]> = {
     CAPABILITY.COLLECTION_READ,
     CAPABILITY.COLLECTION_UPDATE,
     CAPABILITY.TRANSACTION_READ,
+    // Wave 6.7F.4 (backend services/workspaceAuthorizationService.js
+    // ROLE_CAPABILITIES) grants ADMIN withdrawal:create — an ADMIN-initiated
+    // withdrawal lands at 'pending_owner_approval' rather than skipping
+    // approval, so this is safe to mirror here. WITHDRAWAL_APPROVE stays
+    // OWNER-only below; ADMIN never holds it.
+    CAPABILITY.WITHDRAWAL_CREATE,
     CAPABILITY.REPORTS_READ,
   ],
   MEMBER: [CAPABILITY.WORKSPACE_READ, CAPABILITY.COLLECTION_READ],
@@ -105,8 +115,15 @@ export interface WorkspaceCapabilities {
   canViewWallet: boolean;
   /** Show "Create collection" entry points. */
   canCreateCollection: boolean;
-  /** Show withdrawal request UI. OWNER-only by the backend's role map. */
+  /** Show withdrawal request UI. Granted to OWNER and ADMIN (Wave 6.7F.4). */
   canRequestWithdrawal: boolean;
+  /**
+   * Show the workspace OWNER-approval queue (Wave 6.7F.5) — withdrawals an
+   * ADMIN initiated that are sitting at 'pending_owner_approval'. OWNER-only
+   * by the backend's role map; ADMIN never holds this, including for their
+   * own withdrawal.
+   */
+  canApproveWithdrawals: boolean;
   /** Show member-management UI (invite, roles, suspend, remove). */
   canManageMembers: boolean;
   /** Show workspace settings editing. */
@@ -137,6 +154,7 @@ export function computeWorkspaceCapabilities(
       canViewWallet: true,
       canCreateCollection: true,
       canRequestWithdrawal: true,
+      canApproveWithdrawals: true,
       canManageMembers: true,
       canUpdateWorkspace: true,
       role: null,
@@ -151,6 +169,7 @@ export function computeWorkspaceCapabilities(
     canViewWallet: canSeeMoney,
     canCreateCollection: hasCapability(active, CAPABILITY.COLLECTION_CREATE),
     canRequestWithdrawal: hasCapability(active, CAPABILITY.WITHDRAWAL_CREATE),
+    canApproveWithdrawals: hasCapability(active, CAPABILITY.WITHDRAWAL_APPROVE),
     canManageMembers: hasCapability(active, CAPABILITY.WORKSPACE_MEMBERS_MANAGE),
     canUpdateWorkspace: hasCapability(active, CAPABILITY.WORKSPACE_UPDATE),
     role: active.role ?? null,

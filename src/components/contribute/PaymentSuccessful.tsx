@@ -1,5 +1,14 @@
 import React, { useRef } from 'react';
-import html2pdf from 'html2pdf.js';
+// html2pdf.js is imported DYNAMICALLY inside handleDownloadPDF, not here.
+//
+// Performance wave (2026-08-20): as a static import it pulled a 776 kB
+// (235 kB gzipped) chunk — the largest in the whole build — into the payment
+// success path, which is the PUBLIC contributor flow. Every contributor paid
+// that download to render a success screen; only the ones who tap "Download
+// PDF" actually need it.
+//
+// CollectionDetailsPage.tsx already loads the same library on demand
+// (`(await import('html2pdf.js')).default`); this matches that pattern.
 import {
   CalendarDays,
   CheckCircle2,
@@ -391,24 +400,27 @@ const PaymentSuccessful = ({
     return `${safeTitle}_${safeRef}_${safeDate}_receipt@kolekto.com.ng.pdf`;
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!receiptRef.current) return;
 
-    html2pdf()
-      .set({
-        margin: 0.5,
-        filename: getReceiptFilename(),
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
-      })
-      .from(receiptRef.current)
-      .save()
-      .then(() => {
-        toast.success('PDF receipt downloaded');
-      })
-      .catch(() => {
-        toast.error('Failed to download PDF');
-      });
+    try {
+      // Loaded on demand — see the note at the top of this file.
+      const html2pdf = (await import('html2pdf.js')).default;
+      await html2pdf()
+        .set({
+          margin: 0.5,
+          filename: getReceiptFilename(),
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
+        })
+        .from(receiptRef.current)
+        .save();
+      toast.success('PDF receipt downloaded');
+    } catch {
+      // Also covers the chunk itself failing to load (offline / flaky
+      // network), which the static import could not fail at this point.
+      toast.error('Failed to download PDF');
+    }
   };
 
   const handleGoToDashboard = () => {

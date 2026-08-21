@@ -25,12 +25,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { WithdrawFundsDialog } from "@/components/withdrawals/WithdrawFundsDialog";
 import { KycEnforcementBanner } from "@/components/kyc/KycEnforcementBanner";
 import { useAuthStore } from "@/store/useAuthStore";
-import { DashboardHomeSkeleton } from "@/components/ui/page-skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardHomeStore } from "@/store/useDashboardHomeStore";
 import { getCollectionStatusMeta } from "@/utils/collectionStatus";
 import { ActiveWorkspaceBadge } from "@/components/workspace/WorkspaceSwitcher";
 import { useWorkspaceStore } from "@/store/useWorkspaceStore";
 import { useWorkspaceCapabilities } from "@/hooks/useWorkspaceCapabilities";
+import {
+  createCoalescer,
+  collectionIdSet,
+  shouldHandleRealtimeEvent,
+} from "@/utils/realtimeScope";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -167,6 +172,59 @@ interface Activity {
   relative_time: string;
 }
 
+// ── Section-level loading primitives (performance wave, 2026-08-20) ──────────
+//
+// Each is sized to the content it stands in for, so a section resolving does
+// not shift the page. Deliberately small and local: this is the only screen
+// with these exact shapes, and the shared page-skeletons module holds the
+// FULL-PAGE variants, which is exactly what this screen no longer uses.
+
+/** A single figure inside an already-rendered stat card. */
+function StatValue({
+  loading,
+  children,
+  className,
+}: {
+  loading: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  if (loading) return <Skeleton className="h-7 w-28 my-0.5" />;
+  return <div className={className}>{children}</div>;
+}
+
+/** Placeholder cards for "My Collections" while /collections is in flight. */
+function CollectionCardsSkeleton() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <Skeleton key={index} className="h-44 rounded-2xl" />
+      ))}
+    </div>
+  );
+}
+
+/** Placeholder rows for the activity feed, matching its 3.5rem row height. */
+function ActivityRowsSkeleton() {
+  return (
+    <div className="divide-y divide-gray-50">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="flex items-center gap-3 px-4 py-3.5">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <div className="shrink-0 space-y-1.5 text-right">
+            <Skeleton className="ml-auto h-3.5 w-16" />
+            <Skeleton className="ml-auto h-3 w-12" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 const DashboardPage: React.FC = () => {
@@ -177,11 +235,19 @@ const DashboardPage: React.FC = () => {
     user?.user_metadata?.firstName ||
     user?.email?.split("@")[0] ||
     "there";
+  // Performance wave (2026-08-20): per-section flags instead of one page-wide
+  // `isLoading`. The three dashboard requests resolve at different times, so
+  // each section now renders the moment ITS data lands — see
+  // useDashboardHomeStore's PROGRESSIVE COMMIT note. The page shell, greeting,
+  // workspace badge and action buttons are never replaced by a skeleton, which
+  // is what makes a workspace switch feel immediate rather than like a reload.
   const {
     stats,
     activities,
     recentCollections,
-    isLoading: loading,
+    statsLoading,
+    collectionsLoading,
+    activitiesLoading,
     loadDashboardHome,
   } = useDashboardHomeStore();
   const [isGlobalWithdrawOpen, setIsGlobalWithdrawOpen] = useState(false);
@@ -195,40 +261,78 @@ const DashboardPage: React.FC = () => {
     const userId = user?.id || getStoredUserId();
     void loadDashboardHome(userId);
 
+    // ── Realtime (wave 6.7F.8) ───────────────────────────────────────────────
+    //
+    // Refreshes are COALESCED and WORKSPACE-SCOPED. Previously every event on
+    // contributions/wallets/collections fired its own forced reload of all
+    // three dashboard endpoints, unfiltered — so a burst of contributions
+    // produced a burst of identical request triples, and a user with
+    // collections in more than one workspace refetched workspace A every time
+    // something happened in workspace B.
+    //
+    // The refresh stays `silent: true`, so figures already on screen are
+    // updated in place rather than being replaced by skeletons.
+    const refresh = createCoalescer(() => {
+      void loadDashboardHome(userId, { force: true, silent: true });
+    });
+
+    // Read the scope at EVENT TIME, not effect time: the collection list
+    // arrives after this effect runs, and a stale closure would leave the set
+    // permanently empty (which fails open — correct, but pointless).
+    const inScope = (payload: unknown) =>
+      shouldHandleRealtimeEvent(
+        payload as any,
+        collectionIdSet(useDashboardHomeStore.getState().workspaceCollectionIds),
+      );
+
+    const onScopedChange = (payload: unknown) => {
+      if (!inScope(payload)) return;
+      refresh.schedule();
+    };
+
     const rtChannel = supabase
       .channel(`dashboard-rt-${userId || "guest"}-${activeWorkspaceId ?? "none"}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "contributions" },
-        () => {
-          void loadDashboardHome(userId, { force: true, silent: true });
-        },
+        onScopedChange,
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "contributions" },
-        () => {
-          void loadDashboardHome(userId, { force: true, silent: true });
-        },
+        onScopedChange,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "wallets" },
-        () => {
-          void loadDashboardHome(userId, { force: true, silent: true });
-        },
+        onScopedChange,
       )
       .on(
         // Collection status/target/limit changes refresh the dashboard cards.
+        //
+        // This is the ONE subscription that can be scoped server-side:
+        // `collections` actually has a `workspace_id` column, so Realtime can
+        // filter it before the event ever reaches the browser. The other three
+        // tables carry only `collection_id` and are scoped client-side above.
+        // When no workspace has resolved yet the filter is omitted rather than
+        // guessed, preserving the previous unfiltered behaviour for that case.
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "collections" },
+        activeWorkspaceId
+          ? {
+              event: "UPDATE",
+              schema: "public",
+              table: "collections",
+              filter: `workspace_id=eq.${activeWorkspaceId}`,
+            }
+          : { event: "UPDATE", schema: "public", table: "collections" },
         () => {
-          void loadDashboardHome(userId, { force: true, silent: true });
+          refresh.schedule();
         },
       )
       .subscribe();
 
     return () => {
+      refresh.cancel();
       supabase.removeChannel(rtChannel);
     };
     // Wave 6.2: activeWorkspaceId is a dependency so a switch re-runs this —
@@ -237,9 +341,12 @@ const DashboardPage: React.FC = () => {
     // the skeleton shows rather than the previous workspace's figures.
   }, [user?.id, activeWorkspaceId, loadDashboardHome]);
 
-  if (loading) {
-    return <DashboardHomeSkeleton />;
-  }
+  // NOTE: there is deliberately no `if (loading) return <DashboardHomeSkeleton/>`
+  // early return here any more. Replacing the whole page — greeting, workspace
+  // badge, create-collection shortcuts and all — with a skeleton on every
+  // workspace switch is precisely the "I clicked and the page vanished"
+  // experience this wave set out to remove. The static shell renders
+  // immediately and only the data-backed sections below show skeletons.
 
   return (
     <div className="space-y-8 pb-8">
@@ -301,9 +408,9 @@ const DashboardPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="text-xl font-bold text-gray-900">
+            <StatValue loading={statsLoading} className="text-xl font-bold text-gray-900">
               {fmt(stats.totalBalance)}
-            </div>
+            </StatValue>
             <p className="text-xs text-gray-400 mt-0.5">
               across all collections
             </p>
@@ -320,9 +427,9 @@ const DashboardPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="text-xl font-bold text-green-700">
+            <StatValue loading={statsLoading} className="text-xl font-bold text-green-700">
               {fmt(stats.availableBalance)}
-            </div>
+            </StatValue>
             <p className="text-xs text-green-600/70 mt-0.5">
               ready to withdraw
             </p>
@@ -339,9 +446,9 @@ const DashboardPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="text-xl font-bold text-yellow-700">
+            <StatValue loading={statsLoading} className="text-xl font-bold text-yellow-700">
               {fmt(stats.pendingBalance)}
-            </div>
+            </StatValue>
             <p className="text-xs text-yellow-600/70 mt-0.5">
               awaiting settlement
             </p>
@@ -363,13 +470,23 @@ const DashboardPage: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 relative z-10">
-            <div className="text-2xl font-bold text-gray-900">
+            {/* Counts come from EITHER /dashboard/stats or, while that is
+                still in flight, the /collections list — so this card waits
+                only for whichever answers first. */}
+            <StatValue
+              loading={statsLoading && collectionsLoading}
+              className="text-2xl font-bold text-gray-900"
+            >
               {stats.totalCollections}
-            </div>
-            <p className="text-xs text-kolekto font-medium mt-0.5 flex items-center gap-1 hover:underline">
-              {stats.activeCollections} active{" "}
-              <ChevronRight className="w-3 h-3" />
-            </p>
+            </StatValue>
+            {statsLoading && collectionsLoading ? (
+              <Skeleton className="mt-1.5 h-3 w-20" />
+            ) : (
+              <p className="text-xs text-kolekto font-medium mt-0.5 flex items-center gap-1 hover:underline">
+                {stats.activeCollections} active{" "}
+                <ChevronRight className="w-3 h-3" />
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -413,7 +530,21 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* ── My Collections ────────────────────────────────────────────────────── */}
-      {recentCollections.length > 0 && (
+      {/* While /collections is in flight the heading and three placeholder
+          cards render, so the section holds its place instead of the rest of
+          the page jumping up and then back down when the data lands. */}
+      {collectionsLoading && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">
+              My Collections
+            </h2>
+          </div>
+          <CollectionCardsSkeleton />
+        </div>
+      )}
+
+      {!collectionsLoading && recentCollections.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-900">
@@ -531,7 +662,7 @@ const DashboardPage: React.FC = () => {
           <h2 className="text-base font-semibold text-gray-900">
             Recent Activities
           </h2>
-          {activities.length > 0 && (
+          {!activitiesLoading && activities.length > 0 && (
             <button
               onClick={() => navigate("/dashboard/activities")}
               className="text-xs font-semibold text-green-600 hover:text-green-700 flex items-center gap-1"
@@ -542,7 +673,12 @@ const DashboardPage: React.FC = () => {
         </div>
         <Card className="border-gray-200">
           <CardContent className="p-0">
-            {activities.length === 0 ? (
+            {/* The empty state and the loading state must be distinguishable:
+                showing "No contributions yet" while the feed is still loading
+                tells the user something false about their own money. */}
+            {activitiesLoading ? (
+              <ActivityRowsSkeleton />
+            ) : activities.length === 0 ? (
               <div className="py-12 text-center">
                 <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-3" />
                 <p className="text-sm text-gray-400 font-medium">
@@ -589,7 +725,7 @@ const DashboardPage: React.FC = () => {
                 ))}
               </div>
             )}
-            {activities.length > 5 && (
+            {!activitiesLoading && activities.length > 5 && (
               <div className="border-t border-gray-50 p-3">
                 <button
                   onClick={() => navigate("/dashboard/activities")}

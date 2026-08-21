@@ -131,6 +131,37 @@ describe("useCollectionStore", () => {
     });
   });
 
+  describe("fetchCollectionById", () => {
+    // Wave 6 stabilization (real-QA bug #5, "Failed to load collection"):
+    // migrated off a direct-Supabase browser query — gated only by RLS
+    // (auth.uid() = user_id, workspace-blind) — onto GET /collections/:id,
+    // the same scoped/redacted seam the list already reads through.
+    it("reads through the backend endpoint, not the browser Supabase client", async () => {
+      getMock.mockResolvedValue({ data: { collection: { id: "col-9", title: "Trip Fund", created_at: "2026-08-17T00:00:00.000Z" } } });
+
+      const result = await useCollectionStore.getState().fetchCollectionById("col-9");
+
+      expect(getMock).toHaveBeenCalledWith("/collections/col-9");
+      expect(supabase.from).not.toHaveBeenCalled();
+      expect(result.id).toBe("col-9");
+    });
+
+    it("serves from the in-memory cache without a network call when already present", async () => {
+      useCollectionStore.setState({ collections: [{ id: "col-9", title: "Cached" }] } as any);
+
+      const result = await useCollectionStore.getState().fetchCollectionById("col-9");
+
+      expect(getMock).not.toHaveBeenCalled();
+      expect(result.title).toBe("Cached");
+    });
+
+    it("throws a friendly error when the backend reports the collection is not in scope", async () => {
+      getMock.mockResolvedValue({ data: { collection: null } });
+
+      await expect(useCollectionStore.getState().fetchCollectionById("not-mine")).rejects.toThrow(/not found/i);
+    });
+  });
+
   describe("createCollection", () => {
     it("routes fundraising submissions through Express even when the generic create flag is set to edge", async () => {
       localStorage.setItem("kolekto-ff-create-path", "edge");

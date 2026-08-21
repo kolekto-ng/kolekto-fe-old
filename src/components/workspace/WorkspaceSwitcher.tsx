@@ -28,8 +28,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useWorkspaceStore } from "@/store/useWorkspaceStore";
+import { useWorkspaceStore, type Workspace } from "@/store/useWorkspaceStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { toast } from "@/lib/toast";
 import { resolveSwitcherState } from "./switcherState";
 
 interface Props {
@@ -79,6 +80,30 @@ export function WorkspaceSwitcher({ className, variant = "compact" }: Props) {
     isLoading,
     workspaceCount: workspaces.length,
   });
+
+  /**
+   * IMMEDIATE ACKNOWLEDGEMENT (performance wave, 2026-08-20).
+   *
+   * `switchWorkspace` is a synchronous zustand write, so the check mark and
+   * the trigger label already move within the same frame — the sub-100 ms
+   * response the brief asks for was in place. What was missing was
+   * acknowledgement that persisted past the dropdown closing: the menu
+   * disappears, and the user is left watching sections reload with no
+   * statement of what they are now looking at.
+   *
+   * This names the destination explicitly. It is a UI confirmation of a
+   * LOCAL state change that has already happened, not a claim about any
+   * server call — no request has been made yet, and nothing here asserts
+   * success of one. Re-selecting the active workspace is a no-op and stays
+   * silent rather than toasting a switch that did not occur.
+   */
+  const handleSelect = (workspace: Workspace) => {
+    if (workspace.id === activeWorkspaceId) return;
+    switchWorkspace(workspace.id, userId);
+    toast.info(`Switched to ${workspace.name}`, {
+      description: "Loading this workspace's collections, wallet and activity…",
+    });
+  };
 
   if (state === "hidden") return null;
 
@@ -140,7 +165,7 @@ export function WorkspaceSwitcher({ className, variant = "compact" }: Props) {
         {workspaces.map((w) => (
           <DropdownMenuItem
             key={w.id}
-            onSelect={() => switchWorkspace(w.id, userId)}
+            onSelect={() => handleSelect(w)}
             className="flex items-center gap-2"
           >
             <WorkspaceAvatar name={w.name} type={w.type} size="sm" />

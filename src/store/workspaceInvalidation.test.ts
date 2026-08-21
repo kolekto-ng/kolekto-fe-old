@@ -182,6 +182,76 @@ describe("Wave 6.2 — workspace switch invalidation", () => {
     });
   });
 
+  // ── Performance wave (2026-08-20): the null → personal bootstrap exemption ──
+  //
+  // On a first load there is no persisted selection, so the dashboard fires
+  // its requests with NO X-Workspace-Id — which the backend resolves to the
+  // personal workspace. Treating the subsequent null → personal settle as a
+  // "switch" wiped that already-correct data and refetched all of it, so every
+  // dashboard request fired twice and a populated page collapsed to a
+  // skeleton. See subscribeWorkspaceInvalidation's header.
+  //
+  // The exemption is narrow by design; these tests pin both sides of it.
+  describe("bootstrap settle (null → …)", () => {
+    it("does NOT wipe data when bootstrap settles on the PERSONAL workspace", () => {
+      // Those rows were fetched header-less and the server scoped them to
+      // exactly this workspace, so there is nothing stale to clear.
+      useWorkspaceStore.setState({ activeWorkspaceId: null });
+      const unsubscribe = subscribeWorkspaceInvalidation();
+      seedWorkspaceAData();
+
+      useWorkspaceStore.setState({ activeWorkspaceId: WS_A }); // WS_A is personal
+
+      expect(useCollectionStore.getState().collections).toHaveLength(2);
+      unsubscribe();
+    });
+
+    it("DOES wipe data when bootstrap settles on a NON-personal workspace", () => {
+      // A restored selection (or a user with no personal workspace) means the
+      // header-less responses belong to a different workspace entirely.
+      useWorkspaceStore.setState({ activeWorkspaceId: null });
+      const unsubscribe = subscribeWorkspaceInvalidation();
+      seedWorkspaceAData();
+
+      useWorkspaceStore.setState({ activeWorkspaceId: WS_B }); // WS_B is organization
+
+      expect(useCollectionStore.getState().collections).toEqual([]);
+      unsubscribe();
+    });
+
+    it("fails closed: wipes when the workspace list has not loaded yet", () => {
+      useWorkspaceStore.setState({ activeWorkspaceId: null, workspaces: [] });
+      const unsubscribe = subscribeWorkspaceInvalidation();
+      seedWorkspaceAData();
+
+      useWorkspaceStore.setState({ activeWorkspaceId: WS_A });
+
+      expect(useCollectionStore.getState().collections).toEqual([]);
+      unsubscribe();
+    });
+
+    it("still wipes on a real switch AWAY from the personal workspace", () => {
+      // The exemption must not leak into the ordinary path it sits next to.
+      const unsubscribe = subscribeWorkspaceInvalidation();
+      seedWorkspaceAData();
+
+      useWorkspaceStore.getState().switchWorkspace(WS_B, USER);
+
+      expect(useCollectionStore.getState().collections).toEqual([]);
+      unsubscribe();
+    });
+
+    it("still wipes on sign-out (id → null)", () => {
+      const unsubscribe = subscribeWorkspaceInvalidation();
+      seedWorkspaceAData();
+
+      useWorkspaceStore.setState({ activeWorkspaceId: null });
+
+      expect(useCollectionStore.getState().collections).toEqual([]);
+      unsubscribe();
+    });
+  });
+
   describe("cache keys include the workspace (second line of defence)", () => {
     it("useActivities refetches under B even if the reset were missed", async () => {
       // Simulate a stale, still-'fresh' Workspace A feed that a missed reset

@@ -19,7 +19,7 @@ import type { Workspace } from "@/store/useWorkspaceStore";
 
 const WS = "ws-1";
 
-/** Capability sets exactly as the backend's role map emits them. */
+/** Capability sets exactly as the backend's role map emits them (Wave 6.7F.4). */
 const OWNER_CAPS = [
   "workspace:read",
   "workspace:update",
@@ -30,8 +30,13 @@ const OWNER_CAPS = [
   "collection:delete",
   "transaction:read",
   "withdrawal:create",
+  "withdrawal:approve",
   "reports:read",
 ];
+// ADMIN gained withdrawal:create in Wave 6.7F.4 — an ADMIN-initiated
+// withdrawal still lands at 'pending_owner_approval', not 'pending', so this
+// does not skip the OWNER-approval stage. withdrawal:approve stays absent:
+// ADMIN can never approve a withdrawal, including their own.
 const ADMIN_CAPS = [
   "workspace:read",
   "workspace:update",
@@ -40,6 +45,7 @@ const ADMIN_CAPS = [
   "collection:read",
   "collection:update",
   "transaction:read",
+  "withdrawal:create",
   "reports:read",
 ];
 const MEMBER_CAPS = ["workspace:read", "collection:read"];
@@ -62,25 +68,29 @@ function workspace(
 }
 
 describe("computeWorkspaceCapabilities (Wave 6.6)", () => {
-  it("OWNER: everything, including withdrawal", () => {
+  it("OWNER: everything, including withdrawal and owner-approval", () => {
     const caps = computeWorkspaceCapabilities([workspace(WS, "OWNER", OWNER_CAPS)], WS);
 
     expect(caps.canSeeMoney).toBe(true);
     expect(caps.canViewWallet).toBe(true);
     expect(caps.canCreateCollection).toBe(true);
     expect(caps.canRequestWithdrawal).toBe(true);
+    expect(caps.canApproveWithdrawals).toBe(true);
     expect(caps.canManageMembers).toBe(true);
   });
 
-  it("ADMIN: money and collections, but NOT withdrawal", () => {
+  it("ADMIN: money, collections, and withdrawal creation — but NOT owner-approval", () => {
     const caps = computeWorkspaceCapabilities([workspace(WS, "ADMIN", ADMIN_CAPS)], WS);
 
     expect(caps.canSeeMoney).toBe(true);
     expect(caps.canViewWallet).toBe(true);
     expect(caps.canCreateCollection).toBe(true);
     expect(caps.canManageMembers).toBe(true);
-    // The boundary Wave 6 exists to protect: seeing money is not moving it.
-    expect(caps.canRequestWithdrawal).toBe(false);
+    // Wave 6.7F.4 — ADMIN may initiate a withdrawal (it still requires OWNER
+    // approval before Super Admin ever sees it).
+    expect(caps.canRequestWithdrawal).toBe(true);
+    // The boundary Wave 6.7F.3 exists to protect: initiating is not approving.
+    expect(caps.canApproveWithdrawals).toBe(false);
   });
 
   it("MEMBER: no money, no wallet, no creating, no managing, no withdrawing", () => {
@@ -90,6 +100,7 @@ describe("computeWorkspaceCapabilities (Wave 6.6)", () => {
     expect(caps.canViewWallet).toBe(false);
     expect(caps.canCreateCollection).toBe(false);
     expect(caps.canRequestWithdrawal).toBe(false);
+    expect(caps.canApproveWithdrawals).toBe(false);
     expect(caps.canManageMembers).toBe(false);
   });
 
@@ -136,7 +147,18 @@ describe("computeWorkspaceCapabilities (Wave 6.6)", () => {
 
     const asAdmin = computeWorkspaceCapabilities([workspace(WS, "ADMIN", undefined)], WS);
     expect(asAdmin.canSeeMoney).toBe(true);
-    expect(asAdmin.canRequestWithdrawal).toBe(false);
+    // Wave 6.7F.4: the backend's ROLE_CAPABILITIES grants ADMIN
+    // withdrawal:create (an ADMIN-initiated withdrawal still requires OWNER
+    // approval before it's eligible for Super Admin approval — see
+    // 'pending_owner_approval'). The fallback must mirror that or it hides
+    // the Withdraw action from a legitimate ADMIN during a degraded-response
+    // window.
+    expect(asAdmin.canRequestWithdrawal).toBe(true);
+    // withdrawal:approve stays OWNER-only even in the fallback — ADMIN never
+    // approves a withdrawal, including their own.
+    expect(asAdmin.canApproveWithdrawals).toBe(false);
+
+    expect(asOwner.canApproveWithdrawals).toBe(true);
   });
 
   it("an unknown role with no capabilities grants nothing (fails closed)", () => {

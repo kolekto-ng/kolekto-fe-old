@@ -96,6 +96,38 @@ export default defineConfig({
         // Navigation requests use NetworkFirst below so fresh HTML wins online.
         globPatterns: ["**/*.{js,css,ico,png,jpg,jpeg,svg,woff2}"],
 
+        // PERFORMANCE WAVE (2026-08-20) — what NOT to precache.
+        //
+        // The precache was 170 entries / 8.94 MB, and the service worker
+        // downloads all of it eagerly on first visit. Two groups of files made
+        // up over half of that while being irrelevant to the app's offline
+        // value (which is the DASHBOARD, not the marketing site):
+        //
+        //   • Landing-page artwork — featuresImage.png (2.40 MB),
+        //     kolekto-on-campus.png (1.86 MB) and the four hero avatars
+        //     (~0.92 MB). A signed-in organizer opening the PWA never renders
+        //     any of them.
+        //   • On-demand PDF/canvas vendor chunks — html2pdf (0.76 MB) and
+        //     html2canvas (0.20 MB), pulled in only when a user taps "Download
+        //     PDF" or generates a share image.
+        //
+        // Excluding them does NOT make them unavailable: the images still hit
+        // the `kolekto-images-v4` CacheFirst runtime rule below, so they are
+        // cached the first time they are actually displayed, and the vendor
+        // chunks load from the network on demand (PaymentSuccessful.tsx and
+        // CollectionDetailsPage.tsx both import them dynamically and toast on
+        // failure). The trade is deliberate and narrow: generating a PDF while
+        // fully offline no longer works. Nothing on a financial path changes —
+        // /api/* remains NetworkOnly.
+        globIgnores: [
+          "**/assets/featuresImage-*",
+          "**/assets/kolekto-on-campus-*",
+          "**/assets/avatar-[0-9]-*",
+          "**/assets/hero-image-*",
+          "**/assets/html2pdf-*",
+          "**/assets/html2canvas*",
+        ],
+
         // Clean URLs - remove hash from precache
         cleanupOutdatedCaches: true,
 

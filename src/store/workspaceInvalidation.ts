@@ -99,6 +99,21 @@ export function resetWorkspaceScopedStores(): void {
 }
 
 /**
+ * Is `workspaceId` the user's PERSONAL workspace, per the loaded list?
+ *
+ * Used only by the bootstrap exemption below. Returns false when the list has
+ * not loaded or the id is not in it — i.e. it fails towards "reset", never
+ * towards "keep the previous workspace's rows".
+ */
+function isPersonalWorkspace(
+  workspaces: { id: string; type: string }[],
+  workspaceId: string | null,
+): boolean {
+  if (!workspaceId) return false;
+  return workspaces.some((w) => w.id === workspaceId && w.type === "personal");
+}
+
+/**
  * Start watching for workspace switches. Returns zustand's unsubscribe fn.
  *
  * Registered once, at app root (see useWorkspaceInvalidation below), rather
@@ -108,13 +123,46 @@ export function resetWorkspaceScopedStores(): void {
  * Deliberately fires only on a genuine change of id. `fetchWorkspaces`
  * re-sets `activeWorkspaceId` to the same value on every bootstrap, and
  * resetting on that would wipe good caches on every page load.
+ *
+ * ── THE null → PERSONAL BOOTSTRAP EXEMPTION (performance wave, 2026-08-20) ──
+ *
+ * WHAT WAS SLOW: on a user's FIRST load in a browser (or the first after
+ * sign-out) there is no persisted selection, so `activeWorkspaceId` starts
+ * `null`. The dashboard mounts and fires its three requests immediately —
+ * with no X-Workspace-Id header, which the backend resolves to the caller's
+ * PERSONAL workspace (middleware/workspaceContext.js's
+ * `ensurePersonalWorkspace` path). Moments later `fetchWorkspaces` resolves
+ * and sets `activeWorkspaceId`, null → id counted as a "switch", every store
+ * was wiped, and the page refetched all of it. Every dashboard request fired
+ * TWICE on first load, and the user watched a fully-populated dashboard
+ * collapse back into a skeleton.
+ *
+ * WHY SKIPPING IS CORRECT, NOT A SHORTCUT: those in-flight requests carried
+ * no workspace header, so the server already scoped them to exactly the
+ * personal workspace. If the id we are settling on IS that personal
+ * workspace, the data in the stores is already the right data for it — there
+ * is nothing stale to clear. Nothing is being shown under the wrong label.
+ *
+ * EVERY OTHER TRANSITION STILL RESETS, including:
+ *   • null → a NON-personal workspace (a restored selection, or a user with
+ *     no personal workspace falling back to workspaces[0]) — the headerless
+ *     responses belong to a different workspace and MUST be discarded;
+ *   • any id → any other id — the actual switch this module exists for;
+ *   • any id → null (sign-out).
+ * The check also fails closed: an unloaded or unknown workspace list makes
+ * `isPersonalWorkspace` false, so the reset happens.
  */
 export function subscribeWorkspaceInvalidation(): () => void {
   let previous = useWorkspaceStore.getState().activeWorkspaceId;
   return useWorkspaceStore.subscribe((state) => {
     const next = state.activeWorkspaceId;
     if (next === previous) return;
+
+    const isBootstrapToPersonal =
+      previous === null && isPersonalWorkspace(state.workspaces, next);
+
     previous = next;
+    if (isBootstrapToPersonal) return;
     resetWorkspaceScopedStores();
   });
 }

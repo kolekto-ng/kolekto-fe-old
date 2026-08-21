@@ -203,6 +203,13 @@ export const useCollectionStore = create((set, get: any) => ({
   },
 
   // ── Fetch single collection by ID ───────────────────────────────────────────
+  // Wave 6 stabilization (real-QA bug #5, "Failed to load collection"):
+  // migrated off a direct-Supabase browser query onto GET /collections/:id.
+  // The old query (`collections.eq("id", id).single()`) was gated only by RLS
+  // (`auth.uid() = user_id`) — workspace-blind, so it 404'd for anyone RLS
+  // excluded and ignored the active workspace either way. The backend
+  // endpoint reads through the same collectionScopeService seam the list
+  // page uses, so detail and list are scoped and money-redacted identically.
   fetchCollectionById: async (id: string) => {
     const cached = (get().collections as Collection[]).find((c) => c.id === id);
     if (cached) {
@@ -212,13 +219,9 @@ export const useCollectionStore = create((set, get: any) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from("collections")
-        .select("*, contributions(*), wallets(*)")
-        .eq("id", id)
-        .single();
-
-      if (error) throw new Error(error.message);
+      const response = await axiosInstance.get(`/collections/${id}`);
+      const data = response?.data?.collection;
+      if (!data) throw new Error("Collection not found.");
 
       const formatted = formatCollection(data);
       set((state: any) => ({

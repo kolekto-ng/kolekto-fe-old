@@ -69,10 +69,20 @@ export const COMPLETED_WITHDRAWAL_STATUSES: ReadonlySet<string> = new Set([
  * Withdrawal statuses that are in-flight: they reserve against the withdrawable
  * cap but are NOT yet deducted from `available` (only completed withdrawals
  * reduce available). See computeWithdrawalEligibility.
+ *
+ * `pending_owner_approval` (Wave 6.7F.4): an ADMIN-initiated withdrawal
+ * awaiting its Workspace OWNER's approval, before it is even eligible to
+ * enter the existing Kolekto Super Admin approval flow. It reserves funds
+ * identically to `pending`/`processing` — the money is spoken for the moment
+ * the request is created, not only once an OWNER has approved it — so it
+ * must count here or a collection could be over-committed by requests that
+ * simply haven't reached OWNER approval yet. request_withdrawal_atomic's own
+ * SQL-side reservation query mirrors this exact three-value set.
  */
 export const PENDING_WITHDRAWAL_STATUSES: ReadonlySet<string> = new Set([
   "pending",
   "processing",
+  "pending_owner_approval",
 ]);
 
 /** All recognised collection types (for validation / iteration). */

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore, useCollectionStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
 import { WithdrawFundsDialog } from '@/components/withdrawals/WithdrawFundsDialog';
 import { Button } from '@/components/ui/button';
@@ -38,26 +37,26 @@ const WalletOverview: React.FC = () => {
         console.error('Wallet overview stats error:', err);
         if (!isActive) return;
 
-        const collectionIds = collections.map((c: any) => c.id);
+        // Fallback when /dashboard/stats itself is unreachable: derive a
+        // total from the collections already in the store, NOT a fresh
+        // direct-Supabase query. GET /collections already applies the same
+        // transaction:read gate /dashboard/stats does — each collection's
+        // embedded `contributions` carries an `amount` field only when the
+        // caller holds transaction:read (see collectionScopeRepository.js's
+        // listCollectionsForScope). A MEMBER's contributions therefore have
+        // no `amount` at all here, so `Number(c.amount || 0)` degrades to 0
+        // for them automatically — the same money-free result the primary
+        // path gives, without a second, independently-authorized query.
+        const totalRaised = collections.reduce((sum: number, collection: any) => {
+          const paid = Array.isArray(collection.contributions)
+            ? collection.contributions.filter((c: any) => c.status === 'paid')
+            : [];
+          return sum + paid.reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+        }, 0);
 
-        // Fallback: derive from contributions if the API isn't reachable
-        if (collectionIds.length > 0) {
-          const { data: paidContribs } = await supabase
-            .from('contributions')
-            .select('amount')
-            .in('collection_id', collectionIds)
-            .eq('status', 'paid');
-
-          const totalRaised = (paidContribs || []).reduce(
-            (sum: number, c: any) => sum + Number(c.amount || 0),
-            0,
-          );
-
-          if (!isActive) return;
-          setAvailableBalance(0);
-          setPendingBalance(totalRaised);
-          setTotalBalance(totalRaised);
-        }
+        setAvailableBalance(0);
+        setPendingBalance(totalRaised);
+        setTotalBalance(totalRaised);
       }
     };
 

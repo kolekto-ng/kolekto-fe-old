@@ -172,7 +172,7 @@ export interface WithdrawalState {
   withdrawals: Withdrawal[];
   isLoading: boolean;
   error: string | null;
-  
+
   // Actions
   fetchWithdrawals: (userId?: string, collectionId?: string) => Promise<Withdrawal[]>;
   // The payout destination is resolved server-side from `payout_account_id`
@@ -186,6 +186,16 @@ export interface WithdrawalState {
     payout_account_id?: string;
     organizer_id: string;
   }) => Promise<Withdrawal>;
+
+  // ── Workspace OWNER approval (Wave 6.7F.5) ──────────────────────────────
+  // A separate, workspace-scoped queue from `withdrawals` above (which is
+  // the caller's OWN withdrawals). This is "withdrawals awaiting MY OWNER
+  // approval in my active workspace" — gated server-side on withdrawal:approve.
+  ownerApprovals: Withdrawal[];
+  ownerApprovalsLoading: boolean;
+  ownerApprovalsError: string | null;
+  fetchOwnerApprovals: () => Promise<{ withdrawals: Withdrawal[] }>;
+  ownerApproveWithdrawal: (withdrawalId: string) => Promise<unknown>;
 }
 
 export interface DashboardState {

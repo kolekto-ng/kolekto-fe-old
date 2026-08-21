@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
@@ -33,6 +33,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { axiosInstance } from '@/utils/axios';
 import { toFriendlyErrorMessage } from '@/utils/errorMessages';
 import { useCollectionStore } from '@/store/useCollectionStore';
+import { useWorkspaceCapabilities } from '@/hooks/useWorkspaceCapabilities';
 import {
   getCollectionContributorFields,
   getContributorFieldValue,
@@ -137,6 +138,12 @@ const CollectionDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const { updateCollectionStatus, deleteCollection, collections } = useCollectionStore() as any;
   const [isDeleting, setIsDeleting] = useState(false);
+  // Wave 6.6/6.7F.4 — cosmetic gate only, same as DashboardPage's Withdraw
+  // button: the backend independently re-derives and enforces
+  // withdrawal:create (OWNER + ADMIN) on every /withdrawals/request call.
+  // Without this, a MEMBER (who the backend already rejects with 403) still
+  // saw this button.
+  const { canRequestWithdrawal } = useWorkspaceCapabilities();
 
   const [col, setCol] = useState<any>(null);
   const [contributions, setContributions] = useState<any[]>([]);
@@ -282,8 +289,13 @@ const CollectionDetailsPage: React.FC = () => {
   // target/limit edit, or deadline update reflect here instantly — without it,
   // enabling `collections` in the realtime publication has nothing on the client
   // listening for it.
+  // Guards the first 'SUBSCRIBED' callback below — see the note there. A ref,
+  // not state: flipping it must not itself cause a render.
+  const isFirstSubscribe = useRef(true);
+
   useEffect(() => {
     if (!id) return;
+    isFirstSubscribe.current = true;
     const channel = supabase
       .channel(`col-details-${id}`)
       .on('postgres_changes',
@@ -301,8 +313,24 @@ const CollectionDetailsPage: React.FC = () => {
       // Realtime does not backfill events missed during a socket drop (sleep/network
       // blip/backgrounded tab). Refetching on every (re)SUBSCRIBE — not just on row
       // events — closes that gap so a reconnect always re-syncs current state.
+      //
+      // Performance wave (2026-08-20): the FIRST 'SUBSCRIBED' is skipped. The
+      // mount effect above has already fired loadCollection / loadContributions
+      // / loadBalanceStats microseconds earlier, so re-running them here made
+      // opening any collection issue every read TWICE — a duplicate
+      // `contributions` select, a duplicate wallet select and a duplicate
+      // /dashboard/collections/:id/stats — racing its own first copy.
+      //
+      // Every RE-subscribe after that still refetches, which is the only case
+      // this callback was actually protecting against: a socket that dropped
+      // and came back may have missed row events in the gap.
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') { loadContributions(); loadBalanceStats(); loadWallet(); }
+        if (status !== 'SUBSCRIBED') return;
+        if (isFirstSubscribe.current) {
+          isFirstSubscribe.current = false;
+          return;
+        }
+        loadContributions(); loadBalanceStats(); loadWallet();
       });
     return () => { supabase.removeChannel(channel); };
   }, [id]);
@@ -614,16 +642,24 @@ const CollectionDetailsPage: React.FC = () => {
         </div>
 
         <div className="mt-5 grid grid-cols-4 gap-2.5 min-[380px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_3.25rem_3.25rem]">
-          <Button
-            size="sm"
-            onClick={() => setIsWithdrawOpen(true)}
-            disabled={availableBalance <= 0}
-            className="min-h-12 min-w-0 justify-center gap-1.5 rounded-2xl bg-green-700 px-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-green-800 active:scale-[0.98] min-[380px]:px-3"
-            aria-label="Withdraw"
-          >
-            <Wallet className="h-4 w-4 shrink-0" />
-            <span className="hidden truncate min-[380px]:inline">Withdraw</span>
-          </Button>
+          {/* Wave 6.6/6.7F.4 — capability-gated, same as the Wallet section's
+              Withdraw button below. A conditional (invisible) spacer keeps
+              the Share/Edit/More buttons in their expected grid columns when
+              this is hidden, rather than reflowing them. */}
+          {canRequestWithdrawal ? (
+            <Button
+              size="sm"
+              onClick={() => setIsWithdrawOpen(true)}
+              disabled={availableBalance <= 0}
+              className="min-h-12 min-w-0 justify-center gap-1.5 rounded-2xl bg-green-700 px-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-green-800 active:scale-[0.98] min-[380px]:px-3"
+              aria-label="Withdraw"
+            >
+              <Wallet className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate min-[380px]:inline">Withdraw</span>
+            </Button>
+          ) : (
+            <div aria-hidden="true" />
+          )}
 
           <Button
             size="sm"
@@ -830,14 +866,16 @@ const CollectionDetailsPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <Button
-          disabled={availableBalance <= 0}
-          onClick={() => setIsWithdrawOpen(true)}
-          className="mt-4 min-h-[3.25rem] w-full justify-center gap-2 rounded-2xl bg-green-700 text-sm font-medium text-white shadow-sm hover:bg-green-800"
-        >
-          <Wallet className="h-5 w-5" />
-          Withdraw Funds
-        </Button>
+        {canRequestWithdrawal && (
+          <Button
+            disabled={availableBalance <= 0}
+            onClick={() => setIsWithdrawOpen(true)}
+            className="mt-4 min-h-[3.25rem] w-full justify-center gap-2 rounded-2xl bg-green-700 text-sm font-medium text-white shadow-sm hover:bg-green-800"
+          >
+            <Wallet className="h-5 w-5" />
+            Withdraw Funds
+          </Button>
+        )}
       </div>
 
       <div className="rounded-[1.35rem] border border-gray-100 bg-white p-4 shadow-sm sm:p-5">

@@ -44,8 +44,42 @@ interface DashboardHomeState {
   stats: DashStats;
   activities: Activity[];
   recentCollections: CollectionPreview[];
+  /**
+   * Every collection id in the active workspace (wave 6.7F.8) — not just the
+   * three shown as cards.
+   *
+   * `GET /collections` already returns the full workspace-scoped list and this
+   * store already reads it; only the top three survived into state. The ids are
+   * kept so the realtime listeners can tell whether an incoming
+   * contribution/wallet/withdrawal row belongs to the workspace on screen
+   * before forcing a refetch — those tables carry `collection_id` and no
+   * `workspace_id`, so this mapping cannot be done server-side. See
+   * utils/realtimeScope.ts.
+   *
+   * Empty means "not loaded yet", and is treated as unknown (fail open), never
+   * as "this workspace has no collections".
+   */
+  workspaceCollectionIds: string[];
   isLoading: boolean;
   isRefreshing: boolean;
+  /**
+   * PER-SECTION loading flags (performance wave, 2026-08-20).
+   *
+   * The three dashboard requests have always been fired in parallel, but their
+   * results were applied in ONE `set()` after `Promise.all` — so the page
+   * showed nothing until the SLOWEST of them returned, and `isLoading` drove a
+   * single full-page skeleton. On a workspace switch that read as "I clicked,
+   * the whole dashboard vanished, and some seconds later everything appeared
+   * at once."
+   *
+   * Each request now commits its own slice the moment it lands and clears only
+   * its own flag, so balances, collection cards and the activity feed appear
+   * independently. `isLoading` is kept (it still means "nothing to show yet")
+   * for any caller that only wants the coarse signal.
+   */
+  statsLoading: boolean;
+  collectionsLoading: boolean;
+  activitiesLoading: boolean;
   error: string | null;
   lastFetchedAt: number;
   lastUserId: string | null;
@@ -91,8 +125,12 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
   stats: emptyStats,
   activities: [],
   recentCollections: [],
+  workspaceCollectionIds: [],
   isLoading: false,
   isRefreshing: false,
+  statsLoading: false,
+  collectionsLoading: false,
+  activitiesLoading: false,
   error: null,
   lastFetchedAt: 0,
   lastUserId: null,
@@ -105,8 +143,12 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
         stats: emptyStats,
         activities: [],
         recentCollections: [],
+        workspaceCollectionIds: [],
         isLoading: false,
         isRefreshing: false,
+        statsLoading: false,
+        collectionsLoading: false,
+        activitiesLoading: false,
         lastUserId: null,
         lastWorkspaceId: null,
       });
@@ -134,6 +176,12 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
       set({
         isLoading: !hasCachedData && !silent,
         isRefreshing: hasCachedData || silent,
+        // A section is "loading" only when it has nothing to show. A silent
+        // background refresh keeps the current values on screen rather than
+        // flashing three skeletons over data the user is already reading.
+        statsLoading: !hasCachedData && !silent,
+        collectionsLoading: !hasCachedData && !silent,
+        activitiesLoading: !hasCachedData && !silent,
         error: null,
         lastUserId: userId,
         lastWorkspaceId: requestWorkspaceId,
@@ -155,113 +203,168 @@ export const useDashboardHomeStore = create<DashboardHomeState>((set, get) => ({
         // Each endpoint applies the transaction:read gate server-side, so a
         // caller without it simply receives no figures and the dashboard
         // renders its non-financial half.
+        // PROGRESSIVE COMMIT (performance wave, 2026-08-20).
+        //
+        // The three requests are still fired together — that part was already
+        // right. What changed is that each one now COMMITS ITS OWN SLICE the
+        // moment it resolves, instead of all three being held until
+        // `Promise.all` settled and applied in one `set()`. The page therefore
+        // fills in section by section rather than staying blank until the
+        // slowest request returns.
+        //
+        // Wave 6.2's stale-response guard is applied INSIDE each commit, not
+        // once at the end: with three independent commit points, each must
+        // re-check that the user has not switched workspace since the request
+        // left. A late response from workspace A must never land under B.
+        const isStillCurrent = () =>
+          getActiveWorkspaceId() === requestWorkspaceId;
+
         const statsPromise = axiosInstance
           .get("/dashboard/stats")
           .then((res) => res?.data?.data || res?.data || res || {})
-          .catch(() => ({}));
+          .catch(() => ({}))
+          .then((statsData: any) => {
+            if (!isStillCurrent()) return statsData;
+            set((prev) => ({
+              stats: {
+                // `??` not `||`: a genuine 0 from the backend must win over
+                // the locally-derived fallback.
+                totalCollections: Number(
+                  statsData.totalCollections ?? prev.stats.totalCollections ?? 0,
+                ),
+                activeCollections: Number(
+                  statsData.activeCollections ?? prev.stats.activeCollections ?? 0,
+                ),
+                totalBalance: Number(statsData.totalBalance || 0),
+                availableBalance: Number(statsData.availableBalance || 0),
+                pendingBalance: Number(statsData.pendingBalance || 0),
+              },
+              statsLoading: false,
+            }));
+            return statsData;
+          });
 
         const collectionsPromise = axiosInstance
           .get("/collections")
           .then((res) => res?.data?.data || [])
-          .catch(() => []);
+          .catch(() => [])
+          .then((allCollections: any) => {
+            const cols: any[] = Array.isArray(allCollections) ? allCollections : [];
+            if (!isStillCurrent()) return cols;
+
+            // `contributions` is embedded on each collection row, with AMOUNTS
+            // present only when the caller holds transaction:read. Without it
+            // the reduce yields 0 and the card shows a participant count but no
+            // figure — the intended money-free rendering.
+            const recentCollections = cols
+              .filter((collection: any) => collection.status === "active")
+              .slice(0, RECENT_COLLECTION_LIMIT)
+              .map((collection: any) => {
+                const paid = (Array.isArray(collection.contributions)
+                  ? collection.contributions
+                  : []
+                ).filter((contribution: any) => contribution.status === "paid");
+                return {
+                  id: collection.id,
+                  title: collection.title,
+                  status: collection.status,
+                  collection_type: collection.collection_type || "fixed",
+                  totalRaised: paid.reduce(
+                    (sum: number, contribution: any) =>
+                      sum + Number(contribution.amount || 0),
+                    0,
+                  ),
+                  participants: paid.length,
+                  deadline: collection.deadline,
+                  created_at: collection.created_at,
+                  goalAmount:
+                    Number(collection.target_amount || collection.amount || 0) ||
+                    undefined,
+                  maxParticipants:
+                    Number(collection.max_contributions || 0) || undefined,
+                };
+              });
+
+            set((prev) => ({
+              recentCollections,
+              // Full workspace scope for the realtime listeners — see the
+              // field's declaration. Derived from the same response the cards
+              // come from, so it costs nothing extra.
+              workspaceCollectionIds: cols.map((c: any) => c.id).filter(Boolean),
+              collectionsLoading: false,
+              // Counts fall back to this list only while /dashboard/stats is
+              // still in flight or failed outright. Once stats commits, its
+              // authoritative figures are already in place and are not
+              // overwritten — hence the `statsLoading` guard.
+              stats: prev.statsLoading
+                ? {
+                    ...prev.stats,
+                    totalCollections: cols.length,
+                    activeCollections: cols.filter(
+                      (c: any) => c.status === "active",
+                    ).length,
+                  }
+                : prev.stats,
+            }));
+            return cols;
+          });
 
         const activitiesPromise = axiosInstance
           .get(`/dashboard/activities?limit=${RECENT_ACTIVITY_LIMIT}`)
           .then((res) => res?.data?.data || res?.data || res || [])
-          .catch(() => null);
+          .catch(() => null)
+          .then((activitiesData: any) => {
+            if (!isStillCurrent()) return activitiesData;
+            const activitiesRows = Array.isArray(activitiesData)
+              ? activitiesData
+              : [];
 
-        const [statsData, allCollections, activitiesData] = await Promise.all([
-          statsPromise,
-          collectionsPromise,
-          activitiesPromise,
-        ]);
+            // The collection title comes off the activity row itself — the
+            // backend already labels every row (see controllers/dashboard.js's
+            // `titleByCollection` merge). This is what lets the feed render
+            // WITHOUT waiting for /collections; the previous code built a
+            // title map from that response and so could not commit until it
+            // had arrived.
+            const activities = activitiesRows.map((activity: any) => {
+              const createdAt = activity.created_at;
+              return {
+                id: activity.id,
+                name: activity.name || "",
+                email: activity.email || "",
+                amount: Number(activity.gross_amount || activity.amount) || 0,
+                created_at: createdAt,
+                collection_title: activity.collection_title || "Unknown",
+                relative_time: toRelativeTime(createdAt),
+              };
+            });
 
-        const cols: any[] = Array.isArray(allCollections) ? allCollections : [];
-        const titleMap: Record<string, string> = {};
-        for (const c of cols) titleMap[c.id] = c.title;
-
-        // Counts come from the backend, which computes them over the same
-        // scope it applied to the list. Falling back to the local array keeps
-        // the cards populated if /dashboard/stats itself failed.
-        const totalCollections = Number(
-          statsData.totalCollections ?? cols.length ?? 0,
-        );
-        const activeCollections = Number(
-          statsData.activeCollections ??
-            cols.filter((c) => c.status === "active").length ??
-            0,
-        );
-
-        // `contributions` is embedded on each collection row, with AMOUNTS
-        // present only when the caller holds transaction:read. Without it the
-        // reduce yields 0 and the card shows a participant count but no
-        // figure — the intended money-free rendering.
-        const recentCollections = cols
-          .filter((collection: any) => collection.status === "active")
-          .slice(0, RECENT_COLLECTION_LIMIT)
-          .map((collection: any) => {
-            const paid = (Array.isArray(collection.contributions)
-              ? collection.contributions
-              : []
-            ).filter((contribution: any) => contribution.status === "paid");
-            return {
-              id: collection.id,
-              title: collection.title,
-              status: collection.status,
-              collection_type: collection.collection_type || "fixed",
-              totalRaised: paid.reduce(
-                (sum: number, contribution: any) => sum + Number(contribution.amount || 0),
-                0,
-              ),
-              participants: paid.length,
-              deadline: collection.deadline,
-              created_at: collection.created_at,
-              goalAmount: Number(collection.target_amount || collection.amount || 0) || undefined,
-              maxParticipants: Number(collection.max_contributions || 0) || undefined,
-            };
+            set({ activities, activitiesLoading: false });
+            return activitiesData;
           });
 
-        const activitiesRows = Array.isArray(activitiesData) ? activitiesData : [];
+        await Promise.all([statsPromise, collectionsPromise, activitiesPromise]);
 
-        const activities = (activitiesRows || []).map((activity: any) => {
-          const createdAt = activity.created_at;
-          return {
-            id: activity.id,
-            name: activity.name || "",
-            email: activity.email || "",
-            amount: Number(activity.gross_amount || activity.amount) || 0,
-            created_at: createdAt,
-            collection_title:
-              titleMap[activity.collection_id] || activity.collection_title || "Unknown",
-            relative_time: toRelativeTime(createdAt),
-          };
-        });
-
-        // Wave 6.2 — stale in-flight guard: discard a response that was
-        // issued under a workspace the user has since switched away from,
-        // rather than letting it overwrite the new workspace's state.
-        if (getActiveWorkspaceId() !== requestWorkspaceId) return;
+        if (!isStillCurrent()) return;
 
         set({
-          stats: {
-            totalCollections,
-            activeCollections,
-            totalBalance: Number(statsData.totalBalance || 0),
-            availableBalance: Number(statsData.availableBalance || 0),
-            pendingBalance: Number(statsData.pendingBalance || 0),
-          },
-          activities,
-          recentCollections,
           isLoading: false,
           isRefreshing: false,
+          statsLoading: false,
+          collectionsLoading: false,
+          activitiesLoading: false,
           error: null,
           lastFetchedAt: Date.now(),
         });
       } catch (error: any) {
         console.error("Dashboard load error:", error);
+        // Every section flag is cleared too, otherwise a failure would leave
+        // skeletons shimmering forever with no error surfaced next to them.
         set({
           isLoading: false,
           isRefreshing: false,
+          statsLoading: false,
+          collectionsLoading: false,
+          activitiesLoading: false,
           error: error?.message || "Failed to load dashboard",
         });
       } finally {

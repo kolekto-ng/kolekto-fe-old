@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Tooltip } from 'react-tooltip';
 import { useCollectionStore, useWithdrawalStore, useAuthStore } from '@/store';
+import {
+  createCoalescer,
+  collectionIdSet,
+  shouldHandleRealtimeEvent,
+} from '@/utils/realtimeScope';
 import { useWorkspaceStore } from '@/store/useWorkspaceStore';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,10 +23,12 @@ import {
 import {
   isCompletedWithdrawal,
   withdrawalStatusBucket,
+  withdrawalStatusLabel,
 } from '@/utils/withdrawalStatus';
 import { TableRowsSkeleton } from '@/components/ui/page-skeletons';
 import { toast } from "@/lib/toast";
 import { KycEnforcementBanner } from '@/components/kyc/KycEnforcementBanner';
+import { OwnerApprovalsPanel } from '@/components/withdrawals/OwnerApprovalsPanel';
 
 // Simple currency formatter for NGN
 const formatCurrency = (amount: number) =>
@@ -45,7 +52,12 @@ interface RecentTransaction {
   collection: string;
   amount: number;
   date: string;
-  status: 'pending' | 'successful' | 'failed' | string;
+  // Raw backend status (e.g. 'pending', 'approved', 'pending_owner_approval').
+  // Display (color + label) is derived at render time from the canonical
+  // withdrawalStatus.ts helpers — never re-derived here — so a status this
+  // page doesn't specifically know about still renders correctly (pending
+  // statuses amber, never red; see withdrawalStatusBucket()).
+  status: string;
   description: string;
 }
 
@@ -128,7 +140,31 @@ const TransactionHistoryPage: React.FC = () => {
   useEffect(() => {
     if (!user?.id) return;
 
-    let refreshTimeout: number | null = null;
+    // ── Wallet refresh policy (wave 6.7F.8) ──────────────────────────────────
+    //
+    // This screen previously refreshed on FOUR unconditional triggers: a 30 s
+    // interval, window focus, visibility change, and every realtime event on
+    // `wallets`/`withdrawals` (unfiltered, so any of the user's workspaces —
+    // and, for an admin account, the whole platform). Each fired a forced
+    // refetch regardless of how fresh the data already was.
+    //
+    // The policy is now, in order of authority:
+    //   • REALTIME is the primary signal — money events refresh immediately
+    //     (coalesced, so a burst is one request), scoped to the collections in
+    //     the active workspace.
+    //   • FOCUS / VISIBILITY refresh only when the data is actually STALE.
+    //     Alt-tabbing twice in five seconds should not re-read the wallet.
+    //   • POLLING is a FALLBACK, not a baseline: the interval only fires while
+    //     the realtime channel is NOT subscribed. When realtime is healthy it
+    //     is redundant; when realtime is down it is the safety net that keeps
+    //     balances current, so it must not simply be deleted.
+    //
+    // FINANCIAL NOTE: this makes the wallet no less fresh in the normal case —
+    // realtime fires on the very row changes the poll existed to catch, and it
+    // fires sooner. Nothing is served from a cache that a money event has
+    // invalidated, and the backend remains the sole source of truth for every
+    // figure rendered here.
+    const WALLET_STALE_MS = 20_000;
 
     const refreshWalletView = () => {
       void fetchCollections(user.id, { force: true, silent: true });
@@ -137,53 +173,66 @@ const TransactionHistoryPage: React.FC = () => {
       }
     };
 
-    const scheduleRefresh = () => {
-      if (refreshTimeout) {
-        window.clearTimeout(refreshTimeout);
-      }
-
-      refreshTimeout = window.setTimeout(() => {
-        refreshWalletView();
-      }, 350);
-    };
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refreshWalletView();
-      }
-    }, 30_000);
-
-    const handleFocus = () => {
+    const refreshIfStale = () => {
+      const lastFetchedAt = Number(
+        (useCollectionStore.getState() as any)?.lastFetchedAt || 0,
+      );
+      if (Date.now() - lastFetchedAt < WALLET_STALE_MS) return;
       refreshWalletView();
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refreshWalletView();
-      }
+    const refresh = createCoalescer(refreshWalletView);
+
+    const onScopedChange = (payload: unknown) => {
+      // Scope is read at event time — the collection list may still be loading
+      // when this effect runs. An unknown scope fails open (refreshes).
+      const ids = collectionIdSet(
+        ((useCollectionStore.getState() as any)?.collections || [])
+          .map((c: any) => c?.id)
+          .filter(Boolean),
+      );
+      if (!shouldHandleRealtimeEvent(payload as any, ids)) return;
+      refresh.schedule();
     };
 
+    let realtimeHealthy = false;
     const channel = supabase
       .channel(`wallet-live-${user.id}-${activeWorkspaceId ?? 'none'}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'wallets' },
-        scheduleRefresh,
+        onScopedChange,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'withdrawals' },
-        scheduleRefresh,
+        onScopedChange,
       )
-      .subscribe();
+      .subscribe((status) => {
+        const wasHealthy = realtimeHealthy;
+        realtimeHealthy = status === 'SUBSCRIBED';
+        // A reconnect may have missed row events while the socket was down;
+        // realtime does not backfill. Re-sync once on the transition back.
+        if (!wasHealthy && realtimeHealthy) refreshIfStale();
+      });
+
+    // Fallback poll — skipped entirely while realtime is delivering.
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (realtimeHealthy) return;
+      refreshWalletView();
+    }, 30_000);
+
+    const handleFocus = () => refreshIfStale();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshIfStale();
+    };
 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (refreshTimeout) {
-        window.clearTimeout(refreshTimeout);
-      }
+      refresh.cancel();
       window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -280,37 +329,27 @@ const TransactionHistoryPage: React.FC = () => {
       return dateB - dateA;
     });
 
-    return sortedWithdrawals.map((w: any) => {
-      const bucketedStatus = withdrawalStatusBucket(w.status);
-      const mappedStatus =
-        bucketedStatus === 'completed'
-          ? 'successful'
-          : bucketedStatus === 'pending'
-            ? 'pending'
-            : bucketedStatus === 'rejected'
-              ? 'failed'
-              : (w.status || 'pending');
-
-      return {
-        id: w.id,
-        type: 'withdrawal',
-        collection: w.collections ? w.collections.title : 'Unknown Collection',
-        amount: Number(w.amount || 0),
-        date: w.created_at
-          ? new Date(w.created_at).toLocaleString('en-NG', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-          : '',
-        status: mappedStatus,
-        description: w.destination_account
-          ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
-          : 'Withdrawal',
-      };
-    });
+    return sortedWithdrawals.map((w: any) => ({
+      id: w.id,
+      type: 'withdrawal',
+      collection: w.collections ? w.collections.title : 'Unknown Collection',
+      amount: Number(w.amount || 0),
+      date: w.created_at
+        ? new Date(w.created_at).toLocaleString('en-NG', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '',
+      // Raw status — badge color/label are derived from it at render time
+      // via the canonical withdrawalStatus.ts helpers.
+      status: w.status || 'pending',
+      description: w.destination_account
+        ? `Withdrawal to ${w.destination_account.accountName} (${w.destination_account.accountNumber})`
+        : 'Withdrawal',
+    }));
   }, [withdrawalsArray]);
 
   const handleWithdraw = async (collectionId: string) => {
@@ -320,6 +359,9 @@ const TransactionHistoryPage: React.FC = () => {
   return (
     <div className="space-y-5 pb-6">
       <KycEnforcementBanner />
+      {/* Wave 6.7F.5 — renders nothing unless the caller is the OWNER of the
+          active workspace AND has withdrawals awaiting their approval. */}
+      <OwnerApprovalsPanel />
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <section className="min-w-0 overflow-hidden rounded-[22px] bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-800 text-white shadow-[0_12px_24px_rgba(4,120,87,0.18)]">
           <div className="relative p-4 sm:p-5">
@@ -527,7 +569,24 @@ const TransactionHistoryPage: React.FC = () => {
                   </td>
                 </tr>
               )}
-              {recentTransactions.map(transaction => (
+              {recentTransactions.map(transaction => {
+                // Canonical bucket/label — never re-derive status colors
+                // independently here. A bucketed-pending status (including
+                // 'pending_owner_approval') always renders amber, never red;
+                // 'unknown' (a status this app doesn't recognize at all)
+                // renders neutral gray rather than defaulting to red, which
+                // would misreport an unrecognized-but-fine status as failed.
+                const bucket = withdrawalStatusBucket(transaction.status);
+                const badgeClassName =
+                  bucket === 'completed'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : bucket === 'pending'
+                      ? 'bg-amber-50 text-amber-700'
+                      : bucket === 'rejected'
+                        ? 'bg-red-50 text-red-700'
+                        : 'bg-gray-50 text-gray-600';
+
+                return (
                 <tr key={transaction.id} className="transition hover:bg-emerald-50/35">
                   <td className="px-5 py-4 text-sm font-medium text-gray-950">
                     <span className="block max-w-[320px] whitespace-normal break-words leading-snug">{transaction.collection}</span>
@@ -535,17 +594,14 @@ const TransactionHistoryPage: React.FC = () => {
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-gray-950">{formatCurrency(transaction.amount)}</td>
                   <td className="whitespace-nowrap px-4 py-4 text-sm">
-                    <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${
-                      transaction.status === 'successful' || transaction.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
-                      transaction.status === 'pending' ? 'bg-amber-50 text-amber-700' :
-                        'bg-red-50 text-red-700'
-                      }`}>
-                      {transaction.status}
+                    <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${badgeClassName}`}>
+                      {withdrawalStatusLabel(transaction.status)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-500">{transaction.date}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

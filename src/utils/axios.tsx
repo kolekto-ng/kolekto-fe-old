@@ -2,6 +2,7 @@ import { useAuthStore } from "@/store";
 import { clearAuthSessionStorage, getValidAuthSessionFromStorage } from "@/utils/authSession";
 import { getActiveWorkspaceId } from "@/utils/activeWorkspace";
 import { useKycGateStore } from "@/store/useKycGateStore";
+import { isEnabled as timingEnabled, record as recordTiming, safePath } from "@/utils/requestTiming";
 import axios from "axios";
 
 // API configuration following the backend pattern.
@@ -105,10 +106,43 @@ axiosInstance.interceptors.request.use(
         config.headers["X-Workspace-Id"] = activeWorkspaceId;
       }
     }
+
+    // Dev-only request tracing (see utils/requestTiming.ts). Stamps the start
+    // time so the response interceptor can compute a duration. No-op in
+    // production builds.
+    if (timingEnabled()) {
+      (config as any).__startedAt = performance.now();
+    }
     return config;
   },
   (error) => Promise.reject(error)
 );
+
+/**
+ * Dev-only: record how long a request took and how big the response was.
+ * Reads ONLY method/path/status/size/workspace — never bodies or headers.
+ * See utils/requestTiming.ts for the full contract.
+ */
+function traceCompletion(config: any, status: number | "error", data: unknown) {
+  if (!timingEnabled() || !config || typeof config.__startedAt !== "number") return;
+  let bytes: number | null = null;
+  try {
+    // Size is derived locally from the parsed body rather than read from a
+    // header, because content-length is absent on compressed responses.
+    bytes = typeof data === "string" ? data.length : JSON.stringify(data ?? "").length;
+  } catch {
+    bytes = null;
+  }
+  recordTiming({
+    method: (config.method || "get").toUpperCase(),
+    path: safePath(config.url),
+    startedAt: config.__startedAt,
+    durationMs: performance.now() - config.__startedAt,
+    status,
+    bytes,
+    workspaceId: config.headers?.["X-Workspace-Id"] ?? null,
+  });
+}
 
 // Ambassador public endpoints that don't require authentication.
 // 401s from these are normal credential failures, not session expiry.
@@ -242,10 +276,15 @@ async function performSignOutAndRedirect() {
 }
 
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    traceCompletion(response.config, response.status, response.data);
+    return response;
+  },
   async (error) => {
     const status = error.response?.status;
     const url = error.config?.url;
+
+    traceCompletion(error.config, status ?? "error", error.response?.data);
 
     // Ambassador endpoints use a dedicated JWT + live status check
     // (verifyAmbassador re-validates ambassador_profiles.status on every
