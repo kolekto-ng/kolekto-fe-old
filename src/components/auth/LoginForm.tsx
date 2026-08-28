@@ -4,10 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from "@/lib/toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Loader2, LockKeyhole, Mail } from 'lucide-react';
 import { useAuthStore } from '@/store';
-import { toFriendlyErrorMessage } from '@/utils/errorMessages';
+import AuthErrorBanner from '@/components/auth/AuthErrorBanner';
+import { useAuthError } from '@/hooks/useAuthError';
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -18,12 +18,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false);
-  const [isMagicLinkSent, setIsMagicLinkSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
+  // Shared banner state: classification, auto-scroll and the screen-reader
+  // announcement all come from one place (hooks/useAuthError).
+  const { error, scrollKey, raise, raiseValidation, clear } = useAuthError('signin');
 
-  const { signIn, sendMagicLink } = useAuthStore();
+  const { signIn, resendVerification } = useAuthStore() as any;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,17 +37,21 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    clear();
     setIsLoading(true);
 
     try {
-      const { user, error } = await signIn(email, password);
-      if (error) {
-        const message =
-          error.message === 'Email not confirmed'
-            ? 'Please check your email and verify your account before signing in.'
-            : toFriendlyErrorMessage(error, 'Sign in failed. Please check your details and try again.');
-        setError(message);
+      const { user, error: signInError } = await signIn(email, password);
+      if (signInError) {
+        // Classified from the backend's stable `code`, NOT from message text.
+        // The previous check compared error.message to the literal
+        // 'Email not confirmed' — but the auth store had already rewritten the
+        // message before it got here, so that branch never once ran, and
+        // toFriendlyErrorMessage mapped "email not confirmed" and "invalid
+        // credentials" onto the SAME sentence. Unverified users were therefore
+        // told their password was wrong and sent to reset a password that had
+        // never been the problem.
+        raise(signInError);
       } else {
         // Fires exactly once, only on a fresh, user-initiated successful
         // login — never on session rehydration (that lives entirely in
@@ -56,74 +61,54 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
         navigate(resolvedRedirect);
       }
     } catch (err: any) {
-      const message = toFriendlyErrorMessage(err, 'Sign in failed. Please try again.');
-      setError(message);
+      raise(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleMagicLink = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    setError(null);
+  /**
+   * Banner actions. The important one is resending verification straight from
+   * the "verify your email" error — the user is already here, with their email
+   * typed in, at the exact moment they discover they need it.
+   */
+  const handleBannerAction = async (intent?: string) => {
+    if (intent === 'retry') {
+      clear();
+      return;
+    }
+    if (intent !== 'resend-verification') return;
 
     if (!email.trim()) {
-      setError('Please enter your email address first');
+      raiseValidation('Please enter your email address first.');
       return;
     }
 
-    setIsMagicLinkLoading(true);
-
+    setResendPending(true);
     try {
-      const { error } = await sendMagicLink(email);
-      if (error) {
-        const message = toFriendlyErrorMessage(error, 'Could not send magic link. Please try again.');
-        setError(message);
-      } else {
-        // Success toast is owned by the auth store (sendMagicLink). Here we
-        // just switch to the "check your email" confirmation panel.
-        setIsMagicLinkSent(true);
+      const { data, error: resendError } = await resendVerification(
+        email,
+        `${window.location.origin}/auth/verify?redirect=${encodeURIComponent(resolvedRedirect)}`
+      );
+      if (resendError) {
+        raise(resendError);
+        return;
       }
-    } catch (err: any) {
-      setError(toFriendlyErrorMessage(err, 'Could not send magic link. Please try again.'));
+      toast.success(data?.message || 'Verification email sent. Please check your inbox.');
+      clear();
     } finally {
-      setIsMagicLinkLoading(false);
+      setResendPending(false);
     }
   };
 
-  if (isMagicLinkSent) {
-    return (
-      <div className="text-center space-y-5">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
-          <Mail className="h-6 w-6" />
-        </div>
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-800">
-          <h3 className="font-medium">Check your email</h3>
-          <p className="mt-1 text-sm leading-6">
-            We've sent a magic link to <strong>{email}</strong>
-          </p>
-        </div>
-        <p className="text-sm leading-6 text-slate-600">
-          Click the link in your email to sign in to your account.
-        </p>
-        <button
-          type="button"
-          onClick={() => setIsMagicLinkSent(false)}
-          className="min-h-11 rounded-full px-4 text-sm font-medium text-kolekto transition hover:bg-emerald-50"
-        >
-          Try another method
-        </button>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {error && (
-        <Alert variant="destructive" className="rounded-2xl border-red-200 bg-red-50 text-red-800">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <AuthErrorBanner
+        error={error}
+        scrollKey={scrollKey}
+        onAction={handleBannerAction}
+        actionPending={resendPending}
+      />
 
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -203,26 +188,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ redirectTo = '/dashboard', prefil
             Sign in to Kolekto
           </>
         )}
-      </Button>
-
-      <div className="relative py-1">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-200"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-500">or</span>
-        </div>
-      </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        className="h-14 w-full rounded-2xl border-slate-200 bg-white text-base font-medium text-slate-950 shadow-sm hover:bg-slate-50"
-        onClick={handleMagicLink}
-        disabled={isMagicLinkLoading}
-      >
-        {isMagicLinkLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5 text-kolekto" />}
-        {isMagicLinkLoading ? "Sending..." : "Email me a sign-in link"}
       </Button>
 
       <div className="pt-1 text-center text-base text-slate-700">
