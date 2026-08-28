@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/store";
 import { useRecaptcher } from "@/hooks/useRecaptcher";
@@ -21,7 +20,8 @@ import {
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
-import { toFriendlyErrorMessage } from "@/utils/errorMessages";
+import AuthErrorBanner from "@/components/auth/AuthErrorBanner";
+import { useAuthError } from "@/hooks/useAuthError";
 
 interface RegisterFormProps {
   redirectTo?: string;
@@ -56,15 +56,19 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  // Auth errors go through the shared banner: classified copy, auto-scroll and
+  // screen-reader announcement all come from one place. `error` is no longer a
+  // bare string — see hooks/useAuthError.
+  const { error, scrollKey, raise, raiseValidation, raiseClassified, clear } = useAuthError("signup");
   const [isSignupComplete, setIsSignupComplete] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { execute, ready } = useRecaptcher();
   const [showV2, setShowV2] = useState(false);
-  const { signUp } = useAuthStore();
+  const { signUp, resendVerification } = useAuthStore() as any;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -131,33 +135,53 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   //   }
   // };
 
-  const handleV2Change = async (token) => {
-    if (!token) return;
-    let recaptchaType = "v2"
-    let recaptcherToken = token
+  /**
+   * The one place a signup result is interpreted, shared by the v3 submit and
+   * the v2 checkbox callback.
+   *
+   * PREVIOUSLY these two paths interpreted the result differently, and the v3
+   * path did `if (user.requireV2)` on a user that is null on EVERY failure —
+   * throwing a TypeError that the catch below converted into the fallback
+   * string. That single line is why every distinct signup failure (email taken,
+   * weak password, rate limit, 500, offline) surfaced as the identical
+   * "Registration failed. Please try again.", and why the v2 captcha fallback
+   * never appeared for the users who needed it.
+   *
+   * Nothing here dereferences a possibly-null value, and the ORDER matters:
+   * captcha escalation and errors are both resolved before any success path.
+   */
+  const applySignupResult = (result: any): void => {
+    // 1. Captcha escalation — a request for more input, not a failure.
+    if (result?.requireV2) {
+      setShowV2(true);
+      raiseClassified({
+        category: "user",
+        title: "One more security check",
+        message:
+          "Please complete the checkbox below to confirm you're not a robot, then we'll finish creating your account.",
+      });
+      return;
+    }
 
+    // 2. A real failure — classified into actionable copy by utils/authErrors.
+    if (result?.error) {
+      raise(result.error);
+      return;
+    }
+
+    // 3. Success. A session means the account is immediately usable; no session
+    //    means Supabase requires email verification first.
+    if (result?.session?.access_token) {
+      navigate(resolvedRedirect);
+      return;
+    }
+    setIsSignupComplete(true);
+  };
+
+  const submitSignup = async (recaptchaType: "v2" | "v3", recaptcherToken: string) => {
+    setIsLoading(true);
     try {
-      if (password !== confirmPassword) {
-        setError("Passwords do not match");
-        return;
-      }
-
-      const isValidE164 = (phone: string) => /^\+[1-9]\d{1,14}$/.test(phone);
-
-      if (!isValidE164(phoneNumber)) {
-        setError(
-          "Phone number must be in international format, e.g. +2348012345678"
-        );
-        return;
-      }
-
-      if (phoneNumber && phoneNumber.replace(/\D/g, "").length < 10) {
-        setError("Phone number must be at least 10 digits");
-        return;
-      }
-
-      setIsLoading(true);
-      let { user, error } = await signUp(
+      const result = await signUp(
         email,
         password,
         firstName,
@@ -165,24 +189,25 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         phoneNumber,
         recaptcherToken,
         recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`,
+        // Land on the dedicated verification route rather than deep in the app:
+        // /auth/verify is the only page that knows how to turn the tokens in
+        // the callback URL into a Kolekto session.
+        `${window.location.origin}/auth/verify?redirect=${encodeURIComponent(resolvedRedirect)}`,
         ambassadorReferralCode.trim() || undefined
       );
-
-      if (error) {
-        const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
-        setError(message);
-      } else {
-        setIsSignupComplete(true);
-      }
-    } catch (error: any) {
-      console.log(error, 'error');
-      const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
-      setError(message);
+      applySignupResult(result);
+    } catch (err: any) {
+      raise(err);
     } finally {
       setIsLoading(false);
     }
+  };
 
+  const handleV2Change = async (token: string | null) => {
+    if (!token) return;
+    if (!validateForm()) return;
+    setShowV2(false);
+    await submitSignup("v2", token);
   };
 
   // Validation helpers
@@ -190,121 +215,92 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  const handleSubmit = async (e: React.FormEvent, recaptchaType = 'v3') => {
-    e.preventDefault();
-    setError("");
-
-    // Checks for required fields
-    if (!firstName.trim()) {
-      setError("First Name is required.");
-      return;
-    }
-    if (!lastName.trim()) {
-      setError("Last Name is required.");
-      return;
-    }
-    if (!email.trim()) {
-      setError("Email is required.");
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (!phoneNumber.trim()) {
-      setError("Phone number is required.");
-      return;
-    }
+  /**
+   * All pre-submit validation, in one function returning a boolean.
+   *
+   * Extracted so the v3 submit and the v2 checkbox callback validate
+   * IDENTICALLY — they previously ran different, partially overlapping rule
+   * sets, so a value rejected on one path sailed through on the other.
+   *
+   * The first failing rule is raised through the shared banner, which scrolls
+   * it into view. Returning early on the first failure (rather than collecting
+   * all of them) matches the existing behaviour and keeps the message specific.
+   */
+  const validateForm = (): boolean => {
+    if (!firstName.trim()) return fail("First name is required.");
+    if (!lastName.trim()) return fail("Last name is required.");
+    if (!email.trim()) return fail("Email is required.");
+    if (!isValidEmail(email)) return fail("Please enter a valid email address.");
+    if (!phoneNumber.trim()) return fail("Phone number is required.");
     if (!isValidE164(phoneNumber)) {
-      setError(
-        "Phone number must be in international format, e.g. +2348012345678"
-      );
-      return;
+      return fail("Phone number must be in international format, e.g. +2348012345678");
     }
-    if (phoneNumber.replace(/\D/g, "").length < 10) {
-      setError("Phone number must be at least 10 digits.");
-      return;
+    if (phoneNumber.replace(/D/g, "").length < 10) {
+      return fail("Phone number must be at least 10 digits.");
     }
-    if (!password) {
-      setError("Password is required.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    if (!confirmPassword) {
-      setError("Please confirm your password.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (!agreed) {
-      setError("You must agree to the Terms of Service and Privacy Policy.");
-      return;
-    }
+    if (!password) return fail("Password is required.");
+    if (password.length < 6) return fail("Password must be at least 6 characters.");
+    if (!confirmPassword) return fail("Please confirm your password.");
+    if (password !== confirmPassword) return fail("The two passwords don't match.");
+    if (!agreed) return fail("Please accept the Terms of Service and Privacy Policy to continue.");
+    return true;
+  };
 
-    setIsLoading(true);
+  /** Raise a validation message through the banner and report "invalid". */
+  const fail = (message: string): boolean => {
+    raiseValidation(message);
+    return false;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clear();
+
+    if (!validateForm()) return;
 
     if (showV2) {
-      toast.error("Please complete the security check");
-      setIsLoading(false);
+      raiseValidation(
+        "Please complete the security check below before continuing.",
+        "Security check required"
+      );
       return;
     }
 
-    // Allow account creation even if reCAPTCHA isn't ready
+    // reCAPTCHA v3 is best-effort: if the script hasn't loaded we still submit
+    // and let the BACKEND decide (it fails closed and will ask for v2). Blocking
+    // here would lock out every user with a blocked/slow Google script.
     let recaptcherToken = "";
-    if (executeRecaptcha) {
-      // request token with an "action"
-      recaptcherToken = await executeRecaptcha("signup");
-      console.log(recaptcherToken, 'capther');
-    } else {
-      // recaptcha not ready, continue without token
-      console.warn("reCAPTCHA not ready, proceeding without token.");
+    try {
+      if (executeRecaptcha) {
+        recaptcherToken = await executeRecaptcha("signup");
+      }
+    } catch {
+      // Fall through with an empty token — the server-side gate is authoritative.
     }
 
+    await submitSignup("v3", recaptcherToken);
+  };
+
+  /**
+   * Resend the verification email, triggered from the banner's action when
+   * signup reports that the account exists but the email could not be sent.
+   */
+  const handleBannerAction = async (intent?: string) => {
+    if (intent !== "resend-verification") return;
+    setResendPending(true);
     try {
-      let { user, session, verificationRequired, error } = await signUp(
+      const { data, error: resendError } = await resendVerification(
         email,
-        password,
-        firstName,
-        lastName,
-        phoneNumber,
-        recaptcherToken,
-        recaptchaType,
-        `${window.location.origin}${resolvedRedirect}`,
-        ambassadorReferralCode.trim() || undefined
+        `${window.location.origin}/auth/verify?redirect=${encodeURIComponent(resolvedRedirect)}`
       );
-      console.log(user, 'user');
-
-      if (user.requireV2) {
-        // backend says v3 score too low → fallback
-        setShowV2(true);
-        error = { message: 'solve recaptcha' }
-        return
-      } else {
-        console.log("✅ Signup success:", user);
+      if (resendError) {
+        raise(resendError);
+        return;
       }
-
-      if (error) {
-        const message = toFriendlyErrorMessage(error, "Registration failed. Please try again.");
-        setError(message);
-      } else {
-        if (session?.access_token) {
-          navigate(resolvedRedirect);
-        } else if (verificationRequired) {
-          setIsSignupComplete(true);
-        } else {
-          setIsSignupComplete(true);
-        }
-      }
-    } catch (err: any) {
-      const message = toFriendlyErrorMessage(err, "Registration failed. Please try again.");
-      setError(message);
+      toast.success(data?.message || "Verification email sent. Please check your inbox.");
+      clear();
     } finally {
-      setIsLoading(false);
+      setResendPending(false);
     }
   };
 
@@ -321,12 +317,32 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-kolekto">
           <Mail className="h-6 w-6" />
         </div>
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-emerald-800">
-          <h3 className="font-medium">Registration successful!</h3>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-left text-emerald-800">
+          <h3 className="font-medium">Check your inbox to finish signing up</h3>
           <p className="mt-1 text-sm leading-6">
-            Your account has been created. Check your email, verify your account, and we will resume your saved collection publishing flow when you return.
+            We've created your account and sent a verification link to{" "}
+            <strong className="break-all">{email}</strong>. You need to click that
+            link before you can sign in.
+          </p>
+          <p className="mt-2 text-sm leading-6">
+            Can't find it? Check your spam or promotions folder — it can take a
+            minute or two to arrive.
           </p>
         </div>
+
+        {/* Resend lives HERE, on the screen every new user sees. Without it a
+            user whose email never arrived had exactly one option: register
+            again, which then fails with "email already exists". */}
+        <button
+          type="button"
+          disabled={resendPending}
+          onClick={() => handleBannerAction("resend-verification")}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-slate-200 px-5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {resendPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {resendPending ? "Sending…" : "Resend verification email"}
+        </button>
+
         <div className="pt-1">
           <Link to={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectTo)}${redirectTo === '/create-collection' ? '&publish=1' : ''}`} className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-medium text-kolekto hover:bg-emerald-50">
             Continue to sign in
@@ -342,14 +358,12 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
         Fields marked <span className="text-red-500">*</span> are required.
       </p>
 
-      {error && (
-        <Alert
-          variant="destructive"
-          className="rounded-2xl border-red-200 bg-red-50 text-red-800"
-        >
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      <AuthErrorBanner
+        error={error}
+        scrollKey={scrollKey}
+        onAction={handleBannerAction}
+        actionPending={resendPending}
+      />
 
       <section className="space-y-5">
         <AuthSectionHeader
@@ -489,7 +503,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = "/dashboard" }
                 required
                 autoComplete="new-password"
                 aria-required="true"
-                aria-invalid={!!error && error.toLowerCase().includes("password")}
+                aria-invalid={/password/i.test(error?.message ?? "")}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
