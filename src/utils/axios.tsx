@@ -48,6 +48,7 @@ axiosInstance.interceptors.request.use(
       "/auth/signin",
       "/auth/signup",
       "/auth/magic-link",
+      "/auth/resend-verification",
       "/auth/forgot-password",
       "/auth/reset-password",
     ].some((endpoint) => url.includes(endpoint));
@@ -103,6 +104,7 @@ const AUTH_PUBLIC_ENDPOINTS = [
   "/auth/signin",
   "/auth/signup",
   "/auth/magic-link",
+  "/auth/resend-verification",
   "/auth/forgot-password",
   "/auth/reset-password",
 ];
@@ -201,7 +203,7 @@ async function performSignOutAndRedirect() {
         useAuthStore.setState({ user: null, session: null } as any);
       } finally {
         const path = window.location.pathname;
-        const onPublicPage = ["/login", "/register", "/forgot-password", "/reset-password", "/"].includes(path)
+        const onPublicPage = ["/login", "/register", "/auth/verify", "/forgot-password", "/reset-password", "/"].includes(path)
           || path.startsWith("/contribute/")
           || path.startsWith("/payment/");
         if (!onPublicPage) {
