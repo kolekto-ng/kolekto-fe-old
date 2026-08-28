@@ -900,11 +900,14 @@ const ProfilePage = () => {
   const [savingAccount, setSavingAccount] = useState(false);
   const [requestingWithdrawal, setRequestingWithdrawal] = useState(false);
   const [financeError, setFinanceError] = useState("");
+  // Separate from financeError on purpose: this one renders inside the payout
+  // account card, next to the button that produced it.
+  const [accountError, setAccountError] = useState("");
+  const [accountSaved, setAccountSaved] = useState(false);
   const [accountForm, setAccountForm] = useState({
     bankName: "",
-    bankCode: "",
-    accountName: "",
     accountNumber: "",
+    accountName: "",
   });
   const [withdrawalForm, setWithdrawalForm] = useState({
     payoutAccountId: "",
@@ -936,16 +939,44 @@ const ProfilePage = () => {
 
   useEffect(() => { loadFinance(); }, []);
 
+  const updateAccountField = (field: "bankName" | "accountNumber" | "accountName", value: string) => {
+    setAccountForm((c) => ({ ...c, [field]: value }));
+  };
+
+  // Nothing here is verified against the bank, so the only gate is that all
+  // three fields are filled in plausibly.
+  const accountFormComplete =
+    accountForm.bankName.trim().length >= 2 &&
+    accountForm.accountNumber.length === 10 &&
+    accountForm.accountName.trim().length >= 2;
+
   const submitAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     setSavingAccount(true);
-    setFinanceError("");
+    setAccountError("");
+    setAccountSaved(false);
     try {
-      await saveAmbassadorPayoutAccount(accountForm);
-      setAccountForm({ bankName: "", bankCode: "", accountName: "", accountNumber: "" });
+      await saveAmbassadorPayoutAccount({
+        bankName: accountForm.bankName.trim(),
+        accountNumber: accountForm.accountNumber,
+        accountName: accountForm.accountName.trim(),
+      });
+      setAccountForm({ bankName: "", accountNumber: "", accountName: "" });
+      setAccountSaved(true);
       await loadFinance();
     } catch (err: any) {
-      setFinanceError(err?.response?.data?.error || "Unable to save payout account.");
+      const data = err?.response?.data;
+      // `details` carries the underlying cause on a 500. Without it every
+      // server-side failure collapses into one unactionable sentence, which is
+      // exactly how a broken save ends up looking like a dead button.
+      const detail = data?.details ? ` (${data.details})` : "";
+      setAccountError(
+        data?.error
+          ? `${data.error}${detail}`
+          : err?.message
+          ? `Unable to save payout account: ${err.message}`
+          : "Unable to save payout account."
+      );
     } finally {
       setSavingAccount(false);
     }
@@ -1004,10 +1035,15 @@ const ProfilePage = () => {
 
             <form onSubmit={submitAccount} className="mt-5 grid gap-3">
               <FieldText label="Bank Name">
-                <Input className="h-11" value={accountForm.bankName} onChange={(e) => setAccountForm((c) => ({ ...c, bankName: e.target.value }))} required />
-              </FieldText>
-              <FieldText label="Account Name">
-                <Input className="h-11" value={accountForm.accountName} onChange={(e) => setAccountForm((c) => ({ ...c, accountName: e.target.value }))} required />
+                <Input
+                  className="h-11"
+                  value={accountForm.bankName}
+                  onChange={(e) => updateAccountField("bankName", e.target.value)}
+                  placeholder="e.g. Zenith Bank"
+                  autoComplete="off"
+                  maxLength={100}
+                  required
+                />
               </FieldText>
               <FieldText label="Account Number">
                 <Input
@@ -1015,13 +1051,46 @@ const ProfilePage = () => {
                   inputMode="numeric"
                   maxLength={10}
                   value={accountForm.accountNumber}
-                  onChange={(e) => setAccountForm((c) => ({ ...c, accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                  onChange={(e) => updateAccountField("accountNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="10 digits"
                   required
                 />
               </FieldText>
-              <Button type="submit" disabled={savingAccount} className="h-11 w-full gap-2 bg-green-900 hover:bg-green-800 sm:w-fit">
+              <FieldText label="Account Name">
+                <Input
+                  className="h-11"
+                  value={accountForm.accountName}
+                  onChange={(e) => updateAccountField("accountName", e.target.value)}
+                  placeholder="Exactly as it appears on your bank account"
+                  autoComplete="off"
+                  maxLength={100}
+                  required
+                />
+              </FieldText>
+
+              {/* These details are not checked against the bank, so the warning
+                  has to be honest: a typo here is the ambassador's own money
+                  going to the wrong place, and nothing downstream will catch it. */}
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900 sm:text-sm">
+                Please double-check these details before saving. We pay out exactly what you enter here, and we cannot recover a transfer sent to the wrong account.
+              </div>
+
+              {accountError && (
+                <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">{accountError}</div>
+              )}
+              {accountSaved && !accountError && (
+                <div className="rounded-xl border border-green-100 bg-green-50 p-3 text-sm text-green-800">
+                  Payout account saved.
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={savingAccount || !accountFormComplete}
+                className="h-11 w-full gap-2 bg-green-900 hover:bg-green-800 sm:w-fit"
+              >
                 {savingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
-                Save Account
+                Save Payout Account
               </Button>
             </form>
 

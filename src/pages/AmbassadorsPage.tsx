@@ -39,9 +39,11 @@ import campusImage from "@/assets/kolekto-on-campus.png";
 import communityImage from "@/assets/contribut.png";
 
 // ─── Animation variants ───────────────────────────────────────────────────────
+const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE_OUT } },
 };
 
 const fadeIn = {
@@ -56,17 +58,17 @@ const staggerContainer = {
 
 const cardFade = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE_OUT } },
 };
 
 const slideLeft = {
   hidden: { opacity: 0, x: -24 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: EASE_OUT } },
 };
 
 const slideRight = {
   hidden: { opacity: 0, x: 24 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: EASE_OUT } },
 };
 
 function InView({ children, className = "", variants = fadeUp }: { children: React.ReactNode; className?: string; variants?: any }) {
@@ -107,23 +109,16 @@ function AnimatedCounter({ target, prefix = "", suffix = "" }: { target: number;
 }
 
 // ─── Content data ─────────────────────────────────────────────────────────────
-const impactStats = [
-  { value: 5000, prefix: "₦", suffix: "", label: "max reward per organizer" },
-  { value: 8, prefix: "", suffix: "+", label: "achievement badges" },
-  { value: 5, prefix: "", suffix: "", label: "leadership tiers" },
-  { value: 0, prefix: "", suffix: "∞", label: "no limit on referrals" },
-];
-
 const benefitCategories = [
   {
     icon: CircleDollarSign,
     color: "bg-emerald-500/15 text-emerald-300",
-    title: "Financial Rewards",
+    title: "Rewards & Recognition",
     items: [
-      "Earn up to ₦5,000 per successful organizer",
+      "Performance-based rewards for every organizer you onboard",
       "Monthly stipends for top-performing ambassadors",
-      "Performance-based incentive bonuses",
-      "No limit on number of organizers you can refer",
+      "Sponsorship support for your community activities",
+      "No limit on the number of organizers you can refer",
     ],
   },
   {
@@ -242,7 +237,7 @@ const testimonials = [
     name: "Tunde Bakare",
     role: "Community Lead, Lagos Island",
     quote:
-      "The earnings system is transparent and fair. I've introduced several event organizers to Kolekto and can track every reward milestone right in the dashboard. The ambassador portal is genuinely well-built.",
+      "I came in curious and stayed because of the people. I've introduced several event organizers to Kolekto, and the portal tracks every milestone clearly — but what I actually value is the network and the reputation I've built on Lagos Island.",
     initials: "TB",
     color: "bg-amber-600",
   },
@@ -258,8 +253,8 @@ const testimonials = [
 
 const faqs = [
   {
-    q: "How much can I earn as an ambassador?",
-    a: "Rewards are performance-based and scale as the organizers you refer grow their collection activity. The maximum reward per organizer is ₦5,000 — with no limit on how many organizers you can refer. Your earnings are tracked in real time on your personal ambassador dashboard.",
+    q: "Is there a reward for the organizers I bring on?",
+    a: "Yes. Rewards are performance-based and scale as the organizers you refer grow their collection activity, and there is no limit on how many organizers you can refer. The full reward structure is shared with you on acceptance and tracked in real time on your ambassador dashboard. We lead with the leadership experience rather than the payout on purpose — the ambassadors who do best here are the ones who genuinely care about their community.",
   },
   {
     q: "Who can apply to become a Kolekto Ambassador?",
@@ -279,7 +274,7 @@ const faqs = [
   },
   {
     q: "Is the ambassador program paid or voluntary?",
-    a: "It is a performance-based earnings program. You earn real cash rewards for organizers you influence, plus non-monetary benefits like merchandise, certificates, training, and career pathways. There is no fixed salary.",
+    a: "It is performance-based. You earn real rewards for the organizers you influence, alongside the larger part of the programme — training, mentorship, merchandise, certificates, leadership progression, and career pathways. There is no fixed salary, and this is not a role to take on for the money alone.",
   },
   {
     q: "How do I get paid?",
@@ -405,7 +400,7 @@ const AmbassadorsPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 32 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.65, ease: EASE_OUT }}
               className="space-y-7"
             >
               <div className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-semibold text-green-300">
@@ -445,9 +440,9 @@ const AmbassadorsPage: React.FC = () => {
               {/* Quick stats inline */}
               <div className="flex flex-wrap gap-6 pt-1">
                 {[
-                  { value: "₦5K", label: "max per organizer" },
-                  { value: "8+", label: "achievement badges" },
+                  { value: "16", label: "achievement badges" },
                   { value: "5", label: "leadership tiers" },
+                  { value: "∞", label: "organizers you can refer" },
                 ].map(({ value, label }) => (
                   <div key={label} className="space-y-0.5">
                     <p className="font-clash text-2xl font-semibold text-green-400">{value}</p>
@@ -460,7 +455,7 @@ const AmbassadorsPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.65, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.65, delay: 0.12, ease: EASE_OUT }}
               className="relative"
             >
               <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.6)]">
@@ -508,9 +503,9 @@ const AmbassadorsPage: React.FC = () => {
               className="grid grid-cols-2 gap-6 sm:grid-cols-4"
             >
               {[
-                { target: 5000, prefix: "₦", suffix: "", label: "max reward per organizer" },
-                { target: 8, prefix: "", suffix: "+", label: "achievement badges" },
+                { target: 16, prefix: "", suffix: "", label: "achievement badges" },
                 { target: 5, prefix: "", suffix: "", label: "leadership tiers" },
+                { target: 6, prefix: "", suffix: "", label: "steps to join" },
                 { target: 100, prefix: "", suffix: "%", label: "performance-based" },
               ].map(({ target, prefix, suffix, label }, i) => (
                 <motion.div key={label} variants={cardFade} className="text-center">
@@ -548,7 +543,12 @@ const AmbassadorsPage: React.FC = () => {
           </div>
         </section>
 
-        {/* ── EARNINGS HERO — aspirational only ── */}
+        {/* ── OPPORTUNITY HERO ──
+             Deliberately NOT an earnings headline. Ambassadors do earn, and the
+             exact figures are shown in-portal once accepted (see
+             pages/ambassador/AmbassadorPortal.tsx) — but a public page that
+             leads with a naira amount recruits for the amount. Keep the reward
+             honest and secondary here. ── */}
         <section className="overflow-hidden bg-slate-950 px-4 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <div className="relative overflow-hidden rounded-[32px] bg-[linear-gradient(140deg,#0f3d17_0%,#1b5e20_50%,#0a2e0f_100%)] px-6 py-14 text-white shadow-2xl sm:px-12 sm:py-20">
@@ -559,14 +559,14 @@ const AmbassadorsPage: React.FC = () => {
 
               <div className="relative grid items-center gap-10 lg:grid-cols-[1fr_auto]">
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.22em] text-green-300">Earnings potential</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.22em] text-green-300">What you get out of it</p>
                   <h2 className="mt-4 font-clash text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl">
-                    Earn up to{" "}
-                    <span className="text-green-400">₦5,000</span>{" "}
-                    for every organizer you onboard.
+                    Build something{" "}
+                    <span className="text-green-400">people remember</span>{" "}
+                    you for.
                   </h2>
                   <p className="mt-5 max-w-2xl text-base leading-7 text-white/65">
-                    Your rewards grow as the organizers you refer grow. Track every milestone in real time on your personal ambassador dashboard. No cap on the number of organizers you can refer.
+                    You will run real activations, onboard real organizers, and grow a network you keep long after your tenure ends. The work is rewarded — performance-based, tracked to the naira in your dashboard, and growing as your organizers grow. But the reward is the outcome, not the reason.
                   </p>
                   <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                     <Button asChild size="lg" className="h-12 bg-green-400 px-8 font-semibold text-slate-950 hover:bg-green-300">
@@ -580,8 +580,8 @@ const AmbassadorsPage: React.FC = () => {
 
                 <div className="flex flex-col gap-4 lg:min-w-[220px]">
                   {[
-                    { icon: CircleDollarSign, text: "Performance-based earnings" },
-                    { icon: TrendingUp, text: "Rewards scale as organizers grow" },
+                    { icon: Crown, text: "Real leadership experience" },
+                    { icon: TrendingUp, text: "Rewards that scale with impact" },
                     { icon: PartyPopper, text: "No limit on referrals" },
                     { icon: ShieldCheck, text: "Real-time dashboard tracking" },
                   ].map(({ icon: Icon, text }) => (
@@ -712,7 +712,7 @@ const AmbassadorsPage: React.FC = () => {
                     One referral is the start of something bigger.
                   </p>
                   <p className="mt-2 text-sm text-white/65">
-                    Every organizer you introduce multiplies your impact and your earnings.
+                    Every organizer you introduce multiplies your reach — and what you take away from the programme.
                   </p>
                 </div>
               </div>

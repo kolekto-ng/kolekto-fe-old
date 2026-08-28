@@ -120,13 +120,24 @@ export async function getAmbassadorPayoutAccounts() {
   return data;
 }
 
+// All three fields are entered by the ambassador and stored as given. The
+// backend performs no provider lookup and no name check on this path, so the
+// account name is self-declared — see the "Manual payout details" note in
+// controllers/ambassador.js.
 export async function saveAmbassadorPayoutAccount(payload: {
   bankName: string;
-  bankCode?: string;
-  accountName: string;
   accountNumber: string;
+  accountName: string;
 }) {
-  const { data } = await axiosInstance.post("/ambassadors/payout-accounts", payload, { headers: ambassadorHeaders() });
+  const { data } = await axiosInstance.post(
+    "/ambassadors/payout-accounts",
+    {
+      bank_name: payload.bankName,
+      account_number: payload.accountNumber,
+      account_name: payload.accountName,
+    },
+    { headers: ambassadorHeaders() }
+  );
   return data;
 }
 
