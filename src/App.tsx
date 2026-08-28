@@ -8,6 +8,7 @@ const HomePage = lazy(() => import("./pages/HomePage"));
 const CreateCollectionPage = lazy(() => import("./pages/CreateCollectionPage"));
 const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/auth/RegisterPage"));
+const VerifyEmailPage = lazy(() => import("./pages/auth/VerifyEmailPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/auth/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/auth/ResetPasswordPage"));
 const DashboardLayout = lazy(() => import("./components/dashboard/DashboardLayout"));
@@ -69,7 +70,7 @@ function getLegacyPwaTarget(pathname: string): string {
   }
 
   if (
-    ["/login", "/register", "/forgot-password", "/reset-password"].includes(
+    ["/login", "/register", "/auth/verify", "/forgot-password", "/reset-password"].includes(
       normalizedPath
     )
   ) {
@@ -164,6 +165,10 @@ const AuthenticatedApp = () => {
           <RegisterPage />
         </GoogleReCaptchaProvider>
       } />
+      {/* Email-verification callback. Supabase sends the user here after they
+          click the link; this page turns the callback tokens into a Kolekto
+          session. Must stay PUBLIC — the visitor is not signed in yet. */}
+      <Route path="/auth/verify" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/contribute/:collectionId" element={<ContributePage />} />
